@@ -1,5 +1,5 @@
 import React, { type FC, useEffect } from "react";
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
@@ -13,12 +13,15 @@ import ToolProgress from "./components/ToolProgress.js";
 interface AppProps {
   enginePath: string;
   model: string;
+  mode: string;
 }
 
-const App: FC<AppProps> = ({ enginePath, model }) => {
-  const engine = useEngine(enginePath);
-  const { uiState, handleEvent, clearStream, clearPermission } =
-    useEvents(model);
+const App: FC<AppProps> = ({ enginePath, model, mode }) => {
+  const engine = useEngine(enginePath, { model, mode });
+  const { uiState, handleEvent, clearStream, clearPermission } = useEvents(
+    model,
+    mode,
+  );
   const planArtifact =
     uiState.artifacts.find(
       (artifact) => artifact.kind === "implementation-plan",
@@ -29,10 +32,9 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
 
   // Dispatch incoming events to the UI state handler
   useEffect(() => {
-    if (engine.events.length === 0) return;
-    const latest = engine.events[engine.events.length - 1];
-    if (latest) handleEvent(latest);
-  }, [engine.events.length, handleEvent]);
+    if (!engine.lastEvent) return;
+    handleEvent(engine.lastEvent);
+  }, [engine.eventVersion, engine.lastEvent, handleEvent]);
 
   const handleSubmit = (text: string) => {
     clearStream();
@@ -59,6 +61,7 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
   return (
     <Box flexDirection="column" height="100%">
       <StatusBar
+        ready={uiState.ready || engine.ready}
         mode={uiState.mode}
         model={uiState.model}
         totalCostUsd={uiState.cost.totalUsd}
@@ -67,6 +70,34 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
       />
 
       <Box flexDirection="column" flexGrow={1}>
+        {engine.error && !uiState.error && (
+          <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
+            <Text color="red">{engine.error}</Text>
+          </Box>
+        )}
+
+        {!uiState.ready && !engine.error && (
+          <Box paddingLeft={1} marginTop={1}>
+            <Text color="gray">Starting Go engine...</Text>
+          </Box>
+        )}
+
+        {uiState.statusLine && (
+          <Box paddingLeft={1} marginTop={1}>
+            <Text color="cyan">{uiState.statusLine}</Text>
+          </Box>
+        )}
+
+        {uiState.compact && (
+          <Box paddingLeft={1} marginTop={1}>
+            <Text color="yellow">
+              {uiState.compact.active
+                ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
+                : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
+            </Text>
+          </Box>
+        )}
+
         {planArtifact && (
           <PlanPanel
             title={planArtifact.title}
@@ -74,7 +105,20 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
           />
         )}
 
+        {uiState.thinkingText && (
+          <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+            <Text color="gray">Thinking</Text>
+            <Text color="gray">{uiState.thinkingText}</Text>
+          </Box>
+        )}
+
         <StreamOutput text={uiState.streamedText} />
+
+        {uiState.error && (
+          <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
+            <Text color="red">{uiState.error}</Text>
+          </Box>
+        )}
 
         {recentArtifacts.length > 0 && (
           <ArtifactView artifacts={recentArtifacts} />
@@ -97,7 +141,7 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
           onSubmit={handleSubmit}
           onModeToggle={engine.sendModeToggle}
           onCancel={engine.sendCancel}
-          disabled={uiState.isStreaming}
+          disabled={!uiState.ready || !!engine.error || uiState.pendingPermission !== null}
         />
       )}
     </Box>

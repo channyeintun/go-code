@@ -80,6 +80,15 @@ export interface CostUpdatePayload {
   output_tokens: number;
 }
 
+export interface CompactStartPayload {
+  strategy: string;
+  tokens_before: number;
+}
+
+export interface CompactEndPayload {
+  tokens_after: number;
+}
+
 export interface ArtifactCreatedPayload {
   id: string;
   kind: string;

@@ -2,13 +2,17 @@ import { useState, useCallback } from "react";
 import type {
   ArtifactCreatedPayload,
   ArtifactUpdatedPayload,
+  CompactEndPayload,
+  CompactStartPayload,
   CostUpdatePayload,
   ErrorPayload,
   ModeChangedPayload,
   ModelChangedPayload,
   PermissionRequestPayload,
+  ReadyPayload,
   SessionRestoredPayload,
   StreamEvent,
+  TurnCompletePayload,
   TokenDeltaPayload,
   ToolStartPayload,
 } from "../protocol/types.js";
@@ -21,48 +25,88 @@ export interface UIArtifact {
 }
 
 export interface EngineUIState {
+  ready: boolean;
   streamedText: string;
+  thinkingText: string;
   mode: string;
   model: string;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
   activeTool: { id: string; name: string } | null;
+  compact: {
+    active: boolean;
+    strategy: string;
+    tokensBefore: number;
+    tokensAfter?: number;
+  } | null;
+  statusLine: string | null;
   pendingPermission: PermissionRequestPayload | null;
   error: string | null;
   isStreaming: boolean;
 }
 
-const initialState = (model: string): EngineUIState => ({
+const initialState = (model: string, mode: string): EngineUIState => ({
+  ready: false,
   streamedText: "",
-  mode: "plan",
+  thinkingText: "",
+  mode,
   model,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   artifacts: [],
   activeTool: null,
+  compact: null,
+  statusLine: null,
   pendingPermission: null,
   error: null,
   isStreaming: false,
 });
 
-export function useEvents(initialModel: string) {
+export function useEvents(initialModel: string, initialMode: string) {
   const [uiState, setUIState] = useState<EngineUIState>(() =>
-    initialState(initialModel),
+    initialState(initialModel, initialMode),
   );
 
   const handleEvent = useCallback((event: StreamEvent) => {
     switch (event.type) {
+      case "ready": {
+        const p = event.payload as ReadyPayload;
+        setUIState((s) => ({
+          ...s,
+          ready: p.protocol_version > 0,
+          statusLine: `Engine ready (protocol v${p.protocol_version})`,
+        }));
+        break;
+      }
       case "token_delta": {
         const p = event.payload as TokenDeltaPayload;
         setUIState((s) => ({
           ...s,
           streamedText: s.streamedText + p.text,
           isStreaming: true,
+          statusLine: null,
         }));
         break;
       }
-      case "turn_complete":
-        setUIState((s) => ({ ...s, isStreaming: false, activeTool: null }));
+      case "thinking_delta": {
+        const p = event.payload as TokenDeltaPayload;
+        setUIState((s) => ({
+          ...s,
+          thinkingText: s.thinkingText + p.text,
+          isStreaming: true,
+        }));
         break;
+      }
+      case "turn_complete": {
+        const p = event.payload as TurnCompletePayload;
+        setUIState((s) => ({
+          ...s,
+          isStreaming: false,
+          activeTool: null,
+          compact: null,
+          statusLine: `Turn complete (${p.stop_reason})`,
+        }));
+        break;
+      }
       case "tool_start": {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
@@ -75,6 +119,39 @@ export function useEvents(initialModel: string) {
       case "tool_error":
         setUIState((s) => ({ ...s, activeTool: null }));
         break;
+      case "compact_start": {
+        const p = event.payload as CompactStartPayload;
+        setUIState((s) => ({
+          ...s,
+          compact: {
+            active: true,
+            strategy: p.strategy,
+            tokensBefore: p.tokens_before,
+          },
+          statusLine: null,
+        }));
+        break;
+      }
+      case "compact_end": {
+        const p = event.payload as CompactEndPayload;
+        setUIState((s) => ({
+          ...s,
+          compact: s.compact
+            ? {
+                ...s.compact,
+                active: false,
+                tokensAfter: p.tokens_after,
+              }
+            : {
+                active: false,
+                strategy: "compact",
+                tokensBefore: 0,
+                tokensAfter: p.tokens_after,
+              },
+          statusLine: `Compaction complete (${p.tokens_after} tokens)`,
+        }));
+        break;
+      }
       case "permission_request": {
         const p = event.payload as PermissionRequestPayload;
         setUIState((s) => ({ ...s, pendingPermission: p }));
@@ -132,22 +209,36 @@ export function useEvents(initialModel: string) {
         const p = event.payload as SessionRestoredPayload;
         setUIState((s) => ({
           ...s,
+          ready: true,
           mode: p.mode,
           isStreaming: false,
           error: null,
+          statusLine: `Resumed session ${p.session_id}`,
         }));
         break;
       }
       case "error": {
         const p = event.payload as ErrorPayload;
-        setUIState((s) => ({ ...s, error: p.message }));
+        setUIState((s) => ({
+          ...s,
+          error: p.message,
+          isStreaming: false,
+          compact: null,
+        }));
         break;
       }
     }
   }, []);
 
   const clearStream = useCallback(() => {
-    setUIState((s) => ({ ...s, streamedText: "", error: null }));
+    setUIState((s) => ({
+      ...s,
+      streamedText: "",
+      thinkingText: "",
+      compact: null,
+      statusLine: null,
+      error: null,
+    }));
   }, []);
 
   const clearPermission = useCallback(() => {

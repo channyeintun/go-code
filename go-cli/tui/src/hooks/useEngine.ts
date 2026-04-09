@@ -7,32 +7,52 @@ import type { ClientMessage } from "../protocol/types.js";
 
 interface EngineState {
   ready: boolean;
-  events: StreamEvent[];
+  lastEvent: StreamEvent | null;
+  eventVersion: number;
   error: string | null;
 }
 
-export function useEngine(enginePath: string) {
+interface EngineOptions {
+  model?: string;
+  mode?: string;
+}
+
+export function useEngine(enginePath: string, options: EngineOptions = {}) {
   const [state, setState] = useState<EngineState>({
     ready: false,
-    events: [],
+    lastEvent: null,
+    eventVersion: 0,
     error: null,
   });
   const processRef = useRef<ChildProcess | null>(null);
 
   useEffect(() => {
-    const proc = spawn(enginePath, ["--stdio"], {
+    const args = ["--stdio"];
+    if (options.model) {
+      args.push("--model", options.model);
+    }
+    if (options.mode) {
+      args.push("--mode", options.mode);
+    }
+
+    const proc = spawn(enginePath, args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
     processRef.current = proc;
 
     const rl = createInterface({ input: proc.stdout! });
+    const stderrRl = createInterface({ input: proc.stderr! });
 
     rl.on("line", (line) => {
       const event = parseEvent(line);
       if (!event) return;
 
       setState((prev) => {
-        const next = { ...prev, events: [...prev.events, event] };
+        const next = {
+          ...prev,
+          lastEvent: event,
+          eventVersion: prev.eventVersion + 1,
+        };
         if (event.type === "ready") {
           next.ready = true;
         }
@@ -43,6 +63,15 @@ export function useEngine(enginePath: string) {
       });
     });
 
+    stderrRl.on("line", (line) => {
+      const message = line.trim();
+      if (!message) return;
+      setState((prev) => ({
+        ...prev,
+        error: prev.error ?? message,
+      }));
+    });
+
     proc.on("exit", (code) => {
       if (code !== 0) {
         setState((prev) => ({ ...prev, error: `Engine exited with code ${code}` }));
@@ -50,9 +79,25 @@ export function useEngine(enginePath: string) {
     });
 
     return () => {
-      proc.kill("SIGTERM");
+      rl.close();
+      stderrRl.close();
+
+      if (proc.stdin?.writable) {
+        proc.stdin.write(serializeMessage(createMessage("shutdown")));
+        proc.stdin.end();
+      }
+
+      const killTimer = setTimeout(() => {
+        if (!proc.killed) {
+          proc.kill("SIGTERM");
+        }
+      }, 250);
+
+      proc.once("close", () => {
+        clearTimeout(killTimer);
+      });
     };
-  }, [enginePath]);
+  }, [enginePath, options.mode, options.model]);
 
   const send = useCallback((msg: ClientMessage) => {
     const proc = processRef.current;

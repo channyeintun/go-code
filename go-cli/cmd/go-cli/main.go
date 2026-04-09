@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"iter"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -99,10 +101,63 @@ func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
 		return runStdioEngine(ctx, cfg)
 	}
 
-	// TUI mode: check for node, then spawn Ink frontend
-	// (for now, fall back to stdio mode)
-	fmt.Fprintln(os.Stderr, "TUI mode not yet implemented. Use --stdio for engine-only mode.")
-	return runStdioEngine(ctx, cfg)
+	return launchTUI(ctx, cfg)
+}
+
+func launchTUI(ctx context.Context, cfg config.Config) error {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		return fmt.Errorf("node is required for TUI mode: %w", err)
+	}
+
+	enginePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve engine executable: %w", err)
+	}
+	if resolvedPath, resolveErr := filepath.EvalSymlinks(enginePath); resolveErr == nil {
+		enginePath = resolvedPath
+	}
+
+	tuiEntry, err := resolveTUIEntry()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctx, nodePath, tuiEntry)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(),
+		"GOCLI_ENGINE_PATH="+enginePath,
+		"GOCLI_MODEL="+cfg.Model,
+		"GOCLI_MODE="+cfg.DefaultMode,
+	)
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("run ink tui: %w", err)
+	}
+	return nil
+}
+
+func resolveTUIEntry() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("GOCLI_TUI_ENTRY")); override != "" {
+		if _, err := os.Stat(override); err != nil {
+			return "", fmt.Errorf("stat GOCLI_TUI_ENTRY: %w", err)
+		}
+		return override, nil
+	}
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("resolve TUI entry: runtime caller unavailable")
+	}
+
+	moduleRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
+	tuiEntry := filepath.Join(moduleRoot, "tui", "dist", "index.js")
+	if _, err := os.Stat(tuiEntry); err != nil {
+		return "", fmt.Errorf("TUI bundle not found at %s: %w", tuiEntry, err)
+	}
+	return tuiEntry, nil
 }
 
 func runStdioEngine(ctx context.Context, cfg config.Config) error {
@@ -110,11 +165,17 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	registry := toolpkg.NewRegistry()
 	provider, model := config.ParseModel(cfg.Model)
 	provider = normalizeProvider(provider)
+	var (
+		client          api.LLMClient
+		startupModelErr error
+	)
+	activeModelID := modelRef(provider, model)
 	client, err := newLLMClient(provider, model, cfg)
 	if err != nil {
-		return err
+		startupModelErr = err
+	} else {
+		activeModelID = modelRef(provider, client.ModelID())
 	}
-	activeModelID := modelRef(provider, client.ModelID())
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
@@ -148,6 +209,11 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err := bridge.EmitReady(); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
+	if startupModelErr != nil {
+		if err := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, startupModelErr), true); err != nil {
+			return err
+		}
+	}
 
 	// Main event loop: read client messages and dispatch
 	for {
@@ -173,6 +239,16 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			if strings.TrimSpace(payload.Text) == "" {
 				continue
 			}
+
+			resolvedClient, nextModelID, err := ensureClientForSelection(activeModelID, cfg, client)
+			if err != nil {
+				if emitErr := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, err), true); emitErr != nil {
+					return emitErr
+				}
+				continue
+			}
+			client = resolvedClient
+			activeModelID = nextModelID
 
 			messages = append(messages, api.Message{
 				Role:    api.RoleUser,
@@ -346,6 +422,20 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+}
+
+func ensureClientForSelection(modelSelection string, cfg config.Config, current api.LLMClient) (api.LLMClient, string, error) {
+	if current != nil {
+		return current, modelSelection, nil
+	}
+
+	provider, model := config.ParseModel(strings.TrimSpace(modelSelection))
+	provider, model = resolveModelSelection(modelSelection, provider)
+	client, err := newLLMClient(provider, model, cfg)
+	if err != nil {
+		return nil, modelRef(provider, model), err
+	}
+	return client, modelRef(provider, client.ModelID()), nil
 }
 
 func normalizeProvider(provider string) string {
@@ -854,6 +944,16 @@ func handleSlashCommand(
 			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
 		}
 
+		resolvedClient, nextModelID, err := ensureClientForSelection(activeModelID, cfg, *client)
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, err), true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+		*client = resolvedClient
+		activeModelID = nextModelID
+
 		tokensBefore := compact.EstimateConversationTokens(messages)
 		if err := bridge.Emit(ipc.EventCompactStart, ipc.CompactStartPayload{
 			Strategy:     string(agent.CompactManual),
@@ -927,6 +1027,8 @@ func handleSlashCommand(
 			provider = normalizeProvider(provider)
 			restoredClient, err := newLLMClient(provider, model, cfg)
 			if err != nil {
+				*client = nil
+				activeModelID = modelRef(provider, model)
 				if emitErr := bridge.EmitError(fmt.Sprintf("restore model %q: %v", restored.Metadata.Model, err), true); emitErr != nil {
 					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
 				}

@@ -12,14 +12,14 @@ const Input: FC<InputProps> = ({ onSubmit, onModeToggle, onCancel, disabled }) =
   const [value, setValue] = useState("");
 
   useInput((input, key) => {
+    if (key.escape) {
+      onCancel();
+      return;
+    }
     if (disabled) return;
 
     if (key.tab) {
       onModeToggle();
-      return;
-    }
-    if (key.escape) {
-      onCancel();
       return;
     }
     if (key.return) {
