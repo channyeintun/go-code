@@ -15,10 +15,10 @@
 - [x] `client.go` — LLMClient interface, ModelRequest, ModelEvent, Usage types
 - [x] `provider_config.go` — 9 provider presets (Anthropic, OpenAI, Gemini, DeepSeek, Qwen, GLM, Mistral, Groq, Ollama)
 - [x] `retry.go` — APIError classification, exponential backoff, RetryWithBackoff
-- [ ] `anthropic.go` — Anthropic Messages API streaming client
-- [ ] `openai_compat.go` — OpenAI-compatible streaming client
-- [ ] `gemini.go` — Gemini native streaming client
-- [ ] `ollama.go` — Ollama local model client
+- [x] `anthropic.go` — Anthropic Messages API streaming client
+- [x] `openai_compat.go` — OpenAI-compatible streaming client
+- [x] `gemini.go` — Gemini native streaming client
+- [x] `ollama.go` — Ollama local model client
 
 ### `internal/agent/` — Query Engine
 - [x] `query_stream.go` — iter.Seq2-based QueryStream, QueryDeps, QueryState, 5-phase runIteration skeleton
@@ -33,7 +33,7 @@
 - [x] `registry.go` — Tool registry with Get/List/Definitions
 - [x] `orchestration.go` — Dynamic concurrency classification, PartitionBatches, ExecuteBatch
 - [x] `budgeting.go` — ResultBudget, ApplyBudget with disk spillover
-- [ ] `bash.go` — Bash tool with security validation
+- [x] `bash.go` — Bash tool with security validation
 - [ ] `file_read.go` — File read tool
 - [ ] `file_write.go` — File write tool
 - [ ] `file_edit.go` — File edit tool
@@ -154,9 +154,10 @@
 
 ## Phase 2b: Multi-Model Support (Post-MVP)
 - [ ] Finalize LLMClient with Capabilities()
-- [ ] `anthropic.go` — Full streaming implementation
-- [ ] `openai_compat.go` — SSE parser, function calling
-- [ ] `gemini.go` — Native streaming, function declarations
+- [x] `anthropic.go` — Full streaming implementation
+- [x] `openai_compat.go` — SSE parser, function calling
+- [x] `gemini.go` — Native streaming, function declarations
+- [x] `ollama.go` — Local chat streaming implementation
 - [ ] `/model` runtime switching
 - [ ] Capability-aware engine adjustments
 
@@ -167,7 +168,7 @@
 | Area | Scaffolded | Wired/Working |
 |---|---|---|
 | IPC Protocol | ✅ | ✅ |
-| API Interfaces | ✅ | ❌ (no real provider yet) |
+| API Interfaces | ✅ | ⚠️ (Anthropic + OpenAI-compatible + Gemini + Ollama clients implemented) |
 | Agent Loop | ✅ | ❌ (skeleton only) |
 | Tools | ✅ (framework) | ❌ (no real tools yet) |
 | Compaction | ✅ (Strategy A done) | ❌ (B+C pending) |
@@ -182,4 +183,4 @@
 | Ink TUI | ✅ | ❌ (not built/tested) |
 | CLI Entrypoint | ✅ | ✅ (stub responses) |
 
-**Current state:** Full project scaffolding complete with types, interfaces, and skeletons across all 15 packages + TUI. Go code compiles clean. Next step is Week 1–2 implementation: real Anthropic streaming client + tool execution.
+**Current state:** All four provider clients and the Bash tool are implemented, and `go build ./...` passes clean after integration. The next concrete tooling task is `file_read.go`, with query-loop wiring still pending behind the tool layer.
