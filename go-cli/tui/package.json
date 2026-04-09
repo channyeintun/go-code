@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "go-cli": "bin/go-cli.js"
+  },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsc --watch"
+    "start": "node bin/go-cli.js",
+    "dev": "tsc --watch",
+    "install-engine": "cd .. && go build -o tui/engine/go-cli ./cmd/go-cli/",
+    "setup": "npm install && npm run build && npm run install-engine"
   },
   "dependencies": {
     "ink": "^7.0.0",
