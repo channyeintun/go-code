@@ -80,6 +80,17 @@ export interface CostUpdatePayload {
   output_tokens: number;
 }
 
+export interface ArtifactCreatedPayload {
+  id: string;
+  kind: string;
+  title: string;
+}
+
+export interface ArtifactUpdatedPayload {
+  id: string;
+  content: string;
+}
+
 export interface SessionRestoredPayload {
   session_id: string;
   mode: string;

@@ -2,7 +2,9 @@ import React, { type FC, useEffect } from "react";
 import { Box } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents } from "./hooks/useEvents.js";
+import ArtifactView from "./components/ArtifactView.js";
 import Input from "./components/Input.js";
+import PlanPanel from "./components/PlanPanel.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
@@ -15,7 +17,15 @@ interface AppProps {
 
 const App: FC<AppProps> = ({ enginePath, model }) => {
   const engine = useEngine(enginePath);
-  const { uiState, handleEvent, clearStream, clearPermission } = useEvents(model);
+  const { uiState, handleEvent, clearStream, clearPermission } =
+    useEvents(model);
+  const planArtifact =
+    uiState.artifacts.find(
+      (artifact) => artifact.kind === "implementation-plan",
+    ) ?? null;
+  const recentArtifacts = uiState.artifacts
+    .filter((artifact) => artifact.kind !== "implementation-plan")
+    .slice(0, 2);
 
   // Dispatch incoming events to the UI state handler
   useEffect(() => {
@@ -34,9 +44,14 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
     }
   };
 
-  const handlePermissionResponse = (decision: "allow" | "deny" | "always_allow") => {
+  const handlePermissionResponse = (
+    decision: "allow" | "deny" | "always_allow",
+  ) => {
     if (uiState.pendingPermission) {
-      engine.sendPermissionResponse(uiState.pendingPermission.request_id, decision);
+      engine.sendPermissionResponse(
+        uiState.pendingPermission.request_id,
+        decision,
+      );
       clearPermission();
     }
   };
@@ -52,7 +67,18 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
       />
 
       <Box flexDirection="column" flexGrow={1}>
+        {planArtifact && (
+          <PlanPanel
+            title={planArtifact.title}
+            content={planArtifact.content}
+          />
+        )}
+
         <StreamOutput text={uiState.streamedText} />
+
+        {recentArtifacts.length > 0 && (
+          <ArtifactView artifacts={recentArtifacts} />
+        )}
 
         {uiState.activeTool && (
           <ToolProgress toolName={uiState.activeTool.name} />
