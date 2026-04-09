@@ -28,9 +28,14 @@ func runIteration(
 ) error {
 	state.TurnCount++
 	state.TurnContext = LoadTurnContext()
-	selectedSkills := skillspkg.SelectRelevant(state.Skills, latestUserPrompt(state.Messages))
+	currentUserPrompt := latestUserPrompt(state.Messages)
+	selectedSkills := skillspkg.SelectRelevant(state.Skills, currentUserPrompt)
+	basePrompt := state.BasePrompt
+	if capabilityPrompt := capabilitySystemPrompt(state.Capabilities); capabilityPrompt != "" {
+		basePrompt = strings.TrimSpace(basePrompt + "\n\n" + capabilityPrompt)
+	}
 	state.SystemPrompt = composeSystemPrompt(
-		state.BasePrompt,
+		basePrompt,
 		state.SystemContext,
 		state.TurnContext,
 		skillspkg.FormatPromptSection(selectedSkills),
@@ -41,6 +46,10 @@ func runIteration(
 	}
 
 	if err := runProactiveCompaction(ctx, state, deps, yield); err != nil {
+		return err
+	}
+
+	if err := warnUnsupportedThinking(currentUserPrompt, state.Capabilities, yield); err != nil {
 		return err
 	}
 
@@ -139,12 +148,7 @@ func streamModelTurn(
 	deps QueryDeps,
 	yield func(ipc.StreamEvent, error) bool,
 ) (modelTurn, error) {
-	stream, err := deps.CallModel(ctx, api.ModelRequest{
-		Messages:     state.Messages,
-		SystemPrompt: state.SystemPrompt,
-		Tools:        state.Tools,
-		MaxTokens:    state.MaxTokens,
-	})
+	stream, err := deps.CallModel(ctx, buildModelRequest(state))
 	if err != nil {
 		return modelTurn{}, err
 	}
@@ -179,6 +183,71 @@ func streamModelTurn(
 	}
 
 	return turn, nil
+}
+
+func buildModelRequest(state *QueryState) api.ModelRequest {
+	request := api.ModelRequest{
+		Messages:     state.Messages,
+		SystemPrompt: state.SystemPrompt,
+		MaxTokens:    state.MaxTokens,
+	}
+	if state.Capabilities.SupportsToolUse {
+		request.Tools = state.Tools
+	}
+	if budget := thinkingBudgetForPrompt(latestUserPrompt(state.Messages), state.Capabilities, state.MaxTokens); budget > 0 {
+		request.ThinkingBudget = budget
+	}
+	return request
+}
+
+func capabilitySystemPrompt(capabilities api.ModelCapabilities) string {
+	if capabilities.SupportsToolUse {
+		return ""
+	}
+	return "Native tool use is unavailable for the current model. Do not emit tool calls. Respond with text only, explain limitations plainly, and avoid pretending a tool was executed."
+}
+
+func warnUnsupportedThinking(
+	userPrompt string,
+	capabilities api.ModelCapabilities,
+	yield func(ipc.StreamEvent, error) bool,
+) error {
+	if !requestsExtendedThinking(userPrompt) || capabilities.SupportsExtendedThinking {
+		return nil
+	}
+	if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+		Message:     "Current model does not support extended thinking; ignoring ultrathink and continuing with standard reasoning.",
+		Recoverable: true,
+	}), nil) {
+		return context.Canceled
+	}
+	return nil
+}
+
+func requestsExtendedThinking(prompt string) bool {
+	prompt = strings.ToLower(prompt)
+	return strings.Contains(prompt, "ultrathink")
+}
+
+func thinkingBudgetForPrompt(prompt string, capabilities api.ModelCapabilities, maxTokens int) int {
+	if !capabilities.SupportsExtendedThinking || !requestsExtendedThinking(prompt) || maxTokens <= 1 {
+		return 0
+	}
+
+	budget := maxTokens / 2
+	if budget < 1024 && maxTokens > 1024 {
+		budget = 1024
+	}
+	if budget > 8192 {
+		budget = 8192
+	}
+	if budget >= maxTokens {
+		budget = maxTokens - 1
+	}
+	if budget < 0 {
+		return 0
+	}
+	return budget
 }
 
 func runProactiveCompaction(

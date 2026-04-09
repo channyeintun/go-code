@@ -19,6 +19,7 @@ type QueryRequest struct {
 	SessionID     string
 	Skills        []skillspkg.Skill
 	Tools         []api.ToolDefinition
+	Capabilities  api.ModelCapabilities
 	ContextWindow int
 	MaxTokens     int
 }
@@ -54,6 +55,7 @@ type QueryState struct {
 	Profile             ExecutionProfile
 	Skills              []skillspkg.Skill
 	Tools               []api.ToolDefinition
+	Capabilities        api.ModelCapabilities
 	ContextWindow       int
 	MaxTokens           int
 	TurnCount           int
@@ -74,6 +76,7 @@ func NewQueryState(req QueryRequest) *QueryState {
 		Profile:       ProfileForMode(req.Mode),
 		Skills:        req.Skills,
 		Tools:         req.Tools,
+		Capabilities:  req.Capabilities,
 		ContextWindow: req.ContextWindow,
 		MaxTokens:     req.MaxTokens,
 		MaxTurns:      50,

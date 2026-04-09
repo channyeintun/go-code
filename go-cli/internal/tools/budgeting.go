@@ -6,20 +6,48 @@ import (
 	"path/filepath"
 )
 
+const (
+	defaultBudgetScaleTokens = 8192
+	minBudgetChars           = 25_000
+	maxBudgetChars           = 250_000
+	minPreviewBudgetChars    = 1000
+	maxPreviewBudgetChars    = 8000
+)
+
 // ResultBudget defines limits for tool output size.
 type ResultBudget struct {
-	MaxChars     int
-	PreviewLen   int
-	SpillDir     string
+	MaxChars   int
+	PreviewLen int
+	SpillDir   string
 }
 
 // DefaultResultBudget returns the standard budget.
 func DefaultResultBudget(sessionDir string) ResultBudget {
+	return DefaultResultBudgetForModel(sessionDir, defaultBudgetScaleTokens)
+}
+
+// DefaultResultBudgetForModel scales tool output budgets to the active model's
+// output capacity so smaller models keep tighter inline results.
+func DefaultResultBudgetForModel(sessionDir string, maxOutputTokens int) ResultBudget {
 	return ResultBudget{
-		MaxChars:   MaxResultSizeChars,
-		PreviewLen: PreviewChars,
+		MaxChars:   scaleBudget(MaxResultSizeChars, maxOutputTokens, minBudgetChars, maxBudgetChars),
+		PreviewLen: scaleBudget(PreviewChars, maxOutputTokens, minPreviewBudgetChars, maxPreviewBudgetChars),
 		SpillDir:   filepath.Join(sessionDir, "artifacts", "tool-log"),
 	}
+}
+
+func scaleBudget(base, maxOutputTokens, minValue, maxValue int) int {
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = defaultBudgetScaleTokens
+	}
+	scaled := base * maxOutputTokens / defaultBudgetScaleTokens
+	if scaled < minValue {
+		return minValue
+	}
+	if scaled > maxValue {
+		return maxValue
+	}
+	return scaled
 }
 
 // ApplyBudget truncates output if it exceeds the budget, spilling to disk.

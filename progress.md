@@ -173,13 +173,13 @@
 
 ## Phase 2b: Multi-Model Support (Post-MVP)
 
-- [ ] Finalize LLMClient with Capabilities()
+- [x] Finalize LLMClient with Capabilities()
 - [x] `anthropic.go` — Full streaming implementation
 - [x] `openai_compat.go` — SSE parser, function calling
 - [x] `gemini.go` — Native streaming, function declarations
 - [x] `ollama.go` — Local chat streaming implementation
 - [x] `/model` runtime switching
-- [ ] Capability-aware engine adjustments
+- [x] Capability-aware engine adjustments
 
 ---
 
@@ -203,4 +203,4 @@
 | Ink TUI        | ✅                   | ✅ (default CLI launches Ink parent, Go child over NDJSON; status/permission/artifact rendering validated) |
 | CLI Entrypoint | ✅                   | ✅ (live stdio engine)                                                          |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The default CLI path now launches the Ink frontend as the parent process and runs the Go engine as a stdio child over NDJSON, with status, artifact, compaction, and permission/error states rendered in the TUI while the engine remains recoverable if the configured model is unavailable at startup. The stdio engine persists and restores transcript + session metadata, supports runtime `/model` switching, exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path, emits markdown-backed implementation-plan/tool-log artifacts during planning and oversized tool execution, keeps plan mode read-only through planner enforcement, auto-selects matching markdown skills into the per-turn system prompt, and now runs summarizer-backed compaction across manual `/compact`, proactive threshold checks before model calls, and prompt-too-long recovery while preserving prior summaries and the active user turn. The next concrete task is capability-aware engine behavior and remaining non-hook follow-ups.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The default CLI path now launches the Ink frontend as the parent process and runs the Go engine as a stdio child over NDJSON, with status, artifact, compaction, and permission/error states rendered in the TUI while the engine remains recoverable if the configured model is unavailable at startup. The stdio engine persists and restores transcript + session metadata, supports runtime `/model` switching, exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path, emits markdown-backed implementation-plan/tool-log artifacts during planning and oversized tool execution, keeps plan mode read-only through planner enforcement, auto-selects matching markdown skills into the per-turn system prompt, and now shapes requests by model capability: native tool definitions are withheld for text-only models, `ultrathink` only enables extended thinking on supported models, context thresholds already track each model's window, and tool-output budgets scale with model output capacity. The next concrete task is session title generation with the local model and any remaining non-hook follow-ups before hooks.

@@ -169,6 +169,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		client          api.LLMClient
 		startupModelErr error
 	)
+	toolUseNoticeModelID := ""
 	activeModelID := modelRef(provider, model)
 	client, err := newLLMClient(provider, model, cfg)
 	if err != nil {
@@ -249,6 +250,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 			client = resolvedClient
 			activeModelID = nextModelID
+			if err := emitToolUseCapabilityNotice(bridge, activeModelID, client, &toolUseNoticeModelID); err != nil {
+				return err
+			}
 
 			messages = append(messages, api.Message{
 				Role:    api.RoleUser,
@@ -279,7 +283,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					return trackModelStream(callCtx, bridge, tracker, client, req)
 				},
 				ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-					return executeToolCalls(callCtx, bridge, registry, permissionCtx, tracker, planner, artifactManager, sessionID, calls)
+					return executeToolCalls(callCtx, bridge, registry, permissionCtx, tracker, planner, artifactManager, sessionID, client.Capabilities().MaxOutputTokens, calls)
 				},
 				CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
 					pipeline := newCompactionPipeline(bridge, tracker, client)
@@ -315,6 +319,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				SessionID:     sessionID,
 				Skills:        availableSkills,
 				Tools:         registry.Definitions(),
+				Capabilities:  client.Capabilities(),
 				ContextWindow: client.Capabilities().MaxContextWindow,
 				MaxTokens:     client.Capabilities().MaxOutputTokens,
 			}, deps)
@@ -520,11 +525,12 @@ func executeToolCalls(
 	planner *agent.Planner,
 	artifactManager *artifactspkg.Manager,
 	sessionID string,
+	maxOutputTokens int,
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
 	approved := make([]toolpkg.PendingCall, 0, len(calls))
-	budget := toolpkg.DefaultResultBudget(filepath.Join(os.TempDir(), "go-cli-session"))
+	budget := toolpkg.DefaultResultBudgetForModel(filepath.Join(os.TempDir(), "go-cli-session"), maxOutputTokens)
 
 	for index, call := range calls {
 		tool, err := registry.Get(call.Name)
@@ -833,6 +839,27 @@ func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 	})
 }
 
+func emitToolUseCapabilityNotice(
+	bridge *ipc.Bridge,
+	activeModelID string,
+	client api.LLMClient,
+	lastNoticeModelID *string,
+) error {
+	if client == nil || client.Capabilities().SupportsToolUse {
+		return nil
+	}
+	if lastNoticeModelID != nil && *lastNoticeModelID == activeModelID {
+		return nil
+	}
+	if lastNoticeModelID != nil {
+		*lastNoticeModelID = activeModelID
+	}
+	return bridge.Emit(ipc.EventError, ipc.ErrorPayload{
+		Message:     fmt.Sprintf("Model %s does not support native tool use; continuing in text-only mode.", activeModelID),
+		Recoverable: true,
+	})
+}
+
 func handleSlashCommand(
 	ctx context.Context,
 	bridge *ipc.Bridge,
@@ -913,6 +940,9 @@ func handleSlashCommand(
 
 		*client = nextClient
 		activeModelID = modelRef(provider, nextClient.ModelID())
+		if err := emitToolUseCapabilityNotice(bridge, activeModelID, *client, nil); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
 		if err := persistSessionState(store, sessionStateParams{
 			SessionID: sessionID,
 			CreatedAt: startedAt,
@@ -1037,6 +1067,9 @@ func handleSlashCommand(
 			}
 			*client = restoredClient
 			activeModelID = modelRef(provider, restoredClient.ModelID())
+			if err := emitToolUseCapabilityNotice(bridge, activeModelID, *client, nil); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
 		}
 
 		if restored.Metadata.CWD != "" {
