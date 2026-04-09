@@ -37,7 +37,7 @@
 - [x] `file_read.go` — File read tool
 - [x] `file_write.go` — File write tool
 - [x] `file_edit.go` — File edit tool
-- [ ] `glob.go` — Glob tool
+- [x] `glob.go` — Glob tool
 - [ ] `grep.go` — Ripgrep wrapper tool
 - [ ] `web_search.go` — Web search tool
 - [ ] `web_fetch.go` — Web fetch tool
@@ -170,7 +170,7 @@
 | IPC Protocol | ✅ | ✅ |
 | API Interfaces | ✅ | ⚠️ (Anthropic + OpenAI-compatible + Gemini + Ollama clients implemented) |
 | Agent Loop | ✅ | ❌ (skeleton only) |
-| Tools | ✅ (framework) | ⚠️ (bash + file read/write/edit implemented; remaining tools pending) |
+| Tools | ✅ (framework) | ⚠️ (bash + file read/write/edit/glob implemented; remaining tools pending) |
 | Compaction | ✅ (Strategy A done) | ❌ (B+C pending) |
 | Permissions | ✅ | ❌ (not wired) |
 | Cost Tracking | ✅ | ❌ (not wired) |
@@ -183,4 +183,4 @@
 | Ink TUI | ✅ | ❌ (not built/tested) |
 | CLI Entrypoint | ✅ | ✅ (stub responses) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit tools are implemented. The default tool registry now includes those built-ins. The next concrete tooling task is `glob.go`, with query-loop wiring still pending behind the tool layer.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob tools are implemented. The default tool registry now includes those built-ins. The next concrete tooling task is `grep.go`, with query-loop wiring still pending behind the tool layer.

@@ -23,6 +23,7 @@ func NewRegistry() *Registry {
 	r.Register(NewFileReadTool())
 	r.Register(NewFileWriteTool())
 	r.Register(NewFileEditTool())
+	r.Register(NewGlobTool())
 
 	return r
 }
