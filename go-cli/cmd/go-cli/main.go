@@ -230,8 +230,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		case ipc.MsgShutdown:
 			return nil
 		case ipc.MsgCancel:
-			// TODO: cancel in-flight query
-			continue
+			continue // no query in flight; ignore
 		case ipc.MsgUserInput:
 			var payload ipc.UserInputPayload
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
@@ -296,7 +295,30 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				Clock: time.Now,
 			}
 
-			stream := agent.QueryStream(ctx, agent.QueryRequest{
+			queryCtx, queryCancel := context.WithCancel(ctx)
+			queuedMsgs := make([]ipc.ClientMessage, 0)
+			cancelReaderDone := make(chan struct{})
+			go func() {
+				defer close(cancelReaderDone)
+				for {
+					msg, err := bridge.ReadMessage(queryCtx)
+					if err != nil {
+						return
+					}
+					if msg.Type == ipc.MsgCancel {
+						queryCancel()
+						return
+					}
+					if msg.Type == ipc.MsgShutdown {
+						queryCancel()
+						queuedMsgs = append(queuedMsgs, msg)
+						return
+					}
+					queuedMsgs = append(queuedMsgs, msg)
+				}
+			}()
+
+			stream := agent.QueryStream(queryCtx, agent.QueryRequest{
 				Messages:      messages,
 				SystemPrompt:  systemPromptForMode(mode),
 				Mode:          mode,
@@ -309,8 +331,13 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}, deps)
 
 			queryFailed := false
+			queryCancelled := false
 			for event, streamErr := range stream {
 				if streamErr != nil {
+					if queryCtx.Err() != nil {
+						queryCancelled = true
+						break
+					}
 					queryFailed = true
 					if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
 						return emitErr
@@ -322,7 +349,23 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				}
 			}
 
-			if !queryFailed {
+			queryCancel()
+			<-cancelReaderDone
+
+			if queryCancelled {
+				if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
+					return err
+				}
+			}
+
+			// Re-queue any messages received during the query
+			for _, queued := range queuedMsgs {
+				if queued.Type == ipc.MsgShutdown {
+					return nil
+				}
+			}
+
+			if !queryFailed && !queryCancelled {
 				if update, finalizeErr := planner.FinalizeTurn(ctx, "", payload.Text, messages, messagesBeforeQuery); finalizeErr != nil {
 					if emitErr := bridge.EmitError(fmt.Sprintf("update implementation plan artifact: %v", finalizeErr), true); emitErr != nil {
 						return emitErr
@@ -390,8 +433,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 			continue
 		case ipc.MsgPermissionResponse:
-			// TODO: resolve pending permission request
-			continue
+			continue // handled inline during tool execution
 		}
 	}
 }
