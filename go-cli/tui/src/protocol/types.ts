@@ -104,6 +104,18 @@ export interface PermissionRequestPayload {
   working_dir?: string;
 }
 
+export type PermissionResponseDecision =
+  | "allow"
+  | "deny"
+  | "always_allow"
+  | "allow_all_session";
+
+export interface PermissionResponsePayload {
+  request_id: string;
+  decision: PermissionResponseDecision;
+  feedback?: string;
+}
+
 export interface ModeChangedPayload {
   mode: string;
 }

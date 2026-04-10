@@ -3,7 +3,7 @@ package ipc
 import "encoding/json"
 
 // ProtocolVersion is the current IPC protocol version.
-const ProtocolVersion = 3
+const ProtocolVersion = 4
 
 // --- Go → Ink (stdout): StreamEvent ---
 
@@ -204,4 +204,5 @@ type SlashCommandPayload struct {
 type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
+	Feedback  string `json:"feedback,omitempty"`
 }

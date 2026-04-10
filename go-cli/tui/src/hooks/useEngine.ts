@@ -1,7 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { StreamEvent, UserInputImagePayload } from "../protocol/types.js";
+import type {
+  PermissionResponseDecision,
+  StreamEvent,
+  UserInputImagePayload,
+} from "../protocol/types.js";
 import {
   parseEvent,
   serializeMessage,
@@ -155,12 +159,14 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
   const sendPermissionResponse = useCallback(
     (
       requestId: string,
-      decision: "allow" | "deny" | "always_allow" | "allow_all_session",
+      decision: PermissionResponseDecision,
+      feedback?: string,
     ) =>
       send(
         createMessage("permission_response", {
           request_id: requestId,
           decision,
+          feedback,
         }),
       ),
     [send],

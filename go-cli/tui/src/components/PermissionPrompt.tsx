@@ -1,12 +1,9 @@
 import path from "node:path";
 import React, { type FC, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import type { PermissionResponseDecision } from "../protocol/types.js";
 
-type PermissionDecision =
-  | "allow"
-  | "deny"
-  | "always_allow"
-  | "allow_all_session";
+type PermissionDecision = PermissionResponseDecision;
 
 interface PermissionOption {
   decision: PermissionDecision;
@@ -24,7 +21,7 @@ interface PermissionPromptProps {
   targetKind?: string;
   targetValue?: string;
   workingDir?: string;
-  onRespond: (decision: PermissionDecision) => void;
+  onRespond: (decision: PermissionDecision, feedback?: string) => void;
   onCancel: () => void;
 }
 
@@ -83,10 +80,97 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   onCancel,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [feedbackCursorOffset, setFeedbackCursorOffset] = useState(0);
+  const [isEditingFeedback, setIsEditingFeedback] = useState(false);
 
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
+      return;
+    }
+
+    if (key.tab) {
+      setIsEditingFeedback((current) => !current);
+      return;
+    }
+
+    if (isEditingFeedback) {
+      if (key.return) {
+        const selected = OPTIONS[selectedIndex];
+        if (selected) {
+          onRespond(selected.decision, trimFeedback(feedback));
+        }
+        return;
+      }
+
+      if (key.leftArrow || (key.ctrl && input === "b")) {
+        setFeedbackCursorOffset((current) => Math.max(0, current - 1));
+        return;
+      }
+
+      if (key.rightArrow || (key.ctrl && input === "f")) {
+        setFeedbackCursorOffset((current) =>
+          Math.min(feedback.length, current + 1),
+        );
+        return;
+      }
+
+      if (key.home || (key.ctrl && input === "a")) {
+        setFeedbackCursorOffset(0);
+        return;
+      }
+
+      if (key.end || (key.ctrl && input === "e")) {
+        setFeedbackCursorOffset(feedback.length);
+        return;
+      }
+
+      if (key.backspace || (key.ctrl && input === "h")) {
+        if (feedbackCursorOffset === 0) {
+          return;
+        }
+        setFeedback((current) =>
+          replaceRange(
+            current,
+            feedbackCursorOffset - 1,
+            feedbackCursorOffset,
+            "",
+          ),
+        );
+        setFeedbackCursorOffset((current) => Math.max(0, current - 1));
+        return;
+      }
+
+      if (key.delete) {
+        setFeedback((current) =>
+          replaceRange(
+            current,
+            feedbackCursorOffset,
+            feedbackCursorOffset + 1,
+            "",
+          ),
+        );
+        return;
+      }
+
+      if (key.ctrl && input === "u") {
+        setFeedback("");
+        setFeedbackCursorOffset(0);
+        return;
+      }
+
+      if (input && !key.ctrl && !key.meta) {
+        setFeedback((current) =>
+          replaceRange(
+            current,
+            feedbackCursorOffset,
+            feedbackCursorOffset,
+            input,
+          ),
+        );
+        setFeedbackCursorOffset((current) => current + input.length);
+      }
       return;
     }
 
@@ -105,7 +189,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
     if (key.return) {
       const selected = OPTIONS[selectedIndex];
       if (selected) {
-        onRespond(selected.decision);
+        onRespond(selected.decision, trimFeedback(feedback));
       }
       return;
     }
@@ -115,7 +199,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       (option) => option.shortcut.toLowerCase() === shortcut,
     );
     if (matched) {
-      onRespond(matched.decision);
+      onRespond(matched.decision, trimFeedback(feedback));
     }
   });
 
@@ -167,6 +251,28 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         <Text color="gray">{detailLabel}</Text>
         <Text>{detailValue}</Text>
       </Box>
+      <Box
+        marginTop={1}
+        paddingX={1}
+        borderStyle="round"
+        borderColor={isEditingFeedback ? "cyan" : "gray"}
+        flexDirection="column"
+      >
+        <Text color="gray">Note (optional)</Text>
+        {feedback.length === 0 && !isEditingFeedback ? (
+          <Text color="gray">
+            Add context for the agent before this decision is applied.
+          </Text>
+        ) : (
+          <Text>
+            {renderFeedbackValue(
+              feedback,
+              feedbackCursorOffset,
+              isEditingFeedback,
+            )}
+          </Text>
+        )}
+      </Box>
       <Box marginTop={1} flexDirection="column">
         {OPTIONS.map((option, index) => {
           const isSelected = index === selectedIndex;
@@ -187,7 +293,8 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
-          Enter confirm · Up/Down change selection · Esc deny
+          Enter confirm · Up/Down change selection · Tab{" "}
+          {isEditingFeedback ? "return to actions" : "edit note"} · Esc deny
         </Text>
         <Text dimColor>
           Selected:{" "}
@@ -265,4 +372,33 @@ function inferAccessLabel(tool: string): string {
     return "write";
   }
   return "ask";
+}
+
+function renderFeedbackValue(
+  value: string,
+  cursorOffset: number,
+  isEditing: boolean,
+): string {
+  if (!isEditing) {
+    return value;
+  }
+
+  const clampedOffset = Math.max(0, Math.min(value.length, cursorOffset));
+  return value.slice(0, clampedOffset) + "█" + value.slice(clampedOffset);
+}
+
+function replaceRange(
+  value: string,
+  start: number,
+  end: number,
+  replacement: string,
+): string {
+  const safeStart = Math.max(0, Math.min(value.length, start));
+  const safeEnd = Math.max(safeStart, Math.min(value.length, end));
+  return value.slice(0, safeStart) + replacement + value.slice(safeEnd);
+}
+
+function trimFeedback(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }

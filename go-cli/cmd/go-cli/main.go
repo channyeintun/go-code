@@ -608,6 +608,7 @@ func executeToolCalls(
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
 	approved := make([]toolpkg.PendingCall, 0, len(calls))
+	approvalFeedback := make(map[int]string, len(calls))
 	budget := toolpkg.DefaultResultBudgetForModel(filepath.Join(os.TempDir(), "go-cli-session"), maxOutputTokens)
 
 	for index, call := range calls {
@@ -645,16 +646,19 @@ func executeToolCalls(
 			}
 			continue
 		}
-		allowed, denyReason, err := authorizeToolCall(ctx, bridge, router, permissionCtx, call.ID, pendingCall)
+		authorization, err := authorizeToolCall(ctx, bridge, router, permissionCtx, call.ID, pendingCall)
 		if err != nil {
 			return nil, err
 		}
-		if !allowed {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: denyReason, IsError: true}
-			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: denyReason}); emitErr != nil {
+		if !authorization.Allowed {
+			results[index] = api.ToolResult{ToolCallID: call.ID, Output: authorization.DenyReason, IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: authorization.DenyReason}); emitErr != nil {
 				return nil, emitErr
 			}
 			continue
+		}
+		if authorization.Feedback != "" {
+			approvalFeedback[index] = authorization.Feedback
 		}
 
 		// Fire pre_tool_use hook
@@ -672,6 +676,7 @@ func executeToolCalls(
 					if reason == "" {
 						reason = "blocked by pre_tool_use hook"
 					}
+					reason = appendPermissionFeedback(reason, approvalFeedback[index])
 					results[index] = api.ToolResult{ToolCallID: call.ID, Output: reason, IsError: true}
 					_ = bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: reason})
 					hookDenied = true
@@ -693,11 +698,12 @@ func executeToolCalls(
 		for _, result := range batchResults {
 			call := calls[result.Index]
 			toolResult := api.ToolResult{ToolCallID: call.ID}
+			feedback := approvalFeedback[result.Index]
 
 			if result.Err != nil {
-				toolResult.Output = result.Err.Error()
+				toolResult.Output = appendPermissionFeedback(result.Err.Error(), feedback)
 				toolResult.IsError = true
-				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: result.Err.Error()}); err != nil {
+				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: toolResult.Output}); err != nil {
 					return nil, err
 				}
 				results[result.Index] = toolResult
@@ -723,6 +729,7 @@ func executeToolCalls(
 					}
 				}
 			}
+			output = appendPermissionFeedback(output, feedback)
 
 			toolResult.Output = output
 			toolResult.IsError = result.Output.IsError
@@ -765,6 +772,17 @@ func executeToolCalls(
 	return results, nil
 }
 
+type authorizationResult struct {
+	Allowed    bool
+	DenyReason string
+	Feedback   string
+}
+
+type permissionResponse struct {
+	Decision string
+	Feedback string
+}
+
 func newPermissionContext(mode string) *permissions.Context {
 	ctx := permissions.NewContext()
 	switch permissions.Mode(mode) {
@@ -785,36 +803,41 @@ func authorizeToolCall(
 	permissionCtx *permissions.Context,
 	toolCallID string,
 	pending toolpkg.PendingCall,
-) (bool, string, error) {
+) (authorizationResult, error) {
 	decision := permissionCtx.Check(pending.Tool.Name(), pending.Input, pending.Tool.Permission())
 	switch decision {
 	case permissions.DecisionAllow:
-		return true, "", nil
+		return authorizationResult{Allowed: true}, nil
 	case permissions.DecisionDeny:
-		return false, toolPermissionMessage("denied", pending, "permission policy denied this tool call"), nil
+		return authorizationResult{DenyReason: toolPermissionMessage("denied", pending, "permission policy denied this tool call")}, nil
 	case permissions.DecisionAsk:
 		response, err := waitForPermissionDecision(ctx, bridge, router, toolCallID, pending)
 		if err != nil {
-			return false, "", err
+			return authorizationResult{}, err
 		}
-		switch response {
+		switch response.Decision {
 		case "allow":
-			return true, "", nil
+			return authorizationResult{Allowed: true, Feedback: response.Feedback}, nil
 		case "always_allow":
 			if raw := strings.TrimSpace(pending.Input.Raw); raw != "" {
 				if err := permissionCtx.AddAlwaysAllow(pending.Tool.Name(), "^"+regexp.QuoteMeta(raw)+"$"); err != nil {
-					return false, "", err
+					return authorizationResult{}, err
 				}
 			}
-			return true, "", nil
+			return authorizationResult{Allowed: true, Feedback: response.Feedback}, nil
 		case "allow_all_session":
 			permissionCtx.SessionAllowAll = true
-			return true, "", nil
+			return authorizationResult{Allowed: true, Feedback: response.Feedback}, nil
 		default:
-			return false, toolPermissionMessage("denied", pending, "user denied permission request"), nil
+			return authorizationResult{
+				DenyReason: appendPermissionFeedback(
+					toolPermissionMessage("denied", pending, "user denied permission request"),
+					response.Feedback,
+				),
+			}, nil
 		}
 	default:
-		return false, toolPermissionMessage("denied", pending, "permission policy denied this tool call"), nil
+		return authorizationResult{DenyReason: toolPermissionMessage("denied", pending, "permission policy denied this tool call")}, nil
 	}
 }
 
@@ -824,7 +847,7 @@ func waitForPermissionDecision(
 	router *ipc.MessageRouter,
 	toolCallID string,
 	pending toolpkg.PendingCall,
-) (string, error) {
+) (permissionResponse, error) {
 	requestID := fmt.Sprintf("perm-%d", time.Now().UnixNano())
 	if err := bridge.Emit(ipc.EventPermissionRequest, ipc.PermissionRequestPayload{
 		RequestID:       requestID,
@@ -837,27 +860,30 @@ func waitForPermissionDecision(
 		TargetValue:     summarizePermissionTarget(pending),
 		WorkingDir:      permissionWorkingDir(pending),
 	}); err != nil {
-		return "", err
+		return permissionResponse{}, err
 	}
 
 	for {
 		msg, err := router.Next(ctx)
 		if err != nil {
-			return "", err
+			return permissionResponse{}, err
 		}
 
 		switch msg.Type {
 		case ipc.MsgPermissionResponse:
 			var payload ipc.PermissionResponsePayload
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
-				return "", fmt.Errorf("decode permission response: %w", err)
+				return permissionResponse{}, fmt.Errorf("decode permission response: %w", err)
 			}
 			if payload.RequestID != requestID {
 				continue
 			}
-			return payload.Decision, nil
+			return permissionResponse{
+				Decision: strings.TrimSpace(payload.Decision),
+				Feedback: strings.TrimSpace(payload.Feedback),
+			}, nil
 		case ipc.MsgShutdown:
-			return "", context.Canceled
+			return permissionResponse{}, context.Canceled
 		default:
 			continue
 		}
@@ -948,6 +974,17 @@ func toolPermissionMessage(action string, call toolpkg.PendingCall, reason strin
 		reason = "permission policy requires user approval"
 	}
 	return fmt.Sprintf("tool %q %s: %s", call.Tool.Name(), action, reason)
+}
+
+func appendPermissionFeedback(message, feedback string) string {
+	trimmedFeedback := strings.TrimSpace(feedback)
+	if trimmedFeedback == "" {
+		return message
+	}
+	if strings.TrimSpace(message) == "" {
+		return "User feedback: " + trimmedFeedback
+	}
+	return message + "\n\nUser feedback: " + trimmedFeedback
 }
 
 func trackModelStream(

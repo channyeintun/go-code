@@ -14,7 +14,10 @@ import {
   parseImageReferenceIds,
   type PastedImageData,
 } from "./utils/imagePaste.js";
-import type { UserInputImagePayload } from "./protocol/types.js";
+import type {
+  PermissionResponseDecision,
+  UserInputImagePayload,
+} from "./protocol/types.js";
 
 interface AppProps {
   enginePath: string;
@@ -109,7 +112,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const handlePermissionResponse = (
-    decision: "allow" | "deny" | "always_allow" | "allow_all_session",
+    decision: PermissionResponseDecision,
+    feedback?: string,
   ) => {
     if (uiState.pendingPermission) {
       beginAssistantTurn();
@@ -117,6 +121,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       engine.sendPermissionResponse(
         uiState.pendingPermission.request_id,
         decision,
+        feedback,
       );
     }
   };

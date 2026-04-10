@@ -9,10 +9,10 @@
 
 ## Current Status
 
-| Phase                     | Status      | Notes                                                                                                                                                                  |
-| ------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 6. Protocol follow-up     | in progress | Rate-limit data, cost-threshold notices, permission amendment/feedback text, and block-oriented assistant messages are open evaluation items.                           |
-| 7. Deferred infrastructure | not started | Virtual transcript list requires scroll/fullscreen primitives the TUI does not yet have.                                                                               |
+| Phase                      | Status      | Notes                                                                                                                                                                                |
+| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 6. Protocol follow-up      | in progress | Permission amendment/feedback text is now wired through the IPC/TUI/tool execution path. Rate-limit data, cost-threshold notices, and block-oriented assistant messages remain open. |
+| 7. Deferred infrastructure | not started | Virtual transcript list requires scroll/fullscreen primitives the TUI does not yet have.                                                                                             |
 
 ## Task Log
 
@@ -20,3 +20,7 @@
 
 - Completed: Phases 1–5b (layout/prompt foundation, permission UX, markdown/syntax highlighting, transcript/message-row, status line, prompt footer) and the first Phase 6 slice (session metadata, live context usage, structured permission metadata).
 - See git history for detailed per-task entries.
+
+### 2026-04-11
+
+- Completed: Phase 6 permission amendment/feedback text parity slice. The permission prompt now accepts an optional note, the IPC payload carries it, denials include it in the rejection reason, and approved tool executions append it to the emitted tool result so the model can see the user's note on the next turn.
