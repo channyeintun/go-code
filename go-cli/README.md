@@ -160,13 +160,17 @@ The agent has access to:
 | Tool | Description |
 |------|-------------|
 | **bash** | Execute shell commands |
+| **list_dir** | List directory contents as structured JSON lines |
 | **file_read** | Read file contents |
 | **file_write** | Create or overwrite files |
 | **file_edit** | Find-and-replace edits in files |
+| **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
 | **glob** | Find files by pattern |
 | **grep** | Search file contents (ripgrep) |
 | **web_search** | Search the web |
 | **web_fetch** | Fetch and read a URL |
+| **command_status** | Check unread output and state for a background command |
+| **send_command_input** | Send stdin to a background command |
 | **git** | Read-only git operations (status, diff, log, blame) |
 
 ## Configuration

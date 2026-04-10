@@ -13,6 +13,7 @@
 | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 6. Protocol follow-up      | completed | Permission amendment/feedback text, raw 5h/7d Anthropic rate-limit windows, configurable footer cost-threshold notices, and block-oriented assistant message rendering are now wired through the IPC/TUI path.                                                                                          |
 | 7. Deferred infrastructure | completed | The capped transcript now supports PageUp/PageDown paging plus Home/End jumps in stock Ink, which is sufficient for this parity pass. Full scroll/fullscreen primitives for a true virtualized list remain explicitly deferred because the upstream implementation relies on custom renderer internals. |
+| 8. Agent Tool Enhancement  | in-progress | Added the first Antigravity parity slice: structured `list_dir`, validated `multi_replace_file_content`, and background shell follow-up tools via `bash(background=true)`, `command_status`, and `send_command_input`. Claude-specific `.claude` and `CLAUDE.md` cleanup remains. |
 
 ## Task Log
 
@@ -37,3 +38,7 @@
 - Adjusted: Backed out the explicit `file_read` transcript presentation change. The “shown above” confusion is being treated as a model-behavior issue unless we explicitly decide to change how read results render in the UI.
 - Completed: Matched the interrupt end-state more closely to the source flow. Pressing Esc now leaves the live assistant content visible while cancellation is pending, and a cancelled turn preserves the partial assistant response in the transcript instead of clearing it outright.
 - Completed: Made the implementation plan panel transient instead of permanently pinned. A freshly produced plan now shows as a confirmation/review panel while still in plan mode, then hides after the next user response or when leaving plan mode.
+- Updated: Added "Phase 8: Agent Tool Enhancement" to `plan.md` to track achieving parity with advanced AI coding agent tools (multi-replacement file edits, background REPLs, structured list_dir).
+- Updated: Expanded the Phase 8 plan to include removal of Claude-specific memory artifacts and loader paths such as `.claude/` and `CLAUDE.md` conventions.
+- Completed: Implemented the first Phase 8 Antigravity tool slice in the Go engine. The registry now exposes `list_dir`, `multi_replace_file_content`, `command_status`, and `send_command_input`; the `bash` tool can start background commands and return `CommandId` handles for those follow-up tools; the Go module builds cleanly with the new tool set.
+- Adjusted: Removed the temporary Antigravity tool scaffold file from `reference/` after porting the implementations, and removed the Mermaid block from the top-level README while preserving the architecture image.

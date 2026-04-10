@@ -258,3 +258,26 @@ func firstIntParam(params map[string]any, keys ...string) (int, bool) {
 	}
 	return 0, false
 }
+
+func firstParam(params map[string]any, keys ...string) (any, bool) {
+	for _, key := range keys {
+		if value, ok := params[key]; ok {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func firstBoolParam(params map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if value, ok := params[key]; ok {
+			switch typed := value.(type) {
+			case bool:
+				return typed
+			case string:
+				return strings.EqualFold(typed, "true")
+			}
+		}
+	}
+	return false
+}

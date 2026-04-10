@@ -23,14 +23,18 @@ func NewRegistry() *Registry {
 	}
 
 	r.Register(NewBashTool())
+	r.Register(NewListDirTool())
 	r.Register(NewFileReadTool())
 	r.Register(NewFileWriteTool())
 	r.Register(NewFileEditTool())
+	r.Register(NewMultiReplaceFileContentTool())
 	r.Register(NewGlobTool())
 	r.Register(NewGrepTool())
 	r.Register(NewWebSearchTool())
 	r.Register(NewWebFetchTool())
 	r.Register(NewGitTool())
+	r.Register(NewCommandStatusTool())
+	r.Register(NewSendCommandInputTool())
 	r.RegisterAlias(NewFileSearchAliasTool())
 	r.RegisterAlias(NewReadFileAliasTool())
 

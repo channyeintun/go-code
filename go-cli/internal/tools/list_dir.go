@@ -1,0 +1,131 @@
+package tools
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+type ListDirTool struct{}
+
+type listDirEntry struct {
+	Name      string `json:"name"`
+	IsDir     bool   `json:"isDir"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+func NewListDirTool() *ListDirTool {
+	return &ListDirTool{}
+}
+
+func (t *ListDirTool) Name() string {
+	return "list_dir"
+}
+
+func (t *ListDirTool) Description() string {
+	return "List the direct contents of a directory in a structured JSON-lines format."
+}
+
+func (t *ListDirTool) InputSchema() any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"DirectoryPath": map[string]any{
+				"type":        "string",
+				"description": "The absolute path to the directory to inspect.",
+			},
+		},
+		"required": []string{"DirectoryPath"},
+	}
+}
+
+func (t *ListDirTool) Permission() PermissionLevel {
+	return PermissionReadOnly
+}
+
+func (t *ListDirTool) IsConcurrencySafe(input ToolInput) bool {
+	return true
+}
+
+func (t *ListDirTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	select {
+	case <-ctx.Done():
+		return ToolOutput{}, ctx.Err()
+	default:
+	}
+
+	directoryPath, ok := firstStringParam(input.Params, "DirectoryPath", "directory_path")
+	if !ok || strings.TrimSpace(directoryPath) == "" {
+		return ToolOutput{}, fmt.Errorf("list_dir requires DirectoryPath")
+	}
+	if !filepath.IsAbs(directoryPath) {
+		cwd, _ := os.Getwd()
+		directoryPath = filepath.Join(cwd, directoryPath)
+	}
+
+	info, err := os.Stat(directoryPath)
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("stat directory %q: %w", directoryPath, err)
+	}
+	if !info.IsDir() {
+		return ToolOutput{}, fmt.Errorf("%q is not a directory", directoryPath)
+	}
+
+	entries, err := os.ReadDir(directoryPath)
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("read directory %q: %w", directoryPath, err)
+	}
+
+	results := make([]listDirEntry, 0, len(entries))
+	for _, entry := range entries {
+		select {
+		case <-ctx.Done():
+			return ToolOutput{}, ctx.Err()
+		default:
+		}
+
+		item := listDirEntry{
+			Name:  entry.Name(),
+			IsDir: entry.IsDir(),
+		}
+		if !entry.IsDir() {
+			entryInfo, err := entry.Info()
+			if err == nil {
+				item.SizeBytes = entryInfo.Size()
+			}
+		}
+		results = append(results, item)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].IsDir != results[j].IsDir {
+			return results[i].IsDir
+		}
+		return strings.ToLower(results[i].Name) < strings.ToLower(results[j].Name)
+	})
+
+	var out bytes.Buffer
+	for _, item := range results {
+		encoded, err := json.Marshal(item)
+		if err != nil {
+			return ToolOutput{}, fmt.Errorf("marshal list_dir entry: %w", err)
+		}
+		out.Write(encoded)
+		out.WriteByte('\n')
+	}
+	fmt.Fprintf(&out, "Summary: This directory contains %d entr%s.", len(results), pluralizeEntries(len(results)))
+
+	return ToolOutput{Output: strings.TrimRight(out.String(), "\n")}, nil
+}
+
+func pluralizeEntries(count int) string {
+	if count == 1 {
+		return "y"
+	}
+	return "ies"
+}

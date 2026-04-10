@@ -153,6 +153,8 @@ When the agent wants to run a command or write a file, you'll see a permission p
 
 Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always require explicit approval, even with `[s]`.
 
+Background shell sessions are also supported through the `bash` tool by setting `background=true`, then following up with `command_status` and `send_command_input` using the returned `CommandId`.
+
 ## Tools
 
 The agent has access to:

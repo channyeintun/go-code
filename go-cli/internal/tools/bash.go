@@ -65,6 +65,10 @@ func (t *BashTool) InputSchema() any {
 				"type":        "string",
 				"description": "The zsh command to execute.",
 			},
+			"background": map[string]any{
+				"type":        "boolean",
+				"description": "Start the command in the background and return a CommandId for follow-up status and stdin tools.",
+			},
 			"cwd": map[string]any{
 				"type":        "string",
 				"description": "Optional working directory for the command.",
@@ -84,6 +88,9 @@ func (t *BashTool) Permission() PermissionLevel {
 }
 
 func (t *BashTool) IsConcurrencySafe(input ToolInput) bool {
+	if firstBoolParam(input.Params, "background") {
+		return false
+	}
 	command, _ := stringParam(input.Params, "command")
 	return bashReadOnlyCommands.MatchString(command)
 }
@@ -101,6 +108,21 @@ func (t *BashTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, er
 	workingDir, err := resolveWorkingDirectory(input.Params)
 	if err != nil {
 		return ToolOutput{}, err
+	}
+
+	if firstBoolParam(input.Params, "background") {
+		bg, err := startBackgroundShellCommand(command, workingDir)
+		if err != nil {
+			return ToolOutput{}, err
+		}
+		result, err := renderBackgroundCommandResult(backgroundCommandResult{
+			CommandID: bg.id,
+			Running:   true,
+		})
+		if err != nil {
+			return ToolOutput{}, fmt.Errorf("render background command result: %w", err)
+		}
+		return ToolOutput{Output: result}, nil
 	}
 
 	commandCtx := ctx
