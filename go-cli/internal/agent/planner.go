@@ -11,16 +11,20 @@ import (
 )
 
 const (
-	plannerSource      = "planner"
-	planArtifactSlot   = "active"
-	planStatusDraft    = "draft"
-	planStatusFinal    = "final"
-	planArtifactTitle  = "Implementation Plan"
-	planModePromptHint = "When plan mode is active, you MUST still use read tools (file_read, glob, grep, bash with read-only commands like ls/cat/find) to gather information. Only avoid write tools (file_write, file_edit). Produce or revise the implementation plan, and tell the user to switch to /fast when they want implementation to begin."
+	plannerSource            = "planner"
+	planArtifactSlot         = "active"
+	planStatusDraft          = "draft"
+	planStatusFinal          = "final"
+	planArtifactTitle        = "Implementation Plan"
+	taskListArtifactSlot     = "active"
+	taskListArtifactTitle    = "Task List"
+	walkthroughArtifactSlot  = "latest"
+	walkthroughArtifactTitle = "Walkthrough"
+	planModePromptHint       = "When plan mode is active, you MUST still use read tools (file_read, glob, grep, bash with read-only commands like ls/cat/find) to gather information. Only avoid write tools (file_write, file_edit). Produce or revise the implementation plan, and tell the user to switch to /fast when they want implementation to begin."
 )
 
-// PlanArtifactUpdate describes a plan artifact mutation that should be emitted to the UI.
-type PlanArtifactUpdate struct {
+// ArtifactUpdate describes an artifact mutation that should be emitted to the UI.
+type ArtifactUpdate struct {
 	Artifact artifactspkg.Artifact
 	Content  string
 	Created  bool
@@ -42,10 +46,38 @@ func NewPlanner(mode ExecutionMode, sessionID string, artifactManager *artifacts
 	}
 }
 
-// BeginTurn creates or refreshes the active plan artifact in plan mode.
-func (p *Planner) BeginTurn(ctx context.Context, userRequest string) (*PlanArtifactUpdate, error) {
-	if !p.enabled() {
+// BeginTurn creates or refreshes session-scoped planning artifacts for the current turn.
+func (p *Planner) BeginTurn(ctx context.Context, userRequest string) ([]ArtifactUpdate, error) {
+	if p == nil || strings.TrimSpace(p.sessionID) == "" || p.artifactManager == nil {
 		return nil, nil
+	}
+
+	updates := make([]ArtifactUpdate, 0, 2)
+	if shouldMaintainTaskList(userRequest) {
+		if owned, err := p.shouldManageSessionArtifact(ctx, artifactspkg.KindTaskList, taskListArtifactSlot); err != nil {
+			return nil, err
+		} else if owned {
+			content := artifactspkg.DraftTaskListMarkdown(userRequest)
+			artifact, _, created, err := p.artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+				Kind:    artifactspkg.KindTaskList,
+				Scope:   artifactspkg.ScopeSession,
+				Title:   taskListArtifactTitle,
+				Source:  plannerSource,
+				Content: content,
+				Metadata: map[string]any{
+					"mode":   string(p.mode),
+					"status": planStatusDraft,
+				},
+			}, p.sessionID, taskListArtifactSlot)
+			if err != nil {
+				return nil, err
+			}
+			updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: content, Created: created})
+		}
+	}
+
+	if !p.enabled() {
+		return updates, nil
 	}
 
 	content := artifactspkg.DraftImplementationPlanMarkdown(userRequest)
@@ -64,60 +96,81 @@ func (p *Planner) BeginTurn(ctx context.Context, userRequest string) (*PlanArtif
 		return nil, err
 	}
 
-	return &PlanArtifactUpdate{
-		Artifact: artifact,
-		Content:  content,
-		Created:  created,
-	}, nil
+	updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: content, Created: created})
+	return updates, nil
 }
 
 // FinalizeTurn persists the plan text produced during the current turn.
-func (p *Planner) FinalizeTurn(ctx context.Context, artifactID string, userRequest string, messages []api.Message, fromIndex int) (*PlanArtifactUpdate, error) {
-	if !p.enabled() {
+func (p *Planner) FinalizeTurn(ctx context.Context, artifactID string, userRequest string, messages []api.Message, fromIndex int) ([]ArtifactUpdate, error) {
+	if p == nil || strings.TrimSpace(p.sessionID) == "" || p.artifactManager == nil {
 		return nil, nil
 	}
 
-	plan := latestAssistantPlanSince(messages, fromIndex)
-	if strings.TrimSpace(plan) == "" {
+	updates := make([]ArtifactUpdate, 0, 2)
+	assistantResponse := latestAssistantPlanSince(messages, fromIndex)
+	if strings.TrimSpace(assistantResponse) == "" {
 		return nil, nil
 	}
-	if !shouldPersistImplementationPlan(userRequest, plan) {
+
+	if p.enabled() && shouldPersistImplementationPlan(userRequest, assistantResponse) {
+		content := artifactspkg.RenderImplementationPlanMarkdown(userRequest, assistantResponse)
+		request := artifactspkg.MarkdownRequest{
+			ID:      strings.TrimSpace(artifactID),
+			Kind:    artifactspkg.KindImplementationPlan,
+			Scope:   artifactspkg.ScopeSession,
+			Title:   planArtifactTitle,
+			Source:  plannerSource,
+			Content: content,
+			Metadata: map[string]any{
+				"mode":   string(ModePlan),
+				"status": planStatusFinal,
+			},
+		}
+
+		var (
+			artifact artifactspkg.Artifact
+			created  bool
+			err      error
+		)
+		if strings.TrimSpace(artifactID) == "" {
+			artifact, _, created, err = p.artifactManager.UpsertSessionMarkdown(ctx, request, p.sessionID, planArtifactSlot)
+		} else {
+			artifact, _, created, err = p.artifactManager.SaveMarkdown(ctx, request)
+		}
+		if err != nil {
+			return nil, err
+		}
+		updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: content, Created: created})
+	}
+
+	if p.mode == ModeFast && shouldPersistWalkthrough(userRequest, assistantResponse) {
+		owned, err := p.shouldManageSessionArtifact(ctx, artifactspkg.KindWalkthrough, walkthroughArtifactSlot)
+		if err != nil {
+			return nil, err
+		}
+		if owned {
+			content := artifactspkg.RenderWalkthroughMarkdown(userRequest, assistantResponse)
+			artifact, _, created, err := p.artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+				Kind:    artifactspkg.KindWalkthrough,
+				Scope:   artifactspkg.ScopeSession,
+				Title:   walkthroughArtifactTitle,
+				Source:  plannerSource,
+				Content: content,
+				Metadata: map[string]any{
+					"mode": string(ModeFast),
+				},
+			}, p.sessionID, walkthroughArtifactSlot)
+			if err != nil {
+				return nil, err
+			}
+			updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: content, Created: created})
+		}
+	}
+
+	if len(updates) == 0 {
 		return nil, nil
 	}
-
-	content := artifactspkg.RenderImplementationPlanMarkdown(userRequest, plan)
-	request := artifactspkg.MarkdownRequest{
-		ID:      strings.TrimSpace(artifactID),
-		Kind:    artifactspkg.KindImplementationPlan,
-		Scope:   artifactspkg.ScopeSession,
-		Title:   planArtifactTitle,
-		Source:  plannerSource,
-		Content: content,
-		Metadata: map[string]any{
-			"mode":   string(ModePlan),
-			"status": planStatusFinal,
-		},
-	}
-
-	var (
-		artifact artifactspkg.Artifact
-		created  bool
-		err      error
-	)
-	if strings.TrimSpace(artifactID) == "" {
-		artifact, _, created, err = p.artifactManager.UpsertSessionMarkdown(ctx, request, p.sessionID, planArtifactSlot)
-	} else {
-		artifact, _, created, err = p.artifactManager.SaveMarkdown(ctx, request)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &PlanArtifactUpdate{
-		Artifact: artifact,
-		Content:  content,
-		Created:  created,
-	}, nil
+	return updates, nil
 }
 
 // ValidateTool blocks write tools while plan mode is active.
@@ -222,6 +275,44 @@ func shouldPersistImplementationPlan(userRequest string, assistantResponse strin
 	}
 
 	return requestedImplementation
+}
+
+func shouldMaintainTaskList(userRequest string) bool {
+	request := normalizeIntentText(userRequest)
+	if request == "" {
+		return false
+	}
+	return containsAny(request, planIntentTerms) || containsAny(request, implementationIntentTerms)
+}
+
+func shouldPersistWalkthrough(userRequest string, assistantResponse string) bool {
+	request := normalizeIntentText(userRequest)
+	response := strings.TrimSpace(assistantResponse)
+	if request == "" || response == "" {
+		return false
+	}
+	if !containsAny(request, implementationIntentTerms) {
+		return false
+	}
+	if containsAny(strings.ToLower(response), explicitPlanResponseTerms) {
+		return false
+	}
+	return true
+}
+
+func (p *Planner) shouldManageSessionArtifact(ctx context.Context, kind artifactspkg.Kind, slot string) (bool, error) {
+	if p == nil || strings.TrimSpace(p.sessionID) == "" || p.artifactManager == nil {
+		return false, nil
+	}
+
+	artifact, found, err := p.artifactManager.FindSessionArtifact(ctx, kind, artifactspkg.ScopeSession, p.sessionID, slot)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return true, nil
+	}
+	return strings.TrimSpace(artifact.Source) == "" || artifact.Source == plannerSource, nil
 }
 
 var planIntentTerms = []string{

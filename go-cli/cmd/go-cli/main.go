@@ -195,6 +195,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	}
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
 	toolpkg.SetGlobalFileHistory(fileHistory)
+	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 	startedAt := time.Now()
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -307,6 +308,22 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			availableSkills, _ := skillspkg.LoadAll(cwd)
 			messagesBeforeQuery := len(messages)
 			planner := agent.NewPlanner(mode, sessionID, artifactManager)
+			if updates, beginErr := planner.BeginTurn(ctx, payload.Text); beginErr != nil {
+				if emitErr := bridge.EmitError(fmt.Sprintf("create session artifact: %v", beginErr), true); emitErr != nil {
+					return emitErr
+				}
+			} else {
+				for _, update := range updates {
+					if update.Created {
+						if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
+							return err
+						}
+					}
+					if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
+						return err
+					}
+				}
+			}
 
 			deps := agent.QueryDeps{
 				CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
@@ -387,18 +404,20 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 
 			if !queryFailed && !queryCancelled {
-				if update, finalizeErr := planner.FinalizeTurn(ctx, "", payload.Text, messages, messagesBeforeQuery); finalizeErr != nil {
-					if emitErr := bridge.EmitError(fmt.Sprintf("update implementation plan artifact: %v", finalizeErr), true); emitErr != nil {
+				if updates, finalizeErr := planner.FinalizeTurn(ctx, "", payload.Text, messages, messagesBeforeQuery); finalizeErr != nil {
+					if emitErr := bridge.EmitError(fmt.Sprintf("update session artifact: %v", finalizeErr), true); emitErr != nil {
 						return emitErr
 					}
-				} else if update != nil {
-					if update.Created {
-						if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
+				} else {
+					for _, update := range updates {
+						if update.Created {
+							if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
+								return err
+							}
+						}
+						if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
 							return err
 						}
-					}
-					if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
-						return err
 					}
 				}
 
@@ -459,6 +478,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				return err
 			}
 			if handled {
+				toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 				continue
 			}
 			continue
@@ -583,7 +603,7 @@ func parseExecutionMode(mode string) agent.ExecutionMode {
 }
 
 func defaultSystemPrompt() string {
-	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed.\n\nIMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.\nAlways use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.\nUse these exact tool names when calling tools: bash, file_read, file_write, file_edit, glob, grep, web_search, web_fetch, git. Do not invent alternate names like file_search or read_file.\n\nArtifacts: the runtime can surface markdown artifacts in a dedicated panel. Implementation plans in plan mode are persisted automatically as implementation-plan artifacts, and oversized tool outputs may be saved as markdown artifacts. Write long structured content in clean GitHub-flavored markdown so it renders well in that panel. Do not claim that you can directly create arbitrary task.md or walkthrough.md artifacts unless the runtime explicitly exposes that capability."
+	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed.\n\nIMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.\nAlways use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.\nUse the exact runtime tool names when calling tools, including bash, list_dir, file_read, file_write, file_edit, multi_replace_file_content, glob, grep, web_search, web_fetch, git, command_status, send_command_input, upsert_task_list, and save_walkthrough. Do not invent alternate names like file_search or read_file.\n\nArtifacts: the runtime can surface markdown artifacts in a dedicated panel. Implementation plans in plan mode are persisted automatically as implementation-plan artifacts, multi-step implementation turns may seed a task-list artifact, oversized tool outputs may be saved as tool-log artifacts, and the runtime exposes upsert_task_list plus save_walkthrough for intentional task-list and walkthrough updates. Write artifact content in clean GitHub-flavored markdown so it renders well in that panel. Use upsert_task_list for live multi-step progress, and use save_walkthrough after a meaningful implementation slice so the user can catch up quickly."
 }
 
 func systemPromptForMode(mode agent.ExecutionMode) string {
@@ -751,6 +771,17 @@ func executeToolCalls(
 					return nil, err
 				}
 				continue
+			}
+
+			for _, artifactUpdate := range result.Output.Artifacts {
+				if artifactUpdate.Created {
+					if err := emitArtifactCreated(bridge, artifactUpdate.Artifact); err != nil {
+						return nil, err
+					}
+				}
+				if err := emitArtifactUpdated(bridge, artifactUpdate.Artifact, artifactUpdate.Content); err != nil {
+					return nil, err
+				}
 			}
 
 			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{

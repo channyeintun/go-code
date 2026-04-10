@@ -35,6 +35,8 @@ func NewRegistry() *Registry {
 	r.Register(NewGitTool())
 	r.Register(NewCommandStatusTool())
 	r.Register(NewSendCommandInputTool())
+	r.Register(NewUpsertTaskListTool())
+	r.Register(NewSaveWalkthroughTool())
 	r.RegisterAlias(NewFileSearchAliasTool())
 	r.RegisterAlias(NewReadFileAliasTool())
 

@@ -1,6 +1,10 @@
 package tools
 
-import "context"
+import (
+	"context"
+
+	artifactspkg "github.com/channyeintun/go-cli/internal/artifacts"
+)
 
 // PermissionLevel classifies the default permission posture for a tool.
 type PermissionLevel int
@@ -28,6 +32,14 @@ type ToolOutput struct {
 	Preview    string
 	Insertions int
 	Deletions  int
+	Artifacts  []ArtifactMutation
+}
+
+// ArtifactMutation describes an artifact created or updated during tool execution.
+type ArtifactMutation struct {
+	Artifact artifactspkg.Artifact
+	Content  string
+	Created  bool
 }
 
 // Tool is the interface every tool must implement.

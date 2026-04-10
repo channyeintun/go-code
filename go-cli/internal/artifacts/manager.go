@@ -159,6 +159,63 @@ func RenderImplementationPlanMarkdown(userRequest string, plan string) string {
 `, blockquote(request), plan)) + "\n"
 }
 
+// DraftTaskListMarkdown renders the initial in-progress task-list artifact.
+func DraftTaskListMarkdown(userRequest string) string {
+	return RenderTaskListMarkdown(userRequest, strings.TrimSpace(`## Progress
+
+- [ ] Inspect the relevant code and constraints
+- [ ] Implement or revise the requested changes
+- [ ] Verify the result and summarize the outcome`))
+}
+
+// RenderTaskListMarkdown wraps a task list with the captured request.
+func RenderTaskListMarkdown(userRequest string, taskList string) string {
+	request := strings.TrimSpace(userRequest)
+	if request == "" {
+		request = "No request captured."
+	}
+
+	taskList = strings.TrimSpace(taskList)
+	if taskList == "" {
+		taskList = "- [ ] Add task details."
+	}
+
+	return strings.TrimSpace(fmt.Sprintf(`# Task List
+
+## Request
+
+%s
+
+---
+
+%s
+`, blockquote(request), taskList)) + "\n"
+}
+
+// RenderWalkthroughMarkdown wraps a walkthrough summary with the captured request.
+func RenderWalkthroughMarkdown(userRequest string, summary string) string {
+	request := strings.TrimSpace(userRequest)
+	if request == "" {
+		request = "No request captured."
+	}
+
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		summary = "No walkthrough summary was provided."
+	}
+
+	return strings.TrimSpace(fmt.Sprintf(`# Walkthrough
+
+## Request
+
+%s
+
+---
+
+%s
+`, blockquote(request), summary)) + "\n"
+}
+
 // RenderToolLogMarkdown formats an oversized tool result as a markdown artifact.
 func RenderToolLogMarkdown(sessionID string, toolName string, toolCallID string, rawInput string, output string) string {
 	var builder strings.Builder
