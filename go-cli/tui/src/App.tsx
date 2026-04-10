@@ -1,4 +1,4 @@
-import React, { type FC, useEffect } from "react";
+import React, { type FC, useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents } from "./hooks/useEvents.js";
@@ -9,6 +9,11 @@ import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
 import { usePromptHistory } from "./hooks/usePromptHistory.js";
+import {
+  parseImageReferenceIds,
+  type PastedImageData,
+} from "./utils/imagePaste.js";
+import type { UserInputImagePayload } from "./protocol/types.js";
 
 interface AppProps {
   enginePath: string;
@@ -16,9 +21,24 @@ interface AppProps {
   mode: string;
 }
 
+function toUserInputImagePayload(
+  id: number,
+  image: PastedImageData,
+): UserInputImagePayload {
+  return {
+    id,
+    data: image.data,
+    media_type: image.mediaType,
+    filename: image.filename,
+    source_path: image.sourcePath,
+  };
+}
+
 const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const engine = useEngine(enginePath, { model, mode });
   const prompt = usePromptHistory();
+  const [promptImages, setPromptImages] = useState<UserInputImagePayload[]>([]);
+  const [nextImageId, setNextImageId] = useState(1);
   const {
     uiState,
     handleEvent,
@@ -44,20 +64,46 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     handleEvent(engine.lastEvent);
   }, [engine.eventVersion, engine.lastEvent, handleEvent]);
 
+  useEffect(() => {
+    setPromptImages((current) => {
+      const referencedIds = parseImageReferenceIds(prompt.value);
+      const next = current.filter((image) => referencedIds.has(image.id));
+      return next.length === current.length ? current : next;
+    });
+  }, [prompt.value]);
+
+  const handleImagePaste = (images: PastedImageData[]) => {
+    let startId = nextImageId;
+    const nextImages = images.map((image, index) => {
+      const id = startId + index;
+      prompt.insertImageReference(id);
+      return toUserInputImagePayload(id, image);
+    });
+
+    setPromptImages((current) => [...current, ...nextImages]);
+    setNextImageId(startId + images.length);
+  };
+
   const handleSubmit = () => {
     const text = prompt.submit();
     if (!text) {
       return;
     }
 
+    const referencedIds = parseImageReferenceIds(text);
+    const images = promptImages.filter((image) => referencedIds.has(image.id));
+    setPromptImages((current) =>
+      current.filter((image) => !referencedIds.has(image.id)),
+    );
+
     appendUserMessage(text);
     clearStream();
     beginAssistantTurn();
-    if (text.startsWith("/")) {
+    if (text.startsWith("/") && images.length === 0) {
       const [cmd, ...rest] = text.slice(1).split(" ");
       engine.sendCommand(cmd!, rest.join(" "));
     } else {
-      engine.sendInput(text);
+      engine.sendInput(text, images);
     }
   };
 
@@ -154,6 +200,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           mode={uiState.mode}
           isLoading={uiState.isStreaming}
           onSubmit={handleSubmit}
+          onImagePaste={handleImagePaste}
           onModeToggle={engine.sendModeToggle}
           onCancel={engine.sendCancel}
           disabled={

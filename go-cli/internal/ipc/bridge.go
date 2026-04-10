@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+const maxIPCMessageSize = 10 * 1024 * 1024
+
 // Bridge manages NDJSON communication between Go engine and Ink frontend.
 type Bridge struct {
 	reader  *bufio.Scanner
@@ -27,7 +29,7 @@ type readResult struct {
 // NewBridge creates a Bridge reading from r and writing to w.
 func NewBridge(r io.Reader, w io.Writer) *Bridge {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB line buffer
+	scanner.Buffer(make([]byte, 1024*1024), maxIPCMessageSize)
 	return &Bridge{
 		reader: scanner,
 		writer: w,

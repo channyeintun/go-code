@@ -11,7 +11,7 @@ import (
 type ClientType int
 
 const (
-	AnthropicAPI   ClientType = iota
+	AnthropicAPI ClientType = iota
 	GeminiAPI
 	OpenAICompatAPI
 	OllamaAPI
@@ -37,12 +37,21 @@ const (
 	RoleTool      Role = "tool"
 )
 
+type ImageAttachment struct {
+	ID         int    `json:"id,omitempty"`
+	Data       string `json:"data,omitempty"`
+	MediaType  string `json:"media_type,omitempty"`
+	Filename   string `json:"filename,omitempty"`
+	SourcePath string `json:"source_path,omitempty"`
+}
+
 // Message is a conversation message.
 type Message struct {
-	Role       Role        `json:"role"`
-	Content    string      `json:"content,omitempty"`
-	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
-	ToolResult *ToolResult `json:"tool_result,omitempty"`
+	Role       Role              `json:"role"`
+	Content    string            `json:"content,omitempty"`
+	Images     []ImageAttachment `json:"images,omitempty"`
+	ToolCalls  []ToolCall        `json:"tool_calls,omitempty"`
+	ToolResult *ToolResult       `json:"tool_result,omitempty"`
 }
 
 // ToolCall represents a model-requested tool invocation.
@@ -90,11 +99,11 @@ const (
 
 // ModelEvent is one event from a streaming model response.
 type ModelEvent struct {
-	Type      ModelEventType
-	Text      string    // for Token/Thinking
-	ToolCall  *ToolCall // for ToolCall
-	StopReason string   // for Stop: "end_turn", "tool_use", "max_tokens"
-	Usage     *Usage    // for Usage
+	Type       ModelEventType
+	Text       string    // for Token/Thinking
+	ToolCall   *ToolCall // for ToolCall
+	StopReason string    // for Stop: "end_turn", "tool_use", "max_tokens"
+	Usage      *Usage    // for Usage
 }
 
 // Usage reports token consumption for a model call.

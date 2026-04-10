@@ -23,7 +23,8 @@ func NormalizeMessages(messages []api.Message) []api.Message {
 		// Consolidate consecutive messages with the same role (except tool)
 		if len(result) > 0 && result[len(result)-1].Role == msg.Role &&
 			msg.Role != api.RoleTool && len(msg.ToolCalls) == 0 &&
-			len(result[len(result)-1].ToolCalls) == 0 {
+			len(result[len(result)-1].ToolCalls) == 0 &&
+			len(msg.Images) == 0 && len(result[len(result)-1].Images) == 0 {
 			result[len(result)-1].Content += "\n" + msg.Content
 			continue
 		}

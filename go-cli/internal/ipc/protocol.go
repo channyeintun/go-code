@@ -166,8 +166,17 @@ type SessionRestoredPayload struct {
 
 // Client message payloads
 
+type ImageInputPayload struct {
+	ID         int    `json:"id"`
+	Data       string `json:"data"`
+	MediaType  string `json:"media_type"`
+	Filename   string `json:"filename,omitempty"`
+	SourcePath string `json:"source_path,omitempty"`
+}
+
 type UserInputPayload struct {
-	Text string `json:"text"`
+	Text   string              `json:"text"`
+	Images []ImageInputPayload `json:"images,omitempty"`
 }
 
 type SlashCommandPayload struct {

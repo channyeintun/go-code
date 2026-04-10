@@ -359,7 +359,7 @@ func buildAnthropicMessages(systemPrompt string, messages []Message) (string, []
 }
 
 func convertAnthropicMessage(msg Message) (anthropicMessage, bool, error) {
-	blocks := make([]map[string]any, 0, 1+len(msg.ToolCalls))
+	blocks := make([]map[string]any, 0, 1+len(msg.ToolCalls)+len(msg.Images))
 	if trimmed := strings.TrimSpace(msg.Content); trimmed != "" {
 		blocks = append(blocks, map[string]any{
 			"type": "text",
@@ -369,6 +369,16 @@ func convertAnthropicMessage(msg Message) (anthropicMessage, bool, error) {
 
 	switch msg.Role {
 	case RoleUser:
+		for _, image := range msg.Images {
+			blocks = append(blocks, map[string]any{
+				"type": "image",
+				"source": map[string]any{
+					"type":       "base64",
+					"media_type": image.MediaType,
+					"data":       image.Data,
+				},
+			})
+		}
 		if msg.ToolResult != nil {
 			blocks = append(blocks, toolResultBlock(*msg.ToolResult))
 		}

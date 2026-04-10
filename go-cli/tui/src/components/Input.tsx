@@ -1,12 +1,14 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, usePaste } from "ink";
 import type { PromptController } from "../hooks/usePromptHistory.js";
+import { parsePasteParts, type PastedImageData } from "../utils/imagePaste.js";
 
 interface InputProps {
   prompt: PromptController;
   mode: string;
   isLoading: boolean;
   onSubmit: () => void;
+  onImagePaste: (images: PastedImageData[]) => void;
   onModeToggle: () => void;
   onCancel: () => void;
   disabled?: boolean;
@@ -125,6 +127,7 @@ const Input: FC<InputProps> = ({
   mode,
   isLoading,
   onSubmit,
+  onImagePaste,
   onModeToggle,
   onCancel,
   disabled,
@@ -260,6 +263,21 @@ const Input: FC<InputProps> = ({
       prompt.insertText(input);
       return;
     }
+  });
+
+  usePaste((text) => {
+    if (disabled) {
+      return;
+    }
+
+    void parsePasteParts(text).then((parts) => {
+      if (parts.text.length > 0) {
+        prompt.insertText(parts.text);
+      }
+      if (parts.images.length > 0) {
+        onImagePaste(parts.images);
+      }
+    });
   });
 
   const showPlaceholder = prompt.value.length === 0;

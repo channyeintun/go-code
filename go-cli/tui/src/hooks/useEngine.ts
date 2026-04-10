@@ -1,8 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { StreamEvent } from "../protocol/types.js";
-import { parseEvent, serializeMessage, createMessage } from "../protocol/codec.js";
+import type { StreamEvent, UserInputImagePayload } from "../protocol/types.js";
+import {
+  parseEvent,
+  serializeMessage,
+  createMessage,
+} from "../protocol/codec.js";
 import type { ClientMessage } from "../protocol/types.js";
 
 interface EngineState {
@@ -57,7 +61,8 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
           next.ready = true;
         }
         if (event.type === "error") {
-          next.error = (event.payload as { message: string })?.message ?? "Unknown error";
+          next.error =
+            (event.payload as { message: string })?.message ?? "Unknown error";
         }
         return next;
       });
@@ -78,7 +83,10 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
 
     proc.on("exit", (code) => {
       if (code !== 0) {
-        setState((prev) => ({ ...prev, error: `Engine exited with code ${code}` }));
+        setState((prev) => ({
+          ...prev,
+          error: `Engine exited with code ${code}`,
+        }));
       }
     });
 
@@ -118,24 +126,44 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
   }, []);
 
   const sendInput = useCallback(
-    (text: string) => send(createMessage("user_input", { text })),
-    [send]
+    (text: string, images?: UserInputImagePayload[]) =>
+      send(
+        createMessage("user_input", {
+          text,
+          images,
+        }),
+      ),
+    [send],
   );
 
   const sendCommand = useCallback(
     (command: string, args?: string) =>
       send(createMessage("slash_command", { command, args: args ?? "" })),
-    [send]
+    [send],
   );
 
   const sendCancel = useCallback(() => send(createMessage("cancel")), [send]);
-  const sendModeToggle = useCallback(() => send(createMessage("mode_toggle")), [send]);
-  const sendShutdown = useCallback(() => send(createMessage("shutdown")), [send]);
+  const sendModeToggle = useCallback(
+    () => send(createMessage("mode_toggle")),
+    [send],
+  );
+  const sendShutdown = useCallback(
+    () => send(createMessage("shutdown")),
+    [send],
+  );
 
   const sendPermissionResponse = useCallback(
-    (requestId: string, decision: "allow" | "deny" | "always_allow" | "allow_all_session") =>
-      send(createMessage("permission_response", { request_id: requestId, decision })),
-    [send]
+    (
+      requestId: string,
+      decision: "allow" | "deny" | "always_allow" | "allow_all_session",
+    ) =>
+      send(
+        createMessage("permission_response", {
+          request_id: requestId,
+          decision,
+        }),
+      ),
+    [send],
   );
 
   return {

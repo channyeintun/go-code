@@ -248,7 +248,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 				return fmt.Errorf("decode user input: %w", err)
 			}
-			if strings.TrimSpace(payload.Text) == "" {
+			if strings.TrimSpace(payload.Text) == "" && len(payload.Images) == 0 {
 				continue
 			}
 
@@ -265,9 +265,28 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				return err
 			}
 
+			if len(payload.Images) > 0 && !client.Capabilities().SupportsVision {
+				if err := bridge.EmitError(fmt.Sprintf("model %q does not support image input", activeModelID), true); err != nil {
+					return err
+				}
+				continue
+			}
+
+			images := make([]api.ImageAttachment, 0, len(payload.Images))
+			for _, image := range payload.Images {
+				images = append(images, api.ImageAttachment{
+					ID:         image.ID,
+					Data:       image.Data,
+					MediaType:  image.MediaType,
+					Filename:   image.Filename,
+					SourcePath: image.SourcePath,
+				})
+			}
+
 			messages = append(messages, api.Message{
 				Role:    api.RoleUser,
 				Content: payload.Text,
+				Images:  images,
 			})
 			availableSkills, _ := skillspkg.LoadAll(cwd)
 			messagesBeforeQuery := len(messages)

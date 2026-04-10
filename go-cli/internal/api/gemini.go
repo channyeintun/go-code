@@ -260,12 +260,20 @@ func buildGeminiContents(systemPrompt string, messages []Message) ([]geminiConte
 
 func convertGeminiMessage(msg Message) ([]geminiContent, error) {
 	trimmed := strings.TrimSpace(msg.Content)
-	parts := make([]geminiPart, 0, 1+len(msg.ToolCalls))
+	parts := make([]geminiPart, 0, 1+len(msg.ToolCalls)+len(msg.Images))
 
 	switch msg.Role {
 	case RoleUser:
 		if trimmed != "" {
 			parts = append(parts, geminiPart{Text: trimmed})
+		}
+		for _, image := range msg.Images {
+			parts = append(parts, geminiPart{
+				InlineData: &geminiInlineData{
+					MimeType: image.MediaType,
+					Data:     image.Data,
+				},
+			})
 		}
 		if msg.ToolResult != nil {
 			resultPart, err := geminiFunctionResponsePart(*msg.ToolResult)
@@ -441,8 +449,14 @@ type geminiContent struct {
 type geminiPart struct {
 	Text             string                  `json:"text,omitempty"`
 	Thought          bool                    `json:"thought,omitempty"`
+	InlineData       *geminiInlineData       `json:"inlineData,omitempty"`
 	FunctionCall     *geminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *geminiFunctionResponse `json:"functionResponse,omitempty"`
+}
+
+type geminiInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
 }
 
 type geminiFunctionCall struct {

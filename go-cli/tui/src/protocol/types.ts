@@ -38,6 +38,19 @@ export interface ClientMessage {
   payload?: unknown;
 }
 
+export interface UserInputImagePayload {
+  id: number;
+  data: string;
+  media_type: string;
+  filename?: string;
+  source_path?: string;
+}
+
+export interface UserInputPayload {
+  text: string;
+  images?: UserInputImagePayload[];
+}
+
 // Typed payloads
 export interface TokenDeltaPayload {
   text: string;

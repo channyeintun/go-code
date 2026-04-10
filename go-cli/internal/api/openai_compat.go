@@ -270,8 +270,9 @@ func convertOpenAICompatMessage(msg Message) ([]openAICompatMessage, error) {
 
 	switch msg.Role {
 	case RoleUser:
-		if trimmed != "" {
-			converted = append(converted, openAICompatMessage{Role: "user", Content: trimmed})
+		if trimmed != "" || len(msg.Images) > 0 {
+			content := buildOpenAICompatUserContent(trimmed, msg.Images)
+			converted = append(converted, openAICompatMessage{Role: "user", Content: content})
 		}
 		if msg.ToolResult != nil {
 			converted = append(converted, openAICompatToolResultMessage(*msg.ToolResult))
@@ -307,6 +308,31 @@ func convertOpenAICompatMessage(msg Message) ([]openAICompatMessage, error) {
 	}
 
 	return converted, nil
+}
+
+func buildOpenAICompatUserContent(text string, images []ImageAttachment) any {
+	if len(images) == 0 {
+		return text
+	}
+
+	parts := make([]map[string]any, 0, len(images)+1)
+	if text != "" {
+		parts = append(parts, map[string]any{
+			"type": "text",
+			"text": text,
+		})
+	}
+
+	for _, image := range images {
+		parts = append(parts, map[string]any{
+			"type": "image_url",
+			"image_url": map[string]any{
+				"url": fmt.Sprintf("data:%s;base64,%s", image.MediaType, image.Data),
+			},
+		})
+	}
+
+	return parts
 }
 
 func openAICompatToolResultMessage(result ToolResult) openAICompatMessage {

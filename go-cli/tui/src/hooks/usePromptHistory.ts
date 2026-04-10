@@ -186,6 +186,7 @@ export interface PromptController {
   cursorOffset: number;
   setValue: (value: string) => void;
   setCursorOffset: (offset: number) => void;
+  insertImageReference: (id: number) => void;
   submit: () => string;
   navigateUp: () => void;
   navigateDown: () => void;
@@ -369,6 +370,24 @@ export function usePromptHistory(): PromptController {
       ),
     );
   }, [updateEditedValue]);
+
+  const insertImageReference = useCallback(
+    (id: number) => {
+      updateEditedValue((current) => {
+        const before = current.value.slice(0, current.cursorOffset);
+        const after = current.value.slice(current.cursorOffset);
+        const reference = `${/\s$/.test(before) || before.length === 0 ? "" : " "}[Image #${id}]${/^\s/.test(after) || after.length === 0 ? "" : " "}`;
+
+        return replaceRange(
+          current.value,
+          current.cursorOffset,
+          current.cursorOffset,
+          reference,
+        );
+      });
+    },
+    [updateEditedValue],
+  );
 
   const backspace = useCallback(() => {
     updateEditedValue((current) => {
@@ -591,6 +610,7 @@ export function usePromptHistory(): PromptController {
     cursorOffset: state.cursorOffset,
     setValue,
     setCursorOffset,
+    insertImageReference,
     submit,
     navigateUp,
     navigateDown,
