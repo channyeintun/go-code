@@ -150,11 +150,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         />
       ) : (
         <Input
-          value={prompt.value}
-          onChange={prompt.setValue}
+          prompt={prompt}
           onSubmit={handleSubmit}
-          onHistoryUp={prompt.navigateUp}
-          onHistoryDown={prompt.navigateDown}
           onModeToggle={engine.sendModeToggle}
           onCancel={engine.sendCancel}
           disabled={
