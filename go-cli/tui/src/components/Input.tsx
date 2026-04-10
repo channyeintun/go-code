@@ -1,4 +1,4 @@
-import React, { type FC } from "react";
+import React, { type FC, useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { PromptController } from "../hooks/usePromptHistory.js";
 
@@ -14,11 +14,92 @@ const INPUT_HINT =
   "Enter send | Shift+Enter newline | Arrows move | Tab mode | Esc cancel";
 const DISABLED_HINT = "Engine busy | Esc cancel";
 
-function renderInputLines(value: string, cursorOffset: number): string[] {
-  const renderedValue =
-    value.slice(0, cursorOffset) + "█" + value.slice(cursorOffset);
+function getPromptTextColumns(terminalColumns: number): number {
+  return Math.max(8, terminalColumns - 7);
+}
 
-  return renderedValue.split("\n");
+function getWrappedLineSegments(value: string, columns: number): string[] {
+  const wrapWidth = Math.max(1, columns - 1);
+  const logicalLines = value.split("\n");
+  const segments: string[] = [];
+
+  for (const line of logicalLines) {
+    if (line.length === 0) {
+      segments.push("");
+      continue;
+    }
+
+    for (let offset = 0; offset < line.length; offset += wrapWidth) {
+      segments.push(line.slice(offset, offset + wrapWidth));
+    }
+  }
+
+  return segments;
+}
+
+function renderInputLines(
+  value: string,
+  cursorOffset: number,
+  columns: number,
+): string[] {
+  const wrapWidth = Math.max(1, columns - 1);
+  const logicalLines = value.split("\n");
+  const renderedLines: string[] = [];
+  let lineStartOffset = 0;
+
+  logicalLines.forEach((line, logicalLineIndex) => {
+    if (line.length === 0) {
+      const isCursorHere = cursorOffset === lineStartOffset;
+      renderedLines.push(isCursorHere ? "█" : " ");
+    } else {
+      for (let start = 0; start < line.length; start += wrapWidth) {
+        const end = Math.min(line.length, start + wrapWidth);
+        const segmentStart = lineStartOffset + start;
+        const segmentEnd = lineStartOffset + end;
+        const nextStart = segmentEnd;
+        const isLastWrappedSegment = end === line.length;
+        const isCursorInside =
+          (cursorOffset >= segmentStart && cursorOffset < segmentEnd) ||
+          (cursorOffset === segmentEnd && isLastWrappedSegment);
+
+        if (!isCursorInside) {
+          renderedLines.push(line.slice(start, end));
+          continue;
+        }
+
+        const cursorColumn = cursorOffset - segmentStart;
+        const rendered =
+          line.slice(start, start + cursorColumn) +
+          "█" +
+          line.slice(start + cursorColumn, end);
+        renderedLines.push(rendered);
+
+        if (
+          cursorOffset === segmentEnd &&
+          !isLastWrappedSegment &&
+          nextStart === cursorOffset
+        ) {
+          // The cursor is exactly on a visual wrap boundary, so render it
+          // at the start of the next wrapped line instead of after the last char.
+          renderedLines[renderedLines.length - 1] = line.slice(start, end);
+        }
+      }
+
+      if (
+        cursorOffset === lineStartOffset + line.length &&
+        line.length % wrapWidth === 0
+      ) {
+        renderedLines.push("█");
+      }
+    }
+
+    lineStartOffset += line.length;
+    if (logicalLineIndex < logicalLines.length - 1) {
+      lineStartOffset += 1;
+    }
+  });
+
+  return renderedLines.length > 0 ? renderedLines : ["█"];
 }
 
 const Input: FC<InputProps> = ({
@@ -28,6 +109,28 @@ const Input: FC<InputProps> = ({
   onCancel,
   disabled,
 }) => {
+  const [terminalColumns, setTerminalColumns] = useState(
+    process.stdout.columns ?? 80,
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setTerminalColumns(process.stdout.columns ?? 80);
+    };
+
+    handleResize();
+    process.stdout.on("resize", handleResize);
+
+    return () => {
+      process.stdout.off("resize", handleResize);
+    };
+  }, []);
+
+  const promptTextColumns = useMemo(
+    () => getPromptTextColumns(terminalColumns),
+    [terminalColumns],
+  );
+
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
@@ -49,19 +152,17 @@ const Input: FC<InputProps> = ({
       return;
     }
     if (key.upArrow) {
-      if (prompt.value.includes("\n")) {
-        prompt.moveUp();
-      } else {
+      if (!prompt.moveVisualUp(promptTextColumns)) {
         prompt.navigateUp();
       }
+
       return;
     }
     if (key.downArrow) {
-      if (prompt.value.includes("\n")) {
-        prompt.moveDown();
-      } else {
+      if (!prompt.moveVisualDown(promptTextColumns)) {
         prompt.navigateDown();
       }
+
       return;
     }
     if (key.leftArrow) {
@@ -143,7 +244,15 @@ const Input: FC<InputProps> = ({
 
   const showPlaceholder = prompt.value.length === 0;
   const hint = disabled ? DISABLED_HINT : INPUT_HINT;
-  const renderedLines = renderInputLines(prompt.value, prompt.cursorOffset);
+  const renderedLines = useMemo(
+    () =>
+      renderInputLines(prompt.value, prompt.cursorOffset, promptTextColumns),
+    [prompt.cursorOffset, prompt.value, promptTextColumns],
+  );
+  const wrappedLineCount = useMemo(
+    () => getWrappedLineSegments(prompt.value, promptTextColumns).length,
+    [prompt.value, promptTextColumns],
+  );
 
   return (
     <Box
@@ -173,7 +282,11 @@ const Input: FC<InputProps> = ({
         )}
       </Box>
       <Box paddingLeft={2} marginTop={1}>
-        <Text dimColor>{hint}</Text>
+        <Text dimColor>
+          {showPlaceholder
+            ? hint
+            : `${hint} | ${wrappedLineCount} line${wrappedLineCount === 1 ? "" : "s"}`}
+        </Text>
       </Box>
     </Box>
   );

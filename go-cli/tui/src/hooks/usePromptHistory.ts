@@ -51,6 +51,108 @@ function findLinePosition(value: string, cursorOffset: number) {
   };
 }
 
+interface WrappedSegment {
+  start: number;
+  end: number;
+  logicalLineIndex: number;
+  text: string;
+}
+
+function normalizeWrapWidth(columns: number): number {
+  return Math.max(1, columns - 1);
+}
+
+function buildWrappedSegments(
+  value: string,
+  columns: number,
+): WrappedSegment[] {
+  const wrapWidth = normalizeWrapWidth(columns);
+  const logicalLines = value.split("\n");
+  const segments: WrappedSegment[] = [];
+  let lineStartOffset = 0;
+
+  logicalLines.forEach((line, logicalLineIndex) => {
+    if (line.length === 0) {
+      segments.push({
+        start: lineStartOffset,
+        end: lineStartOffset,
+        logicalLineIndex,
+        text: "",
+      });
+    } else {
+      for (
+        let startInLine = 0;
+        startInLine < line.length;
+        startInLine += wrapWidth
+      ) {
+        const endInLine = Math.min(line.length, startInLine + wrapWidth);
+        segments.push({
+          start: lineStartOffset + startInLine,
+          end: lineStartOffset + endInLine,
+          logicalLineIndex,
+          text: line.slice(startInLine, endInLine),
+        });
+      }
+    }
+
+    lineStartOffset += line.length;
+    if (logicalLineIndex < logicalLines.length - 1) {
+      lineStartOffset += 1;
+    }
+  });
+
+  return segments;
+}
+
+function findWrappedCursorPosition(
+  value: string,
+  cursorOffset: number,
+  columns: number,
+) {
+  const segments = buildWrappedSegments(value, columns);
+
+  if (segments.length === 0) {
+    return {
+      segments,
+      segmentIndex: -1,
+      column: 0,
+    };
+  }
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+
+    const next = segments[index + 1];
+    const isLastSegmentOfLine =
+      next === undefined || next.logicalLineIndex !== segment.logicalLineIndex;
+    const isWithinSegment =
+      (cursorOffset >= segment.start && cursorOffset < segment.end) ||
+      (cursorOffset === segment.end && isLastSegmentOfLine);
+
+    if (isWithinSegment) {
+      return {
+        segments,
+        segmentIndex: index,
+        column: cursorOffset - segment.start,
+      };
+    }
+  }
+
+  const lastSegment = segments[segments.length - 1]!;
+  return {
+    segments,
+    segmentIndex: segments.length - 1,
+    column: lastSegment.end - lastSegment.start,
+  };
+}
+
+function clampWrappedColumn(segment: WrappedSegment, column: number): number {
+  return segment.start + Math.min(column, segment.end - segment.start);
+}
+
 function findPreviousWordStart(value: string, cursorOffset: number): number {
   let offset = cursorOffset;
 
@@ -99,6 +201,8 @@ export interface PromptController {
   moveWordRight: () => void;
   moveUp: () => void;
   moveDown: () => void;
+  moveVisualUp: (columns: number) => boolean;
+  moveVisualDown: (columns: number) => boolean;
   moveLineStart: () => void;
   moveLineEnd: () => void;
   clear: () => void;
@@ -411,6 +515,67 @@ export function usePromptHistory(): PromptController {
     });
   }, []);
 
+  const moveVisualUp = useCallback((columns: number): boolean => {
+    let moved = false;
+
+    setState((current) => {
+      const position = findWrappedCursorPosition(
+        current.value,
+        current.cursorOffset,
+        columns,
+      );
+
+      if (position.segmentIndex <= 0) {
+        return current;
+      }
+
+      const targetSegment = position.segments[position.segmentIndex - 1];
+      if (!targetSegment) {
+        return current;
+      }
+
+      moved = true;
+      return {
+        ...current,
+        cursorOffset: clampWrappedColumn(targetSegment, position.column),
+      };
+    });
+
+    return moved;
+  }, []);
+
+  const moveVisualDown = useCallback((columns: number): boolean => {
+    let moved = false;
+
+    setState((current) => {
+      const position = findWrappedCursorPosition(
+        current.value,
+        current.cursorOffset,
+        columns,
+      );
+
+      if (
+        position.segmentIndex === -1 ||
+        position.segmentIndex >= position.segments.length - 1
+      ) {
+        return current;
+      }
+
+      const targetSegment = position.segments[position.segmentIndex + 1];
+      if (!targetSegment) {
+        return current;
+      }
+
+      moved = true;
+      return {
+        ...current,
+        cursorOffset: clampWrappedColumn(targetSegment, position.column),
+      };
+    });
+
+    return moved;
+  }, []);
+
   const clear = useCallback(() => {
     setState((current) => ({
       ...current,
@@ -441,6 +606,8 @@ export function usePromptHistory(): PromptController {
     moveWordRight,
     moveUp,
     moveDown,
+    moveVisualUp,
+    moveVisualDown,
     moveLineStart,
     moveLineEnd,
     clear,
