@@ -2,6 +2,7 @@
 
 ## 2026-04-10
 
+- Created `plan.md` first for sourcecode-aligned tool-use parity work, with phased implementation steps and explicit upstream references.
 - Referenced upstream sourcecode input behavior before implementation, primarily `sourcecode/hooks/useArrowKeyHistory.tsx` and `sourcecode/components/PromptInput/PromptInputFooter.tsx`.
 - Ported a sourcecode-inspired TUI input improvement into `go-cli/tui`: prompt history on Up/Down, persistent draft restore, placeholder text, and a footer hint row for primary shortcuts.
 - Kept history state in the app layer via `usePromptHistory` so it survives temporary input unmounts such as permission prompts.
