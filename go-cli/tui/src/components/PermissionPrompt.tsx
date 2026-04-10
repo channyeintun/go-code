@@ -1,3 +1,4 @@
+import path from "node:path";
 import React, { type FC, useMemo, useState } from "react";
 import { Box, Text, useInput } from "ink";
 
@@ -19,6 +20,10 @@ interface PermissionPromptProps {
   tool: string;
   command: string;
   risk: string;
+  permissionLevel?: string;
+  targetKind?: string;
+  targetValue?: string;
+  workingDir?: string;
   onRespond: (decision: PermissionDecision) => void;
   onCancel: () => void;
 }
@@ -70,6 +75,10 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   tool,
   command,
   risk,
+  permissionLevel,
+  targetKind,
+  targetValue,
+  workingDir,
   onRespond,
   onCancel,
 }) => {
@@ -112,7 +121,14 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
 
   const riskColor = getRiskColor(risk);
   const selectedOption = OPTIONS[selectedIndex] ?? OPTIONS[0];
-  const question = useMemo(() => `Allow ${tool} to continue?`, [tool]);
+  const detailValue = targetValue?.trim() || command;
+  const question = useMemo(
+    () => buildQuestion(tool, targetKind, detailValue),
+    [detailValue, targetKind, tool],
+  );
+  const detailLabel = useMemo(() => buildDetailLabel(targetKind), [targetKind]);
+  const toolLabel = useMemo(() => formatToolLabel(tool), [tool]);
+  const accessLabel = permissionLevel?.trim() || inferAccessLabel(tool);
 
   return (
     <Box
@@ -127,11 +143,19 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       <Box marginTop={1} flexDirection="column">
         <Text>{question}</Text>
         <Text color="gray">
-          Tool: <Text color="white">{tool}</Text>
+          Tool: <Text color="white">{toolLabel}</Text>
+        </Text>
+        <Text color="gray">
+          Access: <Text color="white">{accessLabel}</Text>
         </Text>
         <Text color="gray">
           Risk: <Text color={riskColor}>{risk || "normal"}</Text>
         </Text>
+        {workingDir ? (
+          <Text color="gray">
+            Cwd: <Text color="white">{workingDir}</Text>
+          </Text>
+        ) : null}
       </Box>
       <Box
         marginTop={1}
@@ -140,8 +164,8 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         borderColor="gray"
         flexDirection="column"
       >
-        <Text color="gray">Command</Text>
-        <Text>{command}</Text>
+        <Text color="gray">{detailLabel}</Text>
+        <Text>{detailValue}</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
         {OPTIONS.map((option, index) => {
@@ -175,3 +199,70 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
 };
 
 export default PermissionPrompt;
+
+function buildQuestion(
+  tool: string,
+  targetKind: string | undefined,
+  targetValue: string,
+): string {
+  if (targetKind === "file" && targetValue.trim()) {
+    const fileName = path.basename(targetValue.trim());
+    if (tool === "file_edit") {
+      return `Allow edits to ${fileName}?`;
+    }
+    if (tool === "file_write") {
+      return `Allow writes to ${fileName}?`;
+    }
+    return `Allow access to ${fileName}?`;
+  }
+
+  if (tool === "bash") {
+    return "Allow shell command to run?";
+  }
+
+  if (targetKind === "url" && targetValue.trim()) {
+    return `Allow access to ${targetValue.trim()}?`;
+  }
+
+  return `Allow ${formatToolLabel(tool)} to continue?`;
+}
+
+function buildDetailLabel(targetKind: string | undefined): string {
+  switch (targetKind) {
+    case "file":
+      return "File";
+    case "url":
+      return "URL";
+    case "query":
+      return "Query";
+    case "pattern":
+      return "Pattern";
+    case "command":
+      return "Command";
+    default:
+      return "Target";
+  }
+}
+
+function formatToolLabel(tool: string): string {
+  switch (tool) {
+    case "bash":
+      return "Bash";
+    case "file_write":
+      return "File Write";
+    case "file_edit":
+      return "File Edit";
+    default:
+      return tool.replace(/_/g, " ");
+  }
+}
+
+function inferAccessLabel(tool: string): string {
+  if (tool === "bash") {
+    return "execute";
+  }
+  if (tool === "file_write" || tool === "file_edit") {
+    return "write";
+  }
+  return "ask";
+}

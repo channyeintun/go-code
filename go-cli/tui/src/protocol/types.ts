@@ -97,6 +97,10 @@ export interface PermissionRequestPayload {
   tool: string;
   command: string;
   risk: string;
+  permission_level?: string;
+  target_kind?: string;
+  target_value?: string;
+  working_dir?: string;
 }
 
 export interface ModeChangedPayload {

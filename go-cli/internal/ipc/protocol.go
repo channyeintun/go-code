@@ -3,7 +3,7 @@ package ipc
 import "encoding/json"
 
 // ProtocolVersion is the current IPC protocol version.
-const ProtocolVersion = 2
+const ProtocolVersion = 3
 
 // --- Go → Ink (stdout): StreamEvent ---
 
@@ -110,11 +110,15 @@ type ToolErrorPayload struct {
 }
 
 type PermissionRequestPayload struct {
-	RequestID string `json:"request_id"`
-	ToolID    string `json:"tool_id"`
-	Tool      string `json:"tool"`
-	Command   string `json:"command"`
-	Risk      string `json:"risk"`
+	RequestID       string `json:"request_id"`
+	ToolID          string `json:"tool_id"`
+	Tool            string `json:"tool"`
+	Command         string `json:"command"`
+	Risk            string `json:"risk"`
+	PermissionLevel string `json:"permission_level,omitempty"`
+	TargetKind      string `json:"target_kind,omitempty"`
+	TargetValue     string `json:"target_value,omitempty"`
+	WorkingDir      string `json:"working_dir,omitempty"`
 }
 
 type ModeChangedPayload struct {

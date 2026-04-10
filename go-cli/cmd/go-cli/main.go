@@ -820,11 +820,15 @@ func waitForPermissionDecision(
 ) (string, error) {
 	requestID := fmt.Sprintf("perm-%d", time.Now().UnixNano())
 	if err := bridge.Emit(ipc.EventPermissionRequest, ipc.PermissionRequestPayload{
-		RequestID: requestID,
-		ToolID:    toolCallID,
-		Tool:      pending.Tool.Name(),
-		Command:   summarizePermissionTarget(pending),
-		Risk:      permissionRisk(pending),
+		RequestID:       requestID,
+		ToolID:          toolCallID,
+		Tool:            pending.Tool.Name(),
+		Command:         summarizePermissionTarget(pending),
+		Risk:            permissionRisk(pending),
+		PermissionLevel: permissionLevelLabel(pending),
+		TargetKind:      permissionTargetKind(pending),
+		TargetValue:     summarizePermissionTarget(pending),
+		WorkingDir:      permissionWorkingDir(pending),
 	}); err != nil {
 		return "", err
 	}
@@ -870,6 +874,44 @@ func permissionRisk(call toolpkg.PendingCall) string {
 	default:
 		return "read"
 	}
+}
+
+func permissionLevelLabel(call toolpkg.PendingCall) string {
+	switch call.Tool.Permission() {
+	case toolpkg.PermissionWrite:
+		return "write"
+	case toolpkg.PermissionExecute:
+		return "execute"
+	default:
+		return "read"
+	}
+}
+
+func permissionTargetKind(call toolpkg.PendingCall) string {
+	if command, ok := stringParamFromMap(call.Input.Params, "command"); ok && strings.TrimSpace(command) != "" {
+		return "command"
+	}
+	if filePath, ok := stringParamFromMap(call.Input.Params, "file_path"); ok && strings.TrimSpace(filePath) != "" {
+		return "file"
+	}
+	if url, ok := stringParamFromMap(call.Input.Params, "url"); ok && strings.TrimSpace(url) != "" {
+		return "url"
+	}
+	if pattern, ok := stringParamFromMap(call.Input.Params, "pattern"); ok && strings.TrimSpace(pattern) != "" {
+		return "pattern"
+	}
+	if query, ok := stringParamFromMap(call.Input.Params, "query"); ok && strings.TrimSpace(query) != "" {
+		return "query"
+	}
+	return "target"
+}
+
+func permissionWorkingDir(call toolpkg.PendingCall) string {
+	workingDir, ok := stringParamFromMap(call.Input.Params, "cwd")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(workingDir)
 }
 
 func summarizePermissionTarget(call toolpkg.PendingCall) string {

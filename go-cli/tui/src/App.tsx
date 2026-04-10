@@ -201,6 +201,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           tool={uiState.pendingPermission.tool}
           command={uiState.pendingPermission.command}
           risk={uiState.pendingPermission.risk}
+          permissionLevel={uiState.pendingPermission.permission_level}
+          targetKind={uiState.pendingPermission.target_kind}
+          targetValue={uiState.pendingPermission.target_value}
+          workingDir={uiState.pendingPermission.working_dir}
           onRespond={handlePermissionResponse}
           onCancel={() => handlePermissionResponse("deny")}
         />
