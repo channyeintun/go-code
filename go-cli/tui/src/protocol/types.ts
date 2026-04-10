@@ -53,14 +53,29 @@ export interface ToolStartPayload {
   input: string;
 }
 
+export interface ToolProgressPayload {
+  tool_id: string;
+  bytes_read: number;
+}
+
 export interface ToolResultPayload {
   tool_id: string;
   output: string;
   truncated: boolean;
+  name?: string;
+  input?: string;
+}
+
+export interface ToolErrorPayload {
+  tool_id: string;
+  error: string;
+  name?: string;
+  input?: string;
 }
 
 export interface PermissionRequestPayload {
   request_id: string;
+  tool_id: string;
   tool: string;
   command: string;
   risk: string;

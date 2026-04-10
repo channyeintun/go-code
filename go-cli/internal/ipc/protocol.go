@@ -93,15 +93,20 @@ type ToolResultPayload struct {
 	ToolID    string `json:"tool_id"`
 	Output    string `json:"output"`
 	Truncated bool   `json:"truncated"`
+	Name      string `json:"name,omitempty"`
+	Input     string `json:"input,omitempty"`
 }
 
 type ToolErrorPayload struct {
 	ToolID string `json:"tool_id"`
 	Error  string `json:"error"`
+	Name   string `json:"name,omitempty"`
+	Input  string `json:"input,omitempty"`
 }
 
 type PermissionRequestPayload struct {
 	RequestID string `json:"request_id"`
+	ToolID    string `json:"tool_id"`
 	Tool      string `json:"tool"`
 	Command   string `json:"command"`
 	Risk      string `json:"risk"`

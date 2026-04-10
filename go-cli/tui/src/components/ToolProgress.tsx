@@ -5,13 +5,19 @@ import Spinner from "ink-spinner";
 interface ToolProgressProps {
   toolName: string;
   toolInput?: string;
+  status: "running" | "waiting_permission";
+  progressBytes?: number;
 }
 
 function summarizeInput(name: string, raw: string): string {
   try {
     const obj = JSON.parse(raw);
     if (name === "bash" && obj.command) return obj.command;
-    if ((name === "file_read" || name === "file_write" || name === "file_edit") && obj.file_path) return obj.file_path;
+    if (
+      (name === "file_read" || name === "file_write" || name === "file_edit") &&
+      obj.file_path
+    )
+      return obj.file_path;
     if (name === "glob" && obj.pattern) return obj.pattern;
     if (name === "grep" && obj.pattern) return obj.pattern;
     if (name === "git" && obj.subcommand) return obj.subcommand;
@@ -23,14 +29,25 @@ function summarizeInput(name: string, raw: string): string {
   return raw.length > 60 ? raw.slice(0, 57) + "..." : raw;
 }
 
-const ToolProgress: FC<ToolProgressProps> = ({ toolName, toolInput }) => {
+const ToolProgress: FC<ToolProgressProps> = ({
+  toolName,
+  toolInput,
+  status,
+  progressBytes,
+}) => {
   const summary = toolInput ? summarizeInput(toolName, toolInput) : "";
+  const statusLabel =
+    status === "waiting_permission" ? "Waiting for permission" : "Tool";
+
   return (
     <Box paddingLeft={1}>
       <Text color="gray">
-        <Spinner type="dots" /> {"Tool: "}
+        {status === "running" ? <Spinner type="dots" /> : "-"} {statusLabel}:
         <Text bold>{toolName}</Text>
-        {summary ? <Text color="cyan">{" "}{summary}</Text> : null}
+        {summary ? <Text color="cyan"> {summary}</Text> : null}
+        {progressBytes !== undefined ? (
+          <Text color="gray">{` (${progressBytes} bytes)`}</Text>
+        ) : null}
       </Text>
     </Box>
   );

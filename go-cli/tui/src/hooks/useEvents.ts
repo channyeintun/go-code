@@ -14,6 +14,9 @@ import type {
   StreamEvent,
   TurnCompletePayload,
   TokenDeltaPayload,
+  ToolErrorPayload,
+  ToolProgressPayload,
+  ToolResultPayload,
   ToolStartPayload,
 } from "../protocol/types.js";
 
@@ -30,6 +33,24 @@ export interface UIMessage {
   text: string;
 }
 
+export type UIToolStatus =
+  | "running"
+  | "waiting_permission"
+  | "completed"
+  | "error";
+
+export interface UIToolCall {
+  id: string;
+  name: string;
+  input: string;
+  status: UIToolStatus;
+  output?: string;
+  error?: string;
+  truncated?: boolean;
+  progressBytes?: number;
+  permissionRequestId?: string;
+}
+
 export interface EngineUIState {
   ready: boolean;
   messages: UIMessage[];
@@ -39,7 +60,7 @@ export interface EngineUIState {
   model: string;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
-  activeTool: { id: string; name: string; input: string } | null;
+  toolCalls: UIToolCall[];
   compact: {
     active: boolean;
     strategy: string;
@@ -61,7 +82,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   model,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   artifacts: [],
-  activeTool: null,
+  toolCalls: [],
   compact: null,
   statusLine: null,
   pendingPermission: null,
@@ -119,16 +140,22 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as TurnCompletePayload;
         setUIState((s) => {
           const text = s.streamedText.trim();
-          const newMessages = text.length > 0
-            ? [...s.messages, createMessage("assistant", text)]
-            : [...s.messages, createMessage("assistant", "(Model returned an empty response)")];
+          const newMessages =
+            text.length > 0
+              ? [...s.messages, createMessage("assistant", text)]
+              : [
+                  ...s.messages,
+                  createMessage(
+                    "assistant",
+                    "(Model returned an empty response)",
+                  ),
+                ];
           return {
             ...s,
             messages: newMessages,
             streamedText: "",
             thinkingText: "",
             isStreaming: false,
-            activeTool: null,
             compact: null,
             statusLine: `Turn complete (${p.stop_reason})`,
           };
@@ -139,14 +166,66 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
           ...s,
-          activeTool: { id: p.tool_id, name: p.name, input: p.input },
+          toolCalls: upsertToolCall(s.toolCalls, {
+            id: p.tool_id,
+            name: p.name,
+            input: p.input,
+            status: "running",
+            output: undefined,
+            error: undefined,
+            truncated: false,
+            progressBytes: undefined,
+            permissionRequestId: undefined,
+          }),
         }));
         break;
       }
-      case "tool_result":
-      case "tool_error":
-        setUIState((s) => ({ ...s, activeTool: null }));
+      case "tool_progress": {
+        const p = event.payload as ToolProgressPayload;
+        setUIState((s) => ({
+          ...s,
+          toolCalls: upsertToolCall(s.toolCalls, {
+            id: p.tool_id,
+            name: toolCallName(s.toolCalls, p.tool_id),
+            input: toolCallInput(s.toolCalls, p.tool_id),
+            status: "running",
+            progressBytes: p.bytes_read,
+          }),
+        }));
         break;
+      }
+      case "tool_result": {
+        const p = event.payload as ToolResultPayload;
+        setUIState((s) => ({
+          ...s,
+          toolCalls: upsertToolCall(s.toolCalls, {
+            id: p.tool_id,
+            name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
+            input: p.input ?? toolCallInput(s.toolCalls, p.tool_id),
+            status: "completed",
+            output: p.output,
+            truncated: p.truncated,
+            error: undefined,
+            permissionRequestId: undefined,
+          }),
+        }));
+        break;
+      }
+      case "tool_error": {
+        const p = event.payload as ToolErrorPayload;
+        setUIState((s) => ({
+          ...s,
+          toolCalls: upsertToolCall(s.toolCalls, {
+            id: p.tool_id,
+            name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
+            input: p.input ?? toolCallInput(s.toolCalls, p.tool_id),
+            status: "error",
+            error: p.error,
+            permissionRequestId: undefined,
+          }),
+        }));
+        break;
+      }
       case "compact_start": {
         const p = event.payload as CompactStartPayload;
         setUIState((s) => ({
@@ -185,6 +264,13 @@ export function useEvents(initialModel: string, initialMode: string) {
         setUIState((s) => ({
           ...s,
           pendingPermission: p,
+          toolCalls: upsertToolCall(s.toolCalls, {
+            id: p.tool_id,
+            name: p.tool,
+            input: p.command,
+            status: "waiting_permission",
+            permissionRequestId: p.request_id,
+          }),
         }));
         break;
       }
@@ -279,8 +365,25 @@ export function useEvents(initialModel: string, initialMode: string) {
     }));
   }, []);
 
-  const clearPermission = useCallback(() => {
-    setUIState((s) => ({ ...s, pendingPermission: null }));
+  const clearPermission = useCallback((decision?: string) => {
+    setUIState((s) => ({
+      ...s,
+      pendingPermission: null,
+      toolCalls: s.pendingPermission
+        ? upsertToolCall(s.toolCalls, {
+            id: s.pendingPermission.tool_id,
+            name: s.pendingPermission.tool,
+            input: s.pendingPermission.command,
+            status:
+              decision === "allow" ||
+              decision === "always_allow" ||
+              decision === "allow_all_session"
+                ? "running"
+                : "waiting_permission",
+            permissionRequestId: undefined,
+          })
+        : s.toolCalls,
+    }));
   }, []);
 
   const appendUserMessage = useCallback((text: string) => {
@@ -319,6 +422,57 @@ function upsertArtifact(
     (artifact) => artifact.id !== nextArtifact.id,
   );
   return [nextArtifact, ...remaining];
+}
+
+function upsertToolCall(
+  toolCalls: UIToolCall[],
+  nextToolCall: UIToolCall,
+): UIToolCall[] {
+  const existing = toolCalls.find(
+    (toolCall) => toolCall.id === nextToolCall.id,
+  );
+  if (!existing) {
+    return [...toolCalls, nextToolCall];
+  }
+
+  return toolCalls.map((toolCall) =>
+    toolCall.id === nextToolCall.id
+      ? {
+          ...toolCall,
+          ...nextToolCall,
+          name: nextToolCall.name || toolCall.name,
+          input: nextToolCall.input || toolCall.input,
+          output:
+            nextToolCall.output !== undefined
+              ? nextToolCall.output
+              : toolCall.output,
+          error:
+            nextToolCall.error !== undefined
+              ? nextToolCall.error
+              : toolCall.error,
+          truncated:
+            nextToolCall.truncated !== undefined
+              ? nextToolCall.truncated
+              : toolCall.truncated,
+          progressBytes:
+            nextToolCall.progressBytes !== undefined
+              ? nextToolCall.progressBytes
+              : toolCall.progressBytes,
+          permissionRequestId:
+            nextToolCall.permissionRequestId !== undefined
+              ? nextToolCall.permissionRequestId
+              : toolCall.permissionRequestId,
+        }
+      : toolCall,
+  );
+}
+
+function toolCallName(toolCalls: UIToolCall[], id: string): string {
+  return toolCalls.find((toolCall) => toolCall.id === id)?.name ?? "tool";
+}
+
+function toolCallInput(toolCalls: UIToolCall[], id: string): string {
+  return toolCalls.find((toolCall) => toolCall.id === id)?.input ?? "";
 }
 
 function findArtifactField(

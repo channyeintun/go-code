@@ -571,7 +571,7 @@ func executeToolCalls(
 		tool, err := registry.Get(call.Name)
 		if err != nil {
 			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: err.Error()}); emitErr != nil {
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: err.Error()}); emitErr != nil {
 				return nil, emitErr
 			}
 			continue
@@ -580,27 +580,7 @@ func executeToolCalls(
 		input, err := decodeToolInput(call)
 		if err != nil {
 			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: err.Error()}); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-
-		pendingCall := toolpkg.PendingCall{Index: index, Tool: tool, Input: input}
-		if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: err.Error()}); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-		allowed, denyReason, err := authorizeToolCall(ctx, bridge, router, permissionCtx, pendingCall)
-		if err != nil {
-			return nil, err
-		}
-		if !allowed {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: denyReason, IsError: true}
-			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: denyReason}); emitErr != nil {
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: err.Error()}); emitErr != nil {
 				return nil, emitErr
 			}
 			continue
@@ -612,6 +592,26 @@ func executeToolCalls(
 			Input:  call.Input,
 		}); err != nil {
 			return nil, err
+		}
+
+		pendingCall := toolpkg.PendingCall{Index: index, Tool: tool, Input: input}
+		if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
+			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: err.Error()}); emitErr != nil {
+				return nil, emitErr
+			}
+			continue
+		}
+		allowed, denyReason, err := authorizeToolCall(ctx, bridge, router, permissionCtx, call.ID, pendingCall)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			results[index] = api.ToolResult{ToolCallID: call.ID, Output: denyReason, IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: denyReason}); emitErr != nil {
+				return nil, emitErr
+			}
+			continue
 		}
 
 		// Fire pre_tool_use hook
@@ -630,7 +630,7 @@ func executeToolCalls(
 						reason = "blocked by pre_tool_use hook"
 					}
 					results[index] = api.ToolResult{ToolCallID: call.ID, Output: reason, IsError: true}
-					_ = bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: reason})
+					_ = bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: reason})
 					hookDenied = true
 					break
 				}
@@ -654,7 +654,7 @@ func executeToolCalls(
 			if result.Err != nil {
 				toolResult.Output = result.Err.Error()
 				toolResult.IsError = true
-				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: result.Err.Error()}); err != nil {
+				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: result.Err.Error()}); err != nil {
 					return nil, err
 				}
 				results[result.Index] = toolResult
@@ -686,7 +686,7 @@ func executeToolCalls(
 			results[result.Index] = toolResult
 
 			if result.Output.IsError {
-				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: output}); err != nil {
+				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Name: call.Name, Input: call.Input, Error: output}); err != nil {
 					return nil, err
 				}
 				continue
@@ -696,6 +696,8 @@ func executeToolCalls(
 				ToolID:    call.ID,
 				Output:    output,
 				Truncated: truncated || spillPath != "",
+				Name:      call.Name,
+				Input:     call.Input,
 			}); err != nil {
 				return nil, err
 			}
@@ -734,6 +736,7 @@ func authorizeToolCall(
 	bridge *ipc.Bridge,
 	router *ipc.MessageRouter,
 	permissionCtx *permissions.Context,
+	toolCallID string,
 	pending toolpkg.PendingCall,
 ) (bool, string, error) {
 	decision := permissionCtx.Check(pending.Tool.Name(), pending.Input, pending.Tool.Permission())
@@ -743,7 +746,7 @@ func authorizeToolCall(
 	case permissions.DecisionDeny:
 		return false, toolPermissionMessage("denied", pending, "permission policy denied this tool call"), nil
 	case permissions.DecisionAsk:
-		response, err := waitForPermissionDecision(ctx, bridge, router, pending)
+		response, err := waitForPermissionDecision(ctx, bridge, router, toolCallID, pending)
 		if err != nil {
 			return false, "", err
 		}
@@ -772,11 +775,13 @@ func waitForPermissionDecision(
 	ctx context.Context,
 	bridge *ipc.Bridge,
 	router *ipc.MessageRouter,
+	toolCallID string,
 	pending toolpkg.PendingCall,
 ) (string, error) {
 	requestID := fmt.Sprintf("perm-%d", time.Now().UnixNano())
 	if err := bridge.Emit(ipc.EventPermissionRequest, ipc.PermissionRequestPayload{
 		RequestID: requestID,
+		ToolID:    toolCallID,
 		Tool:      pending.Tool.Name(),
 		Command:   summarizePermissionTarget(pending),
 		Risk:      permissionRisk(pending),
