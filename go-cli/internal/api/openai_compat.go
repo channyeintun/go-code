@@ -184,9 +184,10 @@ func (c *OpenAICompatClient) handleEvent(
 		return fmt.Errorf("decode OpenAI-compatible stream chunk: %w", err)
 	}
 	if chunk.Error != nil {
+		message := openAICompatErrorMessage(*chunk.Error)
 		return &APIError{
-			Type:    classifyOpenAICompatErrorType(0, chunk.Error.Type, chunk.Error.Message),
-			Message: chunk.Error.Message,
+			Type:    classifyOpenAICompatErrorType(0, chunk.Error.Type, message),
+			Message: message,
 		}
 	}
 	if chunk.Usage != nil {
@@ -371,7 +372,7 @@ func classifyOpenAICompatStatus(statusCode int, body []byte) error {
 		}
 	}
 
-	message := envelope.Error.Message
+	message := openAICompatErrorMessage(*envelope.Error)
 	if message == "" {
 		message = http.StatusText(statusCode)
 	}
@@ -524,8 +525,39 @@ type openAICompatErrorEnvelope struct {
 }
 
 type openAICompatErrorBody struct {
-	Type    string `json:"type,omitempty"`
-	Message string `json:"message,omitempty"`
+	Type     string                     `json:"type,omitempty"`
+	Message  string                     `json:"message,omitempty"`
+	Metadata *openAICompatErrorMetadata `json:"metadata,omitempty"`
+}
+
+type openAICompatErrorMetadata struct {
+	Raw          string `json:"raw,omitempty"`
+	ProviderName string `json:"provider_name,omitempty"`
+}
+
+func openAICompatErrorMessage(err openAICompatErrorBody) string {
+	message := strings.TrimSpace(err.Message)
+	if err.Metadata == nil {
+		return message
+	}
+
+	raw := strings.TrimSpace(err.Metadata.Raw)
+	providerName := strings.TrimSpace(err.Metadata.ProviderName)
+	if raw == "" {
+		return message
+	}
+
+	if message == "" || strings.EqualFold(message, "Provider returned error") {
+		if providerName != "" {
+			return providerName + ": " + raw
+		}
+		return raw
+	}
+
+	if providerName != "" && !strings.Contains(raw, providerName) {
+		return message + " (" + providerName + ": " + raw + ")"
+	}
+	return message + " (" + raw + ")"
 }
 
 type openAICompatStreamState struct {

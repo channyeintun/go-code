@@ -19,6 +19,7 @@
 - [x] `retry.go` — APIError classification, exponential backoff, RetryWithBackoff
 - [x] `anthropic.go` — Anthropic Messages API streaming client
 - [x] `openai_compat.go` — OpenAI-compatible streaming client
+- [x] `openai_compat.go` — Surface OpenRouter upstream provider messages from nested error metadata instead of showing only generic wrapper errors
 - [x] `gemini.go` — Gemini native streaming client
 - [x] `ollama.go` — Ollama local model client
 
