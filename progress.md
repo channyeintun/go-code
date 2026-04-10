@@ -2,6 +2,8 @@
 
 ## 2026-04-10
 
+- Implemented Phase 3 of `plan.md` by replacing generic tool transcript summaries with tool-aware renderers for bash, file operations, grep/glob, git, and web tools.
+- Kept the sourcecode-style inline transcript layout while making tool rows describe the operation more clearly across running, waiting, success, and failure states.
 - Implemented Phase 2 of `plan.md` against upstream sourcecode references by rendering tool-use entries inline in the transcript instead of in a separate floating widget.
 - Added transcript ordering state in `useEvents` so user messages, tool calls, and assistant messages render in event order during a turn.
 - Reworked `ToolProgress.tsx` into a sourcecode-style tool row with status dots and indented response content for running, permission-waiting, completed, and failed states.
