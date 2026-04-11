@@ -26,6 +26,12 @@ type MarkdownRequest struct {
 	Metadata map[string]any
 }
 
+// SessionArtifact includes the current artifact metadata plus its markdown body.
+type SessionArtifact struct {
+	Artifact Artifact
+	Content  string
+}
+
 // NewManager constructs a markdown artifact manager.
 func NewManager(store Service) *Manager {
 	return &Manager{store: store}
@@ -77,6 +83,32 @@ func (m *Manager) LoadMarkdown(ctx context.Context, id string, version int) (Art
 	}
 
 	return art, string(data), nil
+}
+
+// LoadSessionArtifacts returns the latest markdown-backed artifacts for a session.
+func (m *Manager) LoadSessionArtifacts(ctx context.Context, sessionID string) ([]SessionArtifact, error) {
+	if m == nil || m.store == nil {
+		return nil, fmt.Errorf("artifact manager is not configured")
+	}
+
+	refs, err := m.store.List(ctx, ListRequest{Scope: ScopeSession})
+	if err != nil {
+		return nil, err
+	}
+
+	artifacts := make([]SessionArtifact, 0, len(refs))
+	for _, ref := range refs {
+		art, content, err := m.LoadMarkdown(ctx, ref.ID, 0)
+		if err != nil {
+			continue
+		}
+		if metadataString(art.Metadata, "session_id") != sessionID {
+			continue
+		}
+		artifacts = append(artifacts, SessionArtifact{Artifact: art, Content: content})
+	}
+
+	return artifacts, nil
 }
 
 // FindSessionArtifact finds the latest session-scoped artifact matching the provided slot.

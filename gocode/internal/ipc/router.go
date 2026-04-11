@@ -14,6 +14,7 @@ type MessageRouter struct {
 
 	mu          sync.Mutex
 	incoming    chan ClientMessage // buffered channel for incoming messages
+	pending     []ClientMessage
 	cancelFunc  context.CancelFunc
 	shutdownErr error
 	stopped     bool
@@ -59,6 +60,15 @@ func (r *MessageRouter) readLoop() {
 // During a query, cancel messages trigger the registered cancel function.
 func (r *MessageRouter) Next(ctx context.Context) (ClientMessage, error) {
 	for {
+		r.mu.Lock()
+		if len(r.pending) > 0 {
+			msg := r.pending[0]
+			r.pending = r.pending[1:]
+			r.mu.Unlock()
+			return msg, nil
+		}
+		r.mu.Unlock()
+
 		select {
 		case <-ctx.Done():
 			return ClientMessage{}, ctx.Err()
@@ -86,6 +96,19 @@ func (r *MessageRouter) Next(ctx context.Context) (ClientMessage, error) {
 			return msg, nil
 		}
 	}
+}
+
+// Requeue prepends messages so the next caller to Next receives them before
+// newly-read bridge messages.
+func (r *MessageRouter) Requeue(msgs ...ClientMessage) {
+	if len(msgs) == 0 {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	queued := append([]ClientMessage(nil), msgs...)
+	r.pending = append(queued, r.pending...)
 }
 
 // SetCancelFunc registers a function to call when a cancel message arrives.

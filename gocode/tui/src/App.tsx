@@ -110,7 +110,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   }, [prompt.value]);
 
   useEffect(() => {
-    if (!isEngineReady || uiState.isStreaming || uiState.pendingPermission) {
+    if (
+      !isEngineReady ||
+      uiState.isStreaming ||
+      uiState.pendingPermission ||
+      uiState.pendingArtifactReview
+    ) {
       return;
     }
 
@@ -129,6 +134,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     submitPrompt,
     uiState.isStreaming,
     uiState.pendingPermission,
+    uiState.pendingArtifactReview,
   ]);
 
   const handleImagePaste = (images: PastedImageData[]) => {
@@ -164,6 +170,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     if (
       uiState.isStreaming ||
       uiState.pendingPermission ||
+      uiState.pendingArtifactReview ||
       queuedPrompts.length
     ) {
       const queuedPrompt: QueuedPrompt = {
@@ -215,7 +222,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const isPromptDisabled =
-    !isEngineReady || !!engine.error || uiState.pendingPermission !== null;
+    !isEngineReady ||
+    !!engine.error ||
+    uiState.pendingPermission !== null ||
+    uiState.pendingArtifactReview !== null;
 
   return (
     <Box flexDirection="column" height="100%">

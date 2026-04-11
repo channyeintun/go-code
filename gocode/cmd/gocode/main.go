@@ -307,105 +307,115 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				return err
 			}
 			availableSkills, _ := skillspkg.LoadAll(cwd)
-			messagesBeforeQuery := len(messages)
-			planner := agent.NewPlanner(mode, sessionID, artifactManager)
-			if updates, beginErr := planner.BeginTurn(ctx, payload.Text); beginErr != nil {
-				if emitErr := bridge.EmitError(fmt.Sprintf("create session artifact: %v", beginErr), true); emitErr != nil {
-					return emitErr
-				}
-			} else {
-				for _, update := range updates {
-					if update.Created {
-						if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
+			plannerUserRequest := payload.Text
+			persistCurrentMessages := func() {
+				_ = persistSessionState(sessionStore, sessionStateParams{
+					SessionID: sessionID,
+					CreatedAt: startedAt,
+					Mode:      mode,
+					Model:     activeModelID,
+					CWD:       cwd,
+					Branch:    agent.LoadTurnContext().GitBranch,
+					Tracker:   tracker,
+					Messages:  messages,
+				})
+			}
+
+			for {
+				messagesBeforeQuery := len(messages)
+				planner := agent.NewPlanner(mode, sessionID, artifactManager)
+				if updates, beginErr := planner.BeginTurn(ctx, plannerUserRequest); beginErr != nil {
+					if emitErr := bridge.EmitError(fmt.Sprintf("create session artifact: %v", beginErr), true); emitErr != nil {
+						return emitErr
+					}
+				} else {
+					for _, update := range updates {
+						if update.Created {
+							if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
+								return err
+							}
+						}
+						if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
 							return err
 						}
 					}
-					if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
+				}
+
+				deps := agent.QueryDeps{
+					CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
+						return trackModelStream(callCtx, bridge, tracker, client, req)
+					},
+					ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
+						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, calls)
+					},
+					CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
+						pipeline := newCompactionPipeline(bridge, tracker, client)
+						result, err := pipeline.Compact(callCtx, current, string(reason))
+						if err != nil {
+							return nil, err
+						}
+						return result.Messages, nil
+					},
+					ApplyResultBudget: func(current []api.Message) []api.Message {
+						return current
+					},
+					PersistMessages: func(updated []api.Message) {
+						messages = updated
+						persistCurrentMessages()
+						_ = emitContextWindowUsage(bridge, client, messages)
+					},
+					Clock: time.Now,
+				}
+
+				queryCtx, queryCancel := context.WithCancel(ctx)
+				router.SetCancelFunc(queryCancel)
+
+				stream := agent.QueryStream(queryCtx, agent.QueryRequest{
+					Messages:      messages,
+					SystemPrompt:  systemPromptForMode(mode),
+					Mode:          mode,
+					SessionID:     sessionID,
+					Skills:        availableSkills,
+					Tools:         registry.Definitions(),
+					Capabilities:  client.Capabilities(),
+					ContextWindow: client.Capabilities().MaxContextWindow,
+					MaxTokens:     client.Capabilities().MaxOutputTokens,
+				}, deps)
+
+				queryFailed := false
+				queryCancelled := false
+				for event, streamErr := range stream {
+					if streamErr != nil {
+						if queryCtx.Err() != nil {
+							queryCancelled = true
+							break
+						}
+						queryFailed = true
+						if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
+							return emitErr
+						}
+						break
+					}
+					if err := bridge.EmitEvent(event); err != nil {
 						return err
 					}
 				}
-			}
 
-			deps := agent.QueryDeps{
-				CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
-					return trackModelStream(callCtx, bridge, tracker, client, req)
-				},
-				ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-					return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, calls)
-				},
-				CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-					pipeline := newCompactionPipeline(bridge, tracker, client)
-					result, err := pipeline.Compact(callCtx, current, string(reason))
-					if err != nil {
-						return nil, err
-					}
-					return result.Messages, nil
-				},
-				ApplyResultBudget: func(current []api.Message) []api.Message {
-					return current
-				},
-				PersistMessages: func(updated []api.Message) {
-					messages = updated
-					_ = persistSessionState(sessionStore, sessionStateParams{
-						SessionID: sessionID,
-						CreatedAt: startedAt,
-						Mode:      mode,
-						Model:     activeModelID,
-						CWD:       cwd,
-						Branch:    agent.LoadTurnContext().GitBranch,
-						Tracker:   tracker,
-						Messages:  messages,
-					})
-					_ = emitContextWindowUsage(bridge, client, messages)
-				},
-				Clock: time.Now,
-			}
+				queryCancel()
+				router.SetCancelFunc(nil)
 
-			queryCtx, queryCancel := context.WithCancel(ctx)
-			router.SetCancelFunc(queryCancel)
-
-			stream := agent.QueryStream(queryCtx, agent.QueryRequest{
-				Messages:      messages,
-				SystemPrompt:  systemPromptForMode(mode),
-				Mode:          mode,
-				SessionID:     sessionID,
-				Skills:        availableSkills,
-				Tools:         registry.Definitions(),
-				Capabilities:  client.Capabilities(),
-				ContextWindow: client.Capabilities().MaxContextWindow,
-				MaxTokens:     client.Capabilities().MaxOutputTokens,
-			}, deps)
-
-			queryFailed := false
-			queryCancelled := false
-			for event, streamErr := range stream {
-				if streamErr != nil {
-					if queryCtx.Err() != nil {
-						queryCancelled = true
-						break
-					}
-					queryFailed = true
-					if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
-						return emitErr
+				if queryCancelled {
+					if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
+						return err
 					}
 					break
 				}
-				if err := bridge.EmitEvent(event); err != nil {
-					return err
+
+				if queryFailed {
+					break
 				}
-			}
 
-			queryCancel()
-			router.SetCancelFunc(nil)
-
-			if queryCancelled {
-				if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
-					return err
-				}
-			}
-
-			if !queryFailed && !queryCancelled {
-				if updates, finalizeErr := planner.FinalizeTurn(ctx, "", payload.Text, messages, messagesBeforeQuery); finalizeErr != nil {
+				if updates, finalizeErr := planner.FinalizeTurn(ctx, "", plannerUserRequest, messages, messagesBeforeQuery); finalizeErr != nil {
 					if emitErr := bridge.EmitError(fmt.Sprintf("update session artifact: %v", finalizeErr), true); emitErr != nil {
 						return emitErr
 					}
@@ -438,12 +448,18 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					}
 					if reviewResult.Decision == "approved" {
 						// Mode already switched to fast inside handlePlanReviewGate; persist it.
-						_ = persistSessionState(sessionStore, sessionStateParams{
-							SessionID: sessionID, CreatedAt: startedAt, Mode: mode,
-							Model: activeModelID, CWD: cwd,
-							Branch:  agent.LoadTurnContext().GitBranch,
-							Tracker: tracker, Messages: messages,
+						persistCurrentMessages()
+					}
+					if reviewResult.Decision == "revised" {
+						messages = append(messages, api.Message{
+							Role:    api.RoleUser,
+							Content: planRevisionFeedbackMessage(reviewResult.Feedback),
 						})
+						persistCurrentMessages()
+						if err := emitContextWindowUsage(bridge, client, messages); err != nil {
+							return err
+						}
+						continue
 					}
 				}
 
@@ -477,6 +493,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						}
 					}()
 				}
+
+				break
 			}
 		case ipc.MsgSlashCommand:
 			var payload ipc.SlashCommandPayload
@@ -490,6 +508,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				bridge,
 				sessionStore,
 				cfg,
+				artifactManager,
 				tracker,
 				payload,
 				sessionID,
@@ -1221,6 +1240,7 @@ func handleSlashCommand(
 	bridge *ipc.Bridge,
 	store *session.Store,
 	cfg config.Config,
+	artifactManager *artifactspkg.Manager,
 	tracker *costpkg.Tracker,
 	payload ipc.SlashCommandPayload,
 	sessionID string,
@@ -1471,6 +1491,9 @@ func handleSlashCommand(
 		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
+		if err := emitSessionArtifacts(ctx, bridge, artifactManager, sessionID); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
 		if err := emitTextResponse(bridge, fmt.Sprintf("Resumed session %s with %d messages.", sessionID, len(messages))); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
@@ -1555,6 +1578,44 @@ func emitTextResponse(bridge *ipc.Bridge, text string) error {
 	return bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"})
 }
 
+func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string) error {
+	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+
+	artifacts, err := artifactManager.LoadSessionArtifacts(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+
+	for index := len(artifacts) - 1; index >= 0; index-- {
+		artifact := artifacts[index]
+		if err := emitArtifactCreated(bridge, artifact.Artifact); err != nil {
+			return err
+		}
+		if err := emitArtifactUpdated(bridge, artifact.Artifact, artifact.Content); err != nil {
+			return err
+		}
+	}
+
+	for _, artifact := range artifacts {
+		if artifact.Artifact.Kind == artifactspkg.KindImplementationPlan && strings.TrimSpace(artifact.Content) != "" {
+			return emitArtifactFocused(bridge, artifact.Artifact)
+		}
+	}
+
+	return nil
+}
+
+func planRevisionFeedbackMessage(feedback string) string {
+	feedback = strings.TrimSpace(feedback)
+	if feedback == "" {
+		return "Please revise the implementation plan, update the existing implementation-plan artifact, and resubmit it for review."
+	}
+
+	return "Please revise the implementation plan, update the existing implementation-plan artifact, and address this feedback:\n\n" + feedback
+}
+
 // planReviewGateResult describes the outcome of handlePlanReviewGate.
 type planReviewGateResult struct {
 	Decision string // "approved", "revised", "cancelled", or "" (no gate triggered)
@@ -1601,6 +1662,11 @@ func handlePlanReviewGate(
 		return planReviewGateResult{}, err
 	}
 
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		router.Requeue(deferred...)
+	}()
+
 	for {
 		msg, err := router.Next(ctx)
 		if err != nil {
@@ -1614,6 +1680,7 @@ func handlePlanReviewGate(
 				return planReviewGateResult{}, fmt.Errorf("decode artifact review response: %w", err)
 			}
 			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
 				continue
 			}
 
@@ -1647,7 +1714,7 @@ func handlePlanReviewGate(
 		case ipc.MsgShutdown:
 			return planReviewGateResult{}, context.Canceled
 		default:
-			// Hold all other messages until the review is resolved
+			deferred = append(deferred, msg)
 		}
 	}
 }
