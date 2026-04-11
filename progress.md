@@ -16,7 +16,7 @@
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
 | Phase 1 runtime measurement         | completed | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place. |
 | Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, Think, stronger Go-aware navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains. |
-| Phase 3 subagents                   | in progress | XL  | Fresh-context explore and permission-isolated general-purpose child agents are landed; background execution remains. |
+| Phase 3 subagents                   | in progress | XL  | Fresh-context explore, permission-isolated general-purpose child agents, and background child launch/status are landed. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
 | Phase 5 compaction and cache        | planned   | M     | Output slot reservation, prompt memoization, provider-gated cache stability.               |
 | Phase 6 UI and developer experience | planned   | M     | Data-driven: API preconnect, measured Ink optimizations, subagent/memory UI surfaces.      |
@@ -63,7 +63,8 @@
 - Completed: kept the first subagent slice artifact-safe by restricting the child tool pool to read-only exploration tools, suppressing child UI/tool event leakage, and persisting child transcripts in their own session directories.
 - Completed: widened the `agent` tool to support a synchronous `general-purpose` child agent with a broader tool pool while keeping artifact mutation tools excluded from child sessions.
 - Completed: enforced cloned, non-interactive permission policy inside child sessions so write and execute calls only run when the inherited policy already auto-approves them; otherwise they are denied inside the child transcript instead of prompting.
-- Note: background subagent execution and explicit result retrieval remain future Phase 3 work.
+- Completed: added async child-agent launch via `agent.run_in_background`, returning a durable `agent_id`, child transcript path, and result-file path without blocking the parent turn.
+- Completed: added a read-only `agent_status` tool plus a background child-agent manager so async child runs can be polled for `running`, `completed`, or `failed` status and return their final report on completion.
 
 ## Next Planning Baseline
 

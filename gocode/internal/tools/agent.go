@@ -14,18 +14,29 @@ type AgentRunRequest struct {
 	Description  string
 	Prompt       string
 	SubagentType string
+	Background   bool
 }
 
 type AgentRunResult struct {
 	Status         string   `json:"status"`
+	AgentID        string   `json:"agent_id,omitempty"`
 	SubagentType   string   `json:"subagent_type"`
 	SessionID      string   `json:"session_id"`
 	TranscriptPath string   `json:"transcript_path"`
+	OutputFile     string   `json:"output_file,omitempty"`
 	Summary        string   `json:"summary"`
+	Error          string   `json:"error,omitempty"`
 	Tools          []string `json:"tools,omitempty"`
 }
 
 type AgentRunner func(context.Context, AgentRunRequest) (AgentRunResult, error)
+
+type AgentStatusRequest struct {
+	AgentID string
+	WaitMs  int
+}
+
+type AgentStatusLookup func(context.Context, AgentStatusRequest) (AgentRunResult, error)
 
 type AgentTool struct {
 	runner AgentRunner
@@ -59,6 +70,10 @@ func (t *AgentTool) InputSchema() any {
 				"type":        "string",
 				"description": "The child agent type. Supported values are explore and general-purpose.",
 				"enum":        []string{subagentTypeExplore, subagentTypeGeneralPurpose},
+			},
+			"run_in_background": map[string]any{
+				"type":        "boolean",
+				"description": "Launch the child agent asynchronously and return an agent_id for later status checks.",
 			},
 		},
 		"required": []string{"description", "prompt"},
@@ -104,6 +119,7 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 		Description:  strings.TrimSpace(description),
 		Prompt:       strings.TrimSpace(prompt),
 		SubagentType: strings.TrimSpace(subagentType),
+		Background:   boolOrDefault(input.Params, "run_in_background", false),
 	})
 	if err != nil {
 		return ToolOutput{}, err
@@ -112,6 +128,78 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 	encoded, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return ToolOutput{}, fmt.Errorf("marshal agent result: %w", err)
+	}
+	return ToolOutput{Output: string(encoded)}, nil
+}
+
+type AgentStatusTool struct {
+	lookup AgentStatusLookup
+}
+
+func NewAgentStatusTool(lookup AgentStatusLookup) *AgentStatusTool {
+	return &AgentStatusTool{lookup: lookup}
+}
+
+func (t *AgentStatusTool) Name() string {
+	return "agent_status"
+}
+
+func (t *AgentStatusTool) Description() string {
+	return "Check the latest status for a background child agent and retrieve its final report when complete."
+}
+
+func (t *AgentStatusTool) InputSchema() any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The background child agent identifier returned by the agent tool.",
+			},
+			"wait_ms": map[string]any{
+				"type":        "integer",
+				"description": "Optional number of milliseconds to wait for completion before returning status.",
+				"minimum":     0,
+			},
+		},
+		"required": []string{"agent_id"},
+	}
+}
+
+func (t *AgentStatusTool) Permission() PermissionLevel {
+	return PermissionReadOnly
+}
+
+func (t *AgentStatusTool) Concurrency(input ToolInput) ConcurrencyDecision {
+	return ConcurrencySerial
+}
+
+func (t *AgentStatusTool) Validate(input ToolInput) error {
+	agentID, ok := stringParam(input.Params, "agent_id")
+	if !ok || strings.TrimSpace(agentID) == "" {
+		return fmt.Errorf("agent_status requires agent_id")
+	}
+	if value, ok := intParam(input.Params, "wait_ms"); ok && value < 0 {
+		return fmt.Errorf("wait_ms must be >= 0")
+	}
+	return nil
+}
+
+func (t *AgentStatusTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	if t == nil || t.lookup == nil {
+		return ToolOutput{}, fmt.Errorf("agent status lookup is not configured")
+	}
+	agentID, _ := stringParam(input.Params, "agent_id")
+	result, err := t.lookup(ctx, AgentStatusRequest{
+		AgentID: strings.TrimSpace(agentID),
+		WaitMs:  intOrDefault(input.Params, "wait_ms", 0),
+	})
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	encoded, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("marshal agent status: %w", err)
 	}
 	return ToolOutput{Output: string(encoded)}, nil
 }

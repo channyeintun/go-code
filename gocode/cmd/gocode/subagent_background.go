@@ -1,0 +1,153 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	toolpkg "github.com/channyeintun/gocode/internal/tools"
+)
+
+const backgroundAgentRetention = 5 * time.Minute
+
+type backgroundAgent struct {
+	mu      sync.Mutex
+	id      string
+	result  toolpkg.AgentRunResult
+	running bool
+	done    chan struct{}
+	cancel  context.CancelFunc
+}
+
+var (
+	backgroundAgents   = make(map[string]*backgroundAgent)
+	backgroundAgentsMu sync.RWMutex
+	backgroundAgentCtr uint64
+)
+
+func newBackgroundAgentID() string {
+	return fmt.Sprintf("agent_%d", atomic.AddUint64(&backgroundAgentCtr, 1))
+}
+
+func registerBackgroundAgent(bg *backgroundAgent) {
+	backgroundAgentsMu.Lock()
+	defer backgroundAgentsMu.Unlock()
+	backgroundAgents[bg.id] = bg
+}
+
+func getBackgroundAgent(agentID string) (*backgroundAgent, error) {
+	backgroundAgentsMu.RLock()
+	defer backgroundAgentsMu.RUnlock()
+	bg, ok := backgroundAgents[agentID]
+	if !ok {
+		return nil, fmt.Errorf("agent %q not found", agentID)
+	}
+	return bg, nil
+}
+
+func scheduleBackgroundAgentCleanup(bg *backgroundAgent) {
+	time.AfterFunc(backgroundAgentRetention, func() {
+		backgroundAgentsMu.Lock()
+		defer backgroundAgentsMu.Unlock()
+
+		current, ok := backgroundAgents[bg.id]
+		if !ok || current != bg {
+			return
+		}
+		current.mu.Lock()
+		defer current.mu.Unlock()
+		if current.running {
+			return
+		}
+		delete(backgroundAgents, bg.id)
+	})
+}
+
+func writeBackgroundAgentResultFile(result toolpkg.AgentRunResult) {
+	if result.OutputFile == "" {
+		return
+	}
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(result.OutputFile), 0o755)
+	_ = os.WriteFile(result.OutputFile, data, 0o644)
+}
+
+func launchBackgroundAgent(parentCtx context.Context, execute func(context.Context) (toolpkg.AgentRunResult, error)) toolpkg.AgentRunResult {
+	agentID := newBackgroundAgentID()
+	ctx, cancel := context.WithCancel(context.Background())
+	bg := &backgroundAgent{
+		id:      agentID,
+		done:    make(chan struct{}),
+		cancel:  cancel,
+		running: true,
+		result: toolpkg.AgentRunResult{
+			Status:  "running",
+			AgentID: agentID,
+		},
+	}
+	registerBackgroundAgent(bg)
+
+	go func() {
+		defer close(bg.done)
+		result, err := execute(ctx)
+		bg.mu.Lock()
+		defer bg.mu.Unlock()
+		defer scheduleBackgroundAgentCleanup(bg)
+		bg.running = false
+		if err != nil {
+			bg.result.Status = "failed"
+			bg.result.Error = err.Error()
+			writeBackgroundAgentResultFile(bg.result)
+			return
+		}
+		result.Status = "completed"
+		result.AgentID = agentID
+		bg.result = result
+		writeBackgroundAgentResultFile(bg.result)
+	}()
+
+	go func() {
+		select {
+		case <-parentCtx.Done():
+		case <-bg.done:
+		}
+	}()
+
+	return toolpkg.AgentRunResult{
+		Status:  "async_launched",
+		AgentID: agentID,
+	}
+}
+
+func lookupBackgroundAgentStatus(ctx context.Context, req toolpkg.AgentStatusRequest) (toolpkg.AgentRunResult, error) {
+	bg, err := getBackgroundAgent(req.AgentID)
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	if req.WaitMs > 0 {
+		timer := time.NewTimer(time.Duration(req.WaitMs) * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-bg.done:
+		case <-timer.C:
+		case <-ctx.Done():
+			return toolpkg.AgentRunResult{}, ctx.Err()
+		}
+	}
+
+	bg.mu.Lock()
+	defer bg.mu.Unlock()
+	result := bg.result
+	if bg.running {
+		result.Status = "running"
+	}
+	return result, nil
+}

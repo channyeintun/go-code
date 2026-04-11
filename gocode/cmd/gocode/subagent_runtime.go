@@ -83,121 +83,150 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent subagent_type %q is not supported yet", subagentType)
 		}
 
-		childSessionID, err := newSessionID()
-		if err != nil {
-			return toolpkg.AgentRunResult{}, err
+		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
+			return executeSubagent(runCtx, req, subagentType, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, client, activeModelID, cwd)
 		}
-		childStartedAt := time.Now()
-		childTracker := costpkg.NewTracker()
-		childMessages := []api.Message{{Role: api.RoleUser, Content: req.Prompt}}
-		childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
-		childPermissionCtx := permissions.CloneContext(permissionCtx)
-		childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
-		childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
-		childSkills, _ := skillspkg.LoadAll(cwd)
-		childMode := agent.ModeFast
-		childPrompt := subagentSystemPrompt(subagentType, childRegistry.Definitions())
-
-		if err := persistSessionState(sessionStore, sessionStateParams{
-			SessionID: childSessionID,
-			CreatedAt: childStartedAt,
-			Mode:      childMode,
-			Model:     activeModelID,
-			CWD:       cwd,
-			Branch:    agent.LoadTurnContext().GitBranch,
-			Tracker:   childTracker,
-			Messages:  childMessages,
-		}); err != nil {
-			return toolpkg.AgentRunResult{}, err
+		if req.Background {
+			launch := launchBackgroundAgent(ctx, execute)
+			launch.SubagentType = subagentType
+			launch.Tools = subagentToolNames(subagentType)
+			return launch, nil
 		}
-		_ = sessionStore.SaveMetadata(session.Metadata{
-			SessionID:    childSessionID,
-			CreatedAt:    childStartedAt,
-			UpdatedAt:    childStartedAt,
-			Mode:         string(childMode),
-			Model:        activeModelID,
-			CWD:          cwd,
-			Branch:       agent.LoadTurnContext().GitBranch,
-			TotalCostUSD: 0,
-			Title:        req.Description,
-		})
-
-		childDeps := agent.QueryDeps{
-			CallModel: func(callCtx context.Context, modelReq api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
-				return trackModelStream(callCtx, childBridge, childTracker, client, modelReq)
-			},
-			ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-				return executeToolCallsForSubagent(callCtx, subagentType, childRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
-			},
-			CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-				result, err := compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), current)
-				if err != nil {
-					return nil, err
-				}
-				return result.Messages, nil
-			},
-			ApplyResultBudget: func(current []api.Message) []api.Message {
-				return current
-			},
-			PersistMessages: func(updated []api.Message) {
-				childMessages = updated
-				_ = persistSessionState(sessionStore, sessionStateParams{
-					SessionID: childSessionID,
-					CreatedAt: childStartedAt,
-					Mode:      childMode,
-					Model:     activeModelID,
-					CWD:       cwd,
-					Branch:    agent.LoadTurnContext().GitBranch,
-					Tracker:   childTracker,
-					Messages:  childMessages,
-				})
-			},
-			Clock: time.Now,
-		}
-
-		stream := agent.QueryStream(ctx, agent.QueryRequest{
-			Messages:      childMessages,
-			SystemPrompt:  childPrompt,
-			Mode:          childMode,
-			SessionID:     childSessionID,
-			Skills:        childSkills,
-			Tools:         childRegistry.Definitions(),
-			Capabilities:  client.Capabilities(),
-			ContextWindow: client.Capabilities().MaxContextWindow,
-			MaxTokens:     client.Capabilities().MaxOutputTokens,
-		}, childDeps)
-
-		for _, streamErr := range stream {
-			if streamErr != nil {
-				return toolpkg.AgentRunResult{}, streamErr
-			}
-		}
-
-		if err := persistSessionState(sessionStore, sessionStateParams{
-			SessionID: childSessionID,
-			CreatedAt: childStartedAt,
-			Mode:      childMode,
-			Model:     activeModelID,
-			CWD:       cwd,
-			Branch:    agent.LoadTurnContext().GitBranch,
-			Tracker:   childTracker,
-			Messages:  childMessages,
-		}); err != nil {
-			return toolpkg.AgentRunResult{}, err
-		}
-
-		parentTracker.MergeSnapshot(childTracker.Snapshot())
-		_ = emitCostUpdate(bridge, parentTracker)
-
-		return toolpkg.AgentRunResult{
-			Status:         "completed",
-			SubagentType:   subagentType,
-			SessionID:      childSessionID,
-			TranscriptPath: filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson"),
-			Summary:        latestAssistantContent(childMessages),
-			Tools:          toolDefinitionNames(childRegistry.Definitions()),
-		}, nil
+		return execute(ctx)
 	}
+}
+
+func executeSubagent(
+	ctx context.Context,
+	req toolpkg.AgentRunRequest,
+	subagentType string,
+	bridge *ipc.Bridge,
+	registry *toolpkg.Registry,
+	permissionCtx *permissions.Context,
+	parentTracker *costpkg.Tracker,
+	sessionStore *session.Store,
+	artifactManager *artifactspkg.Manager,
+	client api.LLMClient,
+	activeModelID string,
+	cwd string,
+) (toolpkg.AgentRunResult, error) {
+
+	childSessionID, err := newSessionID()
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	childStartedAt := time.Now()
+	childTracker := costpkg.NewTracker()
+	childMessages := []api.Message{{Role: api.RoleUser, Content: req.Prompt}}
+	childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
+	childPermissionCtx := permissions.CloneContext(permissionCtx)
+	childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
+	childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
+	childSkills, _ := skillspkg.LoadAll(cwd)
+	childMode := agent.ModeFast
+	childPrompt := subagentSystemPrompt(subagentType, childRegistry.Definitions())
+	resultFile := filepath.Join(sessionStore.SessionDir(childSessionID), "agent-result.json")
+
+	if err := persistSessionState(sessionStore, sessionStateParams{
+		SessionID: childSessionID,
+		CreatedAt: childStartedAt,
+		Mode:      childMode,
+		Model:     activeModelID,
+		CWD:       cwd,
+		Branch:    agent.LoadTurnContext().GitBranch,
+		Tracker:   childTracker,
+		Messages:  childMessages,
+	}); err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	_ = sessionStore.SaveMetadata(session.Metadata{
+		SessionID:    childSessionID,
+		CreatedAt:    childStartedAt,
+		UpdatedAt:    childStartedAt,
+		Mode:         string(childMode),
+		Model:        activeModelID,
+		CWD:          cwd,
+		Branch:       agent.LoadTurnContext().GitBranch,
+		TotalCostUSD: 0,
+		Title:        req.Description,
+	})
+
+	childDeps := agent.QueryDeps{
+		CallModel: func(callCtx context.Context, modelReq api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
+			return trackModelStream(callCtx, childBridge, childTracker, client, modelReq)
+		},
+		ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
+			return executeToolCallsForSubagent(callCtx, subagentType, childRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
+		},
+		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
+			result, err := compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), current)
+			if err != nil {
+				return nil, err
+			}
+			return result.Messages, nil
+		},
+		ApplyResultBudget: func(current []api.Message) []api.Message {
+			return current
+		},
+		PersistMessages: func(updated []api.Message) {
+			childMessages = updated
+			_ = persistSessionState(sessionStore, sessionStateParams{
+				SessionID: childSessionID,
+				CreatedAt: childStartedAt,
+				Mode:      childMode,
+				Model:     activeModelID,
+				CWD:       cwd,
+				Branch:    agent.LoadTurnContext().GitBranch,
+				Tracker:   childTracker,
+				Messages:  childMessages,
+			})
+		},
+		Clock: time.Now,
+	}
+
+	stream := agent.QueryStream(ctx, agent.QueryRequest{
+		Messages:      childMessages,
+		SystemPrompt:  childPrompt,
+		Mode:          childMode,
+		SessionID:     childSessionID,
+		Skills:        childSkills,
+		Tools:         childRegistry.Definitions(),
+		Capabilities:  client.Capabilities(),
+		ContextWindow: client.Capabilities().MaxContextWindow,
+		MaxTokens:     client.Capabilities().MaxOutputTokens,
+	}, childDeps)
+
+	for _, streamErr := range stream {
+		if streamErr != nil {
+			return toolpkg.AgentRunResult{}, streamErr
+		}
+	}
+
+	if err := persistSessionState(sessionStore, sessionStateParams{
+		SessionID: childSessionID,
+		CreatedAt: childStartedAt,
+		Mode:      childMode,
+		Model:     activeModelID,
+		CWD:       cwd,
+		Branch:    agent.LoadTurnContext().GitBranch,
+		Tracker:   childTracker,
+		Messages:  childMessages,
+	}); err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+
+	parentTracker.MergeSnapshot(childTracker.Snapshot())
+	_ = emitCostUpdate(bridge, parentTracker)
+
+	return toolpkg.AgentRunResult{
+		Status:         "completed",
+		SubagentType:   subagentType,
+		SessionID:      childSessionID,
+		TranscriptPath: filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson"),
+		OutputFile:     resultFile,
+		Summary:        latestAssistantContent(childMessages),
+		Tools:          toolDefinitionNames(childRegistry.Definitions()),
+	}, nil
 }
 
 func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string {

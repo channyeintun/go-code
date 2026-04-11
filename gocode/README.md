@@ -162,7 +162,8 @@ The agent has access to:
 
 | Tool                           | Description                                                   |
 | ------------------------------ | ------------------------------------------------------------- |
-| **agent**                      | Spawn bounded `explore` or `general-purpose` child agents     |
+| **agent**                      | Spawn bounded child agents, including async background runs   |
+| **agent_status**               | Check a background child agent and retrieve its final report  |
 | **bash**                       | Execute shell commands                                        |
 | **think**                      | Record scratchpad reasoning with no side effects              |
 | **list_dir**                   | List directory contents as structured JSON                    |
