@@ -30,7 +30,9 @@ type memoryRecallCandidate struct {
 	ID       string
 	FilePath string
 	Line     string
+	Title    string
 	FileType string
+	NotePath string
 	Updated  time.Time
 	Index    int
 }
@@ -141,19 +143,21 @@ func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandida
 		if file.Type != "project-index" && file.Type != "user-index" {
 			continue
 		}
-		lines := strings.Split(file.Content, "\n")
-		for _, raw := range lines {
-			line := strings.TrimSpace(raw)
-			if line == "" || strings.HasPrefix(line, "[truncated") {
+		entries := agent.ParseMemoryIndexEntries(file)
+		for _, entry := range entries {
+			line := strings.TrimSpace(entry.RawLine)
+			if line == "" {
 				continue
 			}
 			candidates = append(candidates, memoryRecallCandidate{
 				ID:       fmt.Sprintf("m%d", len(candidates)+1),
 				FilePath: file.Path,
 				Line:     line,
-				FileType: file.Type,
+				Title:    entry.Title,
+				FileType: memoryRecallFirstNonEmpty(entry.NoteType, file.Type),
+				NotePath: entry.NotePath,
 				Updated:  file.UpdatedAt,
-				Index:    len(candidates),
+				Index:    entry.Order,
 			})
 			if len(candidates) >= memoryRecallMaxCandidates {
 				return candidates
@@ -243,17 +247,34 @@ func renderMemoryRecallPrompt(userPrompt string, candidates []memoryRecallCandid
 		b.WriteString(candidate.ID)
 		b.WriteString(" | type: ")
 		b.WriteString(candidate.FileType)
+		if strings.TrimSpace(candidate.Title) != "" {
+			b.WriteString(" | title: ")
+			b.WriteString(candidate.Title)
+		}
 		if !candidate.Updated.IsZero() {
 			b.WriteString(" | updated: ")
 			b.WriteString(candidate.Updated.UTC().Format("2006-01-02"))
 		}
 		b.WriteString(" | path: ")
 		b.WriteString(candidate.FilePath)
+		if strings.TrimSpace(candidate.NotePath) != "" {
+			b.WriteString(" | note_path: ")
+			b.WriteString(candidate.NotePath)
+		}
 		b.WriteString("\n  ")
 		b.WriteString(candidate.Line)
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func memoryRecallFirstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 const memoryRecallSystemPrompt = `Select the most relevant durable memory index entries for the current coding request.

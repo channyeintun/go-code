@@ -28,6 +28,17 @@ type MemoryRecallResult struct {
 	Source string
 }
 
+// MemoryIndexEntry represents one parsed MEMORY.md index entry.
+type MemoryIndexEntry struct {
+	IndexPath string
+	RawLine   string
+	Filename  string
+	Title     string
+	NoteType  string
+	NotePath  string
+	Order     int
+}
+
 const (
 	memoryTypeProject       = "project"
 	memoryTypeLocal         = "local"
@@ -44,6 +55,8 @@ const (
 	maxMemoryFiles         = 20
 	maxRelevantMemoryLines = 8
 	maxRecallTerms         = 12
+	maxMemoryNoteLines     = 12
+	maxMemoryNoteBytes     = 2_000
 )
 
 var nonSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
@@ -311,8 +324,130 @@ func formatRelevantMemoryIndexContent(file MemoryFile, currentUserPrompt string,
 		parts = append(parts, note)
 	}
 	parts = append(parts, fmt.Sprintf("[memory-recall] Selected %d relevant index entr%s for the current request via %s.", len(selectedLines), pluralSuffix(len(selectedLines), "y", "ies"), selectionSource))
-	parts = append(parts, selectedLines...)
+	parts = append(parts, formatRecalledMemoryEntries(file, selectedLines)...)
 	return strings.Join(parts, "\n")
+}
+
+// ParseMemoryIndexEntries parses canonical MEMORY.md bullet entries and preserves raw-line fallbacks.
+func ParseMemoryIndexEntries(file MemoryFile) []MemoryIndexEntry {
+	lines := strings.Split(file.Content, "\n")
+	entries := make([]MemoryIndexEntry, 0, len(lines))
+	for idx, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "[truncated") {
+			continue
+		}
+
+		entry := MemoryIndexEntry{
+			IndexPath: file.Path,
+			RawLine:   line,
+			Order:     idx,
+		}
+		if filename, title, noteType, ok := parseMemoryIndexEntryLine(line); ok {
+			entry.Filename = filename
+			entry.Title = title
+			entry.NoteType = noteType
+			entry.NotePath = filepath.Join(filepath.Dir(file.Path), filepath.Clean(filename))
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func parseMemoryIndexEntryLine(line string) (filename, title, noteType string, ok bool) {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimPrefix(trimmed, "- ")
+	trimmed = strings.TrimPrefix(trimmed, "* ")
+	if !strings.HasPrefix(trimmed, "[") {
+		return "", "", "", false
+	}
+
+	closeIdx := strings.Index(trimmed, "]")
+	if closeIdx <= 1 {
+		return "", "", "", false
+	}
+	filename = strings.TrimSpace(trimmed[1:closeIdx])
+	remaining := strings.TrimSpace(trimmed[closeIdx+1:])
+	if filename == "" || remaining == "" || !strings.HasSuffix(remaining, ")") {
+		return "", "", "", false
+	}
+
+	openTypeIdx := strings.LastIndex(remaining, " (")
+	if openTypeIdx <= 0 {
+		return "", "", "", false
+	}
+	title = strings.TrimSpace(remaining[:openTypeIdx])
+	noteType = strings.TrimSpace(remaining[openTypeIdx+2 : len(remaining)-1])
+	if title == "" || !isKnownMemoryNoteType(noteType) {
+		return "", "", "", false
+	}
+	return filename, title, noteType, true
+}
+
+func isKnownMemoryNoteType(value string) bool {
+	switch strings.TrimSpace(value) {
+	case memoryTypeUserNote, memoryTypeFeedbackNote, memoryTypeProjectNote, memoryTypeReferenceNote:
+		return true
+	default:
+		return false
+	}
+}
+
+func formatRecalledMemoryEntries(file MemoryFile, selectedLines []string) []string {
+	entries := ParseMemoryIndexEntries(file)
+	entryByLine := make(map[string]MemoryIndexEntry, len(entries))
+	for _, entry := range entries {
+		entryByLine[entry.RawLine] = entry
+	}
+
+	parts := make([]string, 0, len(selectedLines)*2)
+	for _, line := range selectedLines {
+		parts = append(parts, line)
+		entry, ok := entryByLine[line]
+		if !ok || strings.TrimSpace(entry.NotePath) == "" {
+			continue
+		}
+		excerpt := loadMemoryNoteExcerpt(entry.NotePath)
+		if excerpt == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("<memory_note path=\"%s\" type=\"%s\">\n%s\n</memory_note>", entry.NotePath, entry.NoteType, excerpt))
+	}
+	return parts
+}
+
+func loadMemoryNoteExcerpt(path string) string {
+	content, err := readMemoryFile(path)
+	if err != nil {
+		return ""
+	}
+	content = stripMemoryFrontmatter(content)
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) > maxMemoryNoteLines {
+		lines = lines[:maxMemoryNoteLines]
+	}
+	excerpt := strings.TrimSpace(strings.Join(lines, "\n"))
+	if len(excerpt) > maxMemoryNoteBytes {
+		excerpt = strings.TrimSpace(excerpt[:maxMemoryNoteBytes]) + "\n[truncated memory note]"
+	}
+	return excerpt
+}
+
+func stripMemoryFrontmatter(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
+		return content
+	}
+	for idx := 1; idx < len(lines); idx++ {
+		if strings.TrimSpace(lines[idx]) == "---" {
+			return strings.TrimSpace(strings.Join(lines[idx+1:], "\n"))
+		}
+	}
+	return content
 }
 
 func memoryRecallLookup(recalls []MemoryRecallResult) map[string]MemoryRecallResult {
