@@ -47,6 +47,7 @@ function toUserInputImagePayload(
 const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const prompt = usePromptHistory();
   const [promptImages, setPromptImages] = useState<UserInputImagePayload[]>([]);
+  const [pasteWarning, setPasteWarning] = useState<string | null>(null);
   const [nextImageId, setNextImageId] = useState(1);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [nextQueuedPromptId, setNextQueuedPromptId] = useState(1);
@@ -128,6 +129,11 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
     setPromptImages((current) => [...current, ...nextImages]);
     setNextImageId(startId + images.length);
+    setPasteWarning(null);
+  };
+
+  const handlePasteWarning = (warnings: string[]) => {
+    setPasteWarning(warnings.length > 0 ? warnings.join(" | ") : null);
   };
 
   const handleSubmit = () => {
@@ -135,6 +141,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     if (!text) {
       return;
     }
+    setPasteWarning(null);
 
     const referencedIds = parseImageReferenceIds(text);
     const images = promptImages.filter((image) => referencedIds.has(image.id));
@@ -297,10 +304,16 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             isLoading={uiState.isStreaming}
             onSubmit={handleSubmit}
             onImagePaste={handleImagePaste}
+            onPasteWarning={handlePasteWarning}
             onModeToggle={engine.sendModeToggle}
             onCancel={handleCancel}
             disabled={isPromptDisabled}
           />
+          {pasteWarning && (
+            <Box paddingLeft={1} marginTop={1}>
+              <Text color="yellow">{pasteWarning}</Text>
+            </Box>
+          )}
           <PromptFooter
             mode={uiState.mode}
             model={uiState.model}

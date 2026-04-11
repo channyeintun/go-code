@@ -9,6 +9,7 @@ interface InputProps {
   isLoading: boolean;
   onSubmit: () => void;
   onImagePaste: (images: PastedImageData[]) => void;
+  onPasteWarning: (warnings: string[]) => void;
   onModeToggle: () => void;
   onCancel: () => void;
   disabled?: boolean;
@@ -89,6 +90,7 @@ const Input: FC<InputProps> = ({
   isLoading,
   onSubmit,
   onImagePaste,
+  onPasteWarning,
   onModeToggle,
   onCancel,
   disabled,
@@ -238,6 +240,7 @@ const Input: FC<InputProps> = ({
       if (parts.images.length > 0) {
         onImagePaste(parts.images);
       }
+      onPasteWarning(parts.warnings);
     });
   });
 

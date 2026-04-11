@@ -13,6 +13,12 @@ export interface PastedImageData {
 export interface ParsedPasteParts {
   text: string;
   images: PastedImageData[];
+  warnings: string[];
+}
+
+interface ReadImageFileResult {
+  image: PastedImageData | null;
+  warning: string | null;
 }
 
 function execFileAsync(file: string, args: string[]): Promise<void> {
@@ -62,17 +68,24 @@ function mediaTypeFromFilename(filename: string): string {
   }
 }
 
-async function readImageFile(path: string): Promise<PastedImageData | null> {
+async function readImageFile(path: string): Promise<ReadImageFileResult> {
   try {
     const buffer = await readFile(path);
     return {
-      data: buffer.toString("base64"),
-      mediaType: mediaTypeFromFilename(path),
-      filename: basename(path),
-      sourcePath: path,
+      image: {
+        data: buffer.toString("base64"),
+        mediaType: mediaTypeFromFilename(path),
+        filename: basename(path),
+        sourcePath: path,
+      },
+      warning: null,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown error";
+    return {
+      image: null,
+      warning: `Failed to load pasted image path ${path}: ${reason}`,
+    };
   }
 }
 
@@ -126,6 +139,7 @@ function extractImageDataUrls(text: string): ParsedPasteParts {
   return {
     text: stripped.trim(),
     images,
+    warnings: [],
   };
 }
 
@@ -136,6 +150,7 @@ export async function parsePasteParts(text: string): Promise<ParsedPasteParts> {
     return {
       text: "",
       images: clipboardImage ? [clipboardImage] : [],
+      warnings: [],
     };
   }
 
@@ -151,15 +166,19 @@ export async function parsePasteParts(text: string): Promise<ParsedPasteParts> {
     .filter(Boolean);
 
   const images: PastedImageData[] = [];
+  const warnings: string[] = [];
   const textParts: string[] = [];
 
   for (const part of parts) {
     const decoded = decodeEscapedPath(part);
     if (isAbsoluteImagePath(decoded)) {
-      const image = await readImageFile(decoded);
-      if (image) {
-        images.push(image);
+      const result = await readImageFile(decoded);
+      if (result.image) {
+        images.push(result.image);
         continue;
+      }
+      if (result.warning) {
+        warnings.push(result.warning);
       }
     }
 
@@ -169,6 +188,7 @@ export async function parsePasteParts(text: string): Promise<ParsedPasteParts> {
   return {
     text: textParts.join("\n"),
     images,
+    warnings,
   };
 }
 
