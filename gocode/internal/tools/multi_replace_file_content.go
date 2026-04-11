@@ -19,6 +19,7 @@ type replacementChunk struct {
 
 func NewMultiReplaceFileContentTool() *MultiReplaceFileContentTool {
 	return &MultiReplaceFileContentTool{}
+
 }
 
 func (t *MultiReplaceFileContentTool) Name() string {
@@ -37,21 +38,109 @@ func (t *MultiReplaceFileContentTool) InputSchema() any {
 				"type":        "string",
 				"description": "The absolute path to the file to modify.",
 			},
+			"target_file": map[string]any{
+				"type":        "string",
+				"description": "Snake_case alias for the path to the file to modify.",
+			},
 			"ReplacementChunks": map[string]any{
 				"type": "array",
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"StartLine":          map[string]any{"type": "integer", "minimum": 1},
-						"EndLine":            map[string]any{"type": "integer", "minimum": 1},
-						"TargetContent":      map[string]any{"type": "string"},
-						"ReplacementContent": map[string]any{"type": "string"},
+						"StartLine":           map[string]any{"type": "integer", "minimum": 1},
+						"EndLine":             map[string]any{"type": "integer", "minimum": 1},
+						"TargetContent":       map[string]any{"type": "string"},
+						"ReplacementContent":  map[string]any{"type": "string"},
+						"start_line":          map[string]any{"type": "integer", "minimum": 1},
+						"end_line":            map[string]any{"type": "integer", "minimum": 1},
+						"target_content":      map[string]any{"type": "string"},
+						"replacement_content": map[string]any{"type": "string"},
 					},
-					"required": []string{"StartLine", "EndLine", "TargetContent", "ReplacementContent"},
+					"allOf": []map[string]any{
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"StartLine"}},
+								{"required": []string{"start_line"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"EndLine"}},
+								{"required": []string{"end_line"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"TargetContent"}},
+								{"required": []string{"target_content"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"ReplacementContent"}},
+								{"required": []string{"replacement_content"}},
+							},
+						},
+					},
+				},
+			},
+			"replacement_chunks": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"StartLine":           map[string]any{"type": "integer", "minimum": 1},
+						"EndLine":             map[string]any{"type": "integer", "minimum": 1},
+						"TargetContent":       map[string]any{"type": "string"},
+						"ReplacementContent":  map[string]any{"type": "string"},
+						"start_line":          map[string]any{"type": "integer", "minimum": 1},
+						"end_line":            map[string]any{"type": "integer", "minimum": 1},
+						"target_content":      map[string]any{"type": "string"},
+						"replacement_content": map[string]any{"type": "string"},
+					},
+					"allOf": []map[string]any{
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"StartLine"}},
+								{"required": []string{"start_line"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"EndLine"}},
+								{"required": []string{"end_line"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"TargetContent"}},
+								{"required": []string{"target_content"}},
+							},
+						},
+						{
+							"anyOf": []map[string]any{
+								{"required": []string{"ReplacementContent"}},
+								{"required": []string{"replacement_content"}},
+							},
+						},
+					},
 				},
 			},
 		},
-		"required": []string{"TargetFile", "ReplacementChunks"},
+		"allOf": []map[string]any{
+			{
+				"anyOf": []map[string]any{
+					{"required": []string{"TargetFile"}},
+					{"required": []string{"target_file"}},
+				},
+			},
+			{
+				"anyOf": []map[string]any{
+					{"required": []string{"ReplacementChunks"}},
+					{"required": []string{"replacement_chunks"}},
+				},
+			},
+		},
 	}
 }
 

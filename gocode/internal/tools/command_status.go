@@ -28,13 +28,25 @@ func (t *CommandStatusTool) InputSchema() any {
 				"type":        "string",
 				"description": "The background command identifier returned by the bash tool.",
 			},
+			"command_id": map[string]any{
+				"type":        "string",
+				"description": "Snake_case alias for the background command identifier.",
+			},
 			"WaitDurationSeconds": map[string]any{
 				"type":        "integer",
 				"description": "Optional number of seconds to wait before checking for new output.",
 				"minimum":     0,
 			},
+			"wait_duration_seconds": map[string]any{
+				"type":        "integer",
+				"description": "Snake_case alias for the optional wait duration in seconds.",
+				"minimum":     0,
+			},
 		},
-		"required": []string{"CommandId"},
+		"anyOf": []map[string]any{
+			{"required": []string{"CommandId"}},
+			{"required": []string{"command_id"}},
+		},
 	}
 }
 

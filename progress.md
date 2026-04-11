@@ -24,6 +24,7 @@
 
 ### 2026-04-11
 
+- Completed: Aligned the Antigravity-style tool schemas with their accepted snake_case runtime aliases. `command_status`, `send_command_input`, `list_dir`, and `multi_replace_file_content` now advertise both PascalCase and snake_case parameter variants in JSON Schema, including nested multi-replace chunk fields, so schema validation matches the compatibility paths already supported by execution.
 - Completed: Tightened the `list_dir` output contract. The tool now returns a single structured JSON array for all directory listings, including empty directories, instead of mixing JSON entry lines with a trailing plain-text summary; the README tool description was updated to match the runtime behavior.
 - Completed: Fixed `file_edit` line-ending preservation for existing files. Exact string replacements now normalize CRLF/LF content only for matching, then restore the original newline style and trailing-newline state before writing so CRLF files are not silently rewritten as LF during targeted edits.
 - Completed: Fixed the remaining tool-result micro-compaction name mismatch. The compactor now canonicalizes both legacy PascalCase names and current snake_case/compat alias names before checking compactable tool types, so older results from `bash`, `file_read`, `grep`, `glob`, `web_search`, `web_fetch`, `file_edit`, and `file_write` can be truncated as intended during compaction instead of silently bypassing the allowlist.

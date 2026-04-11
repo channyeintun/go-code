@@ -28,17 +28,43 @@ func (t *SendCommandInputTool) InputSchema() any {
 				"type":        "string",
 				"description": "The background command identifier returned by the bash tool.",
 			},
+			"command_id": map[string]any{
+				"type":        "string",
+				"description": "Snake_case alias for the background command identifier.",
+			},
 			"Input": map[string]any{
 				"type":        "string",
 				"description": "The exact stdin content to send to the process, usually including a trailing newline.",
+			},
+			"input": map[string]any{
+				"type":        "string",
+				"description": "Snake_case alias for the stdin content to send to the process.",
 			},
 			"WaitMs": map[string]any{
 				"type":        "integer",
 				"description": "Optional number of milliseconds to wait for fresh output after sending input.",
 				"minimum":     0,
 			},
+			"wait_ms": map[string]any{
+				"type":        "integer",
+				"description": "Snake_case alias for the optional wait duration in milliseconds.",
+				"minimum":     0,
+			},
 		},
-		"required": []string{"CommandId", "Input"},
+		"allOf": []map[string]any{
+			{
+				"anyOf": []map[string]any{
+					{"required": []string{"CommandId"}},
+					{"required": []string{"command_id"}},
+				},
+			},
+			{
+				"anyOf": []map[string]any{
+					{"required": []string{"Input"}},
+					{"required": []string{"input"}},
+				},
+			},
+		},
 	}
 }
 

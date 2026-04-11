@@ -37,8 +37,15 @@ func (t *ListDirTool) InputSchema() any {
 				"type":        "string",
 				"description": "The absolute path to the directory to inspect.",
 			},
+			"directory_path": map[string]any{
+				"type":        "string",
+				"description": "Snake_case alias for the directory path to inspect.",
+			},
 		},
-		"required": []string{"DirectoryPath"},
+		"anyOf": []map[string]any{
+			{"required": []string{"DirectoryPath"}},
+			{"required": []string{"directory_path"}},
+		},
 	}
 }
 
