@@ -219,12 +219,13 @@ Both binaries must be in the same directory (or `gocode-engine` must be in `PATH
 
 ## Building from Source
 
-Requires: Go 1.26+, Node.js 20+, Bun 1.0+
+Requires: Go 1.26+, Bun 1.0+
 
 ```bash
 cd gocode/tui
-npm run setup          # Install deps, build TS, compile Go engine
-npm start              # Run via Node.js (development)
+bun install --frozen-lockfile   # Install JS deps from bun.lock
+bun run setup                   # Build TS and compile Go engine
+bun run start                   # Run the TUI in development
 
 make release-local     # Build standalone binaries for your platform
 make release           # Cross-compile for all platforms

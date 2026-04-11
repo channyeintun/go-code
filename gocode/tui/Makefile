@@ -21,7 +21,7 @@ release-local: clean build-tui-standalone
 
 # Build standalone TUI binary via Bun
 build-tui-standalone:
-	npx tsc
+	bun run build
 	bun build --compile --outfile=standalone-bin \
 		dist/standalone.js
 

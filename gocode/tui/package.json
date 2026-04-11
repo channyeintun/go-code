@@ -7,11 +7,11 @@
     "gocode": "bin/gocode.js"
   },
   "scripts": {
-    "build": "tsc",
-    "start": "node bin/gocode.js",
-    "dev": "tsc --watch",
+    "build": "bunx tsc",
+    "start": "bun bin/gocode.js",
+    "dev": "bunx tsc --watch",
     "install-engine": "cd .. && go build -o tui/engine/gocode-engine ./cmd/gocode/",
-    "setup": "npm install && npm run build && npm run install-engine"
+    "setup": "bun run build && bun run install-engine"
   },
   "dependencies": {
     "cli-highlight": "^2.1.11",
