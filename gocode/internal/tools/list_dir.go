@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -63,9 +62,9 @@ func (t *ListDirTool) Execute(ctx context.Context, input ToolInput) (ToolOutput,
 	if !ok || strings.TrimSpace(directoryPath) == "" {
 		return ToolOutput{}, fmt.Errorf("list_dir requires DirectoryPath")
 	}
-	if !filepath.IsAbs(directoryPath) {
-		cwd, _ := os.Getwd()
-		directoryPath = filepath.Join(cwd, directoryPath)
+	directoryPath, err := resolveToolPath(directoryPath)
+	if err != nil {
+		return ToolOutput{}, err
 	}
 
 	info, err := os.Stat(directoryPath)

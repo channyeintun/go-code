@@ -68,9 +68,9 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return ToolOutput{}, fmt.Errorf("file_edit requires file_path")
 	}
-	if !filepath.IsAbs(filePath) {
-		cwd, _ := os.Getwd()
-		filePath = filepath.Join(cwd, filePath)
+	filePath, err := resolveToolPath(filePath)
+	if err != nil {
+		return ToolOutput{}, err
 	}
 
 	oldString, ok := stringParam(input.Params, "old_string")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -75,9 +74,9 @@ func (t *MultiReplaceFileContentTool) Execute(ctx context.Context, input ToolInp
 	if !ok || strings.TrimSpace(targetFile) == "" {
 		return ToolOutput{}, fmt.Errorf("multi_replace_file_content requires TargetFile")
 	}
-	if !filepath.IsAbs(targetFile) {
-		cwd, _ := os.Getwd()
-		targetFile = filepath.Join(cwd, targetFile)
+	targetFile, err := resolveToolPath(targetFile)
+	if err != nil {
+		return ToolOutput{}, err
 	}
 
 	chunks, err := parseReplacementChunks(input.Params)

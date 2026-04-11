@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -62,9 +61,9 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return ToolOutput{}, fmt.Errorf("file_read requires file_path")
 	}
-	if !filepath.IsAbs(filePath) {
-		cwd, _ := os.Getwd()
-		filePath = filepath.Join(cwd, filePath)
+	filePath, err := resolveToolPath(filePath)
+	if err != nil {
+		return ToolOutput{}, err
 	}
 
 	info, err := os.Stat(filePath)

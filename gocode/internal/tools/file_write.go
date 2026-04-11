@@ -60,9 +60,9 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return ToolOutput{}, fmt.Errorf("file_write requires file_path")
 	}
-	if !filepath.IsAbs(filePath) {
-		cwd, _ := os.Getwd()
-		filePath = filepath.Join(cwd, filePath)
+	filePath, err := resolveToolPath(filePath)
+	if err != nil {
+		return ToolOutput{}, err
 	}
 
 	content, ok := stringParam(input.Params, "content")
