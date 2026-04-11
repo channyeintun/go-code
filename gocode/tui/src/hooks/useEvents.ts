@@ -96,6 +96,19 @@ export interface UIToolCall {
   deletions?: number;
 }
 
+export interface UIBackgroundAgent {
+  agentId: string;
+  description: string;
+  subagentType: string;
+  status: string;
+  summary: string;
+  sessionId?: string;
+  transcriptPath?: string;
+  outputFile?: string;
+  error?: string;
+  updatedAt: string;
+}
+
 export interface UIRateLimitWindow {
   usedPercentage: number;
   resetsAt: number;
@@ -135,6 +148,7 @@ export interface EngineUIState {
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
   toolCalls: UIToolCall[];
+  backgroundAgents: UIBackgroundAgent[];
   compact: {
     active: boolean;
     strategy: string;
@@ -167,6 +181,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   focusedArtifactId: null,
   pendingArtifactReview: null,
   toolCalls: [],
+  backgroundAgents: [],
   compact: null,
   statusLine: null,
   pendingPermission: null,
@@ -373,6 +388,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             insertions: p.insertions,
             deletions: p.deletions,
           }),
+          backgroundAgents: applyBackgroundAgentResult(s.backgroundAgents, p),
         }));
         break;
       }
@@ -576,7 +592,11 @@ export function useEvents(initialModel: string, initialMode: string) {
           // Update status on the artifact entry if it changed
           artifacts: s.artifacts.map((a) =>
             a.id === p.id
-              ? { ...a, version: p.version ?? a.version, status: p.status ?? a.status }
+              ? {
+                  ...a,
+                  version: p.version ?? a.version,
+                  status: p.status ?? a.status,
+                }
               : a,
           ),
         }));
@@ -762,6 +782,190 @@ export function useEvents(initialModel: string, initialMode: string) {
     appendUserMessage,
     beginAssistantTurn,
   };
+}
+
+interface AgentToolInput {
+  description?: string;
+  subagent_type?: string;
+  agent_id?: string;
+  run_in_background?: boolean;
+}
+
+interface AgentToolResult {
+  status?: string;
+  agent_id?: string;
+  subagent_type?: string;
+  session_id?: string;
+  transcript_path?: string;
+  output_file?: string;
+  summary?: string;
+  error?: string;
+}
+
+function applyBackgroundAgentResult(
+  agents: UIBackgroundAgent[],
+  payload: ToolResultPayload,
+): UIBackgroundAgent[] {
+  const update = parseBackgroundAgentResult(payload);
+  if (!update) {
+    return agents;
+  }
+  return upsertBackgroundAgent(agents, update);
+}
+
+function parseBackgroundAgentResult(
+  payload: ToolResultPayload,
+): UIBackgroundAgent | null {
+  if (
+    payload.name !== "agent" &&
+    payload.name !== "agent_status" &&
+    payload.name !== "agent_stop"
+  ) {
+    return null;
+  }
+
+  const input = parseJSONObject<AgentToolInput>(payload.input);
+  const result = parseJSONObject<AgentToolResult>(payload.output);
+  if (!result) {
+    return null;
+  }
+
+  const agentId = stringOrEmpty(result.agent_id || input?.agent_id);
+  if (agentId.length === 0) {
+    return null;
+  }
+
+  const backgroundLaunch =
+    payload.name === "agent" && input?.run_in_background === true;
+  const backgroundStatusCheck =
+    payload.name === "agent_status" || payload.name === "agent_stop";
+  if (!backgroundLaunch && !backgroundStatusCheck) {
+    return null;
+  }
+
+  const status = normalizeBackgroundAgentStatus(result.status);
+  return {
+    agentId,
+    description: stringOrEmpty(input?.description),
+    subagentType: stringOrEmpty(result.subagent_type || input?.subagent_type),
+    status,
+    summary: summarizeBackgroundAgent(status, result.summary, result.error),
+    sessionId: stringOrUndefined(result.session_id),
+    transcriptPath: stringOrUndefined(result.transcript_path),
+    outputFile: stringOrUndefined(result.output_file),
+    error: stringOrUndefined(result.error),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function upsertBackgroundAgent(
+  agents: UIBackgroundAgent[],
+  nextAgent: UIBackgroundAgent,
+): UIBackgroundAgent[] {
+  const existing = agents.find((agent) => agent.agentId === nextAgent.agentId);
+  const merged: UIBackgroundAgent = existing
+    ? {
+        ...existing,
+        ...nextAgent,
+        description: nextAgent.description || existing.description,
+        subagentType: nextAgent.subagentType || existing.subagentType,
+        summary: nextAgent.summary || existing.summary,
+        sessionId: nextAgent.sessionId ?? existing.sessionId,
+        transcriptPath: nextAgent.transcriptPath ?? existing.transcriptPath,
+        outputFile: nextAgent.outputFile ?? existing.outputFile,
+        error: nextAgent.error ?? existing.error,
+      }
+    : nextAgent;
+
+  const remaining = agents.filter((agent) => agent.agentId !== merged.agentId);
+  return [merged, ...remaining].sort(compareBackgroundAgents);
+}
+
+function compareBackgroundAgents(
+  left: UIBackgroundAgent,
+  right: UIBackgroundAgent,
+): number {
+  const leftRank = backgroundAgentStatusRank(left.status);
+  const rightRank = backgroundAgentStatusRank(right.status);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  return right.updatedAt.localeCompare(left.updatedAt);
+}
+
+function backgroundAgentStatusRank(status: string): number {
+  switch (status) {
+    case "running":
+    case "cancelling":
+      return 0;
+    case "failed":
+      return 1;
+    case "cancelled":
+      return 2;
+    case "completed":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function normalizeBackgroundAgentStatus(status?: string): string {
+  const normalized = stringOrEmpty(status);
+  if (normalized === "async_launched") {
+    return "running";
+  }
+  return normalized || "running";
+}
+
+function summarizeBackgroundAgent(
+  status: string,
+  summary?: string,
+  error?: string,
+): string {
+  const normalizedSummary = stringOrEmpty(summary);
+  if (normalizedSummary.length > 0) {
+    return normalizedSummary;
+  }
+
+  const normalizedError = stringOrEmpty(error);
+  if (normalizedError.length > 0) {
+    return normalizedError;
+  }
+
+  switch (status) {
+    case "running":
+      return "Child agent running in the background.";
+    case "cancelling":
+      return "Cancellation requested for the background child agent.";
+    case "completed":
+      return "Background child agent completed.";
+    case "cancelled":
+      return "Background child agent cancelled.";
+    case "failed":
+      return "Background child agent failed.";
+    default:
+      return "Background child agent updated.";
+  }
+}
+
+function parseJSONObject<T>(value: string | undefined): T | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function stringOrEmpty(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  const normalized = stringOrEmpty(value);
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function upsertArtifact(

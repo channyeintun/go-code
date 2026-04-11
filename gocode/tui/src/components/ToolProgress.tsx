@@ -20,6 +20,9 @@ function summarizeInput(name: string, raw: string): string {
   try {
     const obj = JSON.parse(raw);
     if (name === "bash" && obj.command) return obj.command;
+    if (name === "agent" && obj.description) return obj.description;
+    if ((name === "agent_status" || name === "agent_stop") && obj.agent_id)
+      return obj.agent_id;
     if (
       (name === "file_read" || name === "file_write" || name === "file_edit") &&
       obj.file_path
@@ -131,6 +134,21 @@ function describeTool(toolCall: UIToolCall): ToolDescriptor {
       };
     case "git":
       return { title: "Git", summary: summarizeGitInput(toolCall.input) };
+    case "agent":
+      return {
+        title: "Agent",
+        summary: summarizeInput(toolCall.name, toolCall.input),
+      };
+    case "agent_status":
+      return {
+        title: "Agent Status",
+        summary: summarizeInput(toolCall.name, toolCall.input),
+      };
+    case "agent_stop":
+      return {
+        title: "Stop Agent",
+        summary: summarizeInput(toolCall.name, toolCall.input),
+      };
     case "web_search":
       return {
         title: "Web Search",
@@ -184,6 +202,12 @@ function runningLabel(toolCall: UIToolCall): string {
       return `Finding files…${progressSuffix}`;
     case "git":
       return `Running git command…${progressSuffix}`;
+    case "agent":
+      return `Launching child agent…${progressSuffix}`;
+    case "agent_status":
+      return `Checking child agent status…${progressSuffix}`;
+    case "agent_stop":
+      return `Stopping child agent…${progressSuffix}`;
     case "web_search":
       return `Searching the web…${progressSuffix}`;
     case "web_fetch":
@@ -260,6 +284,10 @@ function renderSuccess(toolCall: UIToolCall) {
           text={summarizeGitOutput(toolCall.output, toolCall.truncated)}
         />
       );
+    case "agent":
+    case "agent_status":
+    case "agent_stop":
+      return <MarkdownText text={summarizeAgentOutput(toolCall.output)} />;
     case "bash":
       return (
         <MarkdownText
@@ -275,6 +303,71 @@ function renderSuccess(toolCall: UIToolCall) {
           text={summarizeOutput(toolCall.output, toolCall.truncated)}
         />
       );
+  }
+}
+
+interface AgentResultSummary {
+  status?: string;
+  agent_id?: string;
+  subagent_type?: string;
+  session_id?: string;
+  output_file?: string;
+  summary?: string;
+  error?: string;
+}
+
+function summarizeAgentOutput(output?: string): string {
+  if (!output) {
+    return "Agent call completed.";
+  }
+
+  try {
+    const result = JSON.parse(output) as AgentResultSummary;
+    const lines: string[] = [];
+    const status = summarizeAgentStatus(result.status);
+    lines.push(status);
+
+    if (result.summary) {
+      lines.push(result.summary.trim());
+    }
+    if (result.error) {
+      lines.push(`Error: ${result.error.trim()}`);
+    }
+    if (result.agent_id) {
+      lines.push(`Agent ID: ${result.agent_id}`);
+    }
+    if (result.subagent_type) {
+      lines.push(`Type: ${result.subagent_type}`);
+    }
+    if (result.session_id) {
+      lines.push(`Session: ${result.session_id}`);
+    }
+    if (result.output_file) {
+      lines.push(`Result file: ${basenameOrFallback(result.output_file)}`);
+    }
+
+    return lines.join("\n");
+  } catch {
+    return summarizeOutput(output);
+  }
+}
+
+function summarizeAgentStatus(status?: string): string {
+  switch (status) {
+    case "async_launched":
+      return "Launched background child agent.";
+    case "running":
+      return "Background child agent is still running.";
+    case "cancelling":
+      return "Cancellation requested for background child agent.";
+    case "completed":
+      return "Background child agent completed.";
+    case "cancelled":
+      return "Background child agent cancelled.";
+    case "failed":
+      return "Background child agent failed.";
+    default:
+      return "Agent call completed.";
   }
 }
 

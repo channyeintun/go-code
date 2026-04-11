@@ -4,6 +4,7 @@ import { useEngine } from "./hooks/useEngine.js";
 import { useEvents } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
+import BackgroundAgentsPanel from "./components/BackgroundAgentsPanel.js";
 import Input from "./components/Input.js";
 import PlanPanel from "./components/PlanPanel.js";
 import PromptFooter from "./components/PromptFooter.js";
@@ -79,8 +80,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const recentArtifacts = uiState.artifacts
     .filter(
       (artifact) =>
-        artifact.kind !== "implementation-plan" &&
-        artifact.kind !== "tool-log",
+        artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
     )
     .slice(0, 2);
   const isEngineReady = uiState.ready || engine.ready;
@@ -259,7 +259,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
         {uiState.statusLine && (
           <Box paddingLeft={1} marginTop={1}>
-            <Text color={uiState.error ? "red" : "cyan"}>{uiState.statusLine}</Text>
+            <Text color={uiState.error ? "red" : "cyan"}>
+              {uiState.statusLine}
+            </Text>
           </Box>
         )}
 
@@ -282,6 +284,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           activeTurnStatus={uiState.activeTurnStatus}
           model={uiState.model}
         />
+
+        {uiState.backgroundAgents.length > 0 && (
+          <BackgroundAgentsPanel agents={uiState.backgroundAgents} />
+        )}
 
         {uiState.error && (
           <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
