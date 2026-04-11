@@ -1,6 +1,8 @@
 # Go
 /gocode
-bin/
+/bin/
+!/tui/bin/
+!/tui/bin/gocode.js
 *.exe
 *.test
 *.out

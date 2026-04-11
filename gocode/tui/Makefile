@@ -6,18 +6,27 @@ GO_SRC      := ../cmd/gocode
 
 PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
 
-.PHONY: all clean release build-engine build-tui $(PLATFORMS)
+.PHONY: all clean release build-tui-launcher build-tui-standalone $(PLATFORMS)
 
 all: release-local
 
+
 # Build for current platform only (fast, for development)
-release-local: clean build-tui-standalone
+release-local: clean build-tui-launcher
 	@mkdir -p $(BUILD_DIR)
 	GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -o $(BUILD_DIR)/$(ENGINE_NAME) $(GO_SRC)
-	install -m 755 standalone-bin $(BUILD_DIR)/$(BINARY_NAME)
 	@echo ""
 	@echo "Built: $(BUILD_DIR)/$(BINARY_NAME) + $(BUILD_DIR)/$(ENGINE_NAME)"
+	@echo "The local launcher is a Bun script bundle, so Bun must be installed where it runs."
 	@echo "Copy both to a directory in your PATH to install."
+
+# Build a portable Bun launcher script for local installs.
+build-tui-launcher:
+	@mkdir -p $(BUILD_DIR)
+	bun run build
+	bun build --target=bun --outfile=$(BUILD_DIR)/$(BINARY_NAME) \
+		bin/gocode.js
+	chmod +x $(BUILD_DIR)/$(BINARY_NAME)
 
 # Build standalone TUI binary via Bun
 build-tui-standalone:

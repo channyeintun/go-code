@@ -35,7 +35,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Manual install
 
-If you already have local `gocode` and `gocode-engine` binaries, copy both files to a directory in your `PATH`:
+If you already have local `gocode` and `gocode-engine` executables, copy both files to a directory in your `PATH`:
 
 ```bash
 sudo install -m 755 gocode /usr/local/bin/gocode
@@ -69,6 +69,8 @@ install -m 755 release/gocode-engine "$HOME/.local/bin/gocode-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+That local-clone build installs a Bun launcher plus the Go engine, so Bun must remain installed on the machine where you run `gocode`.
+
 ## Setup
 
 Set your API key:
@@ -79,15 +81,15 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 Supported providers and their environment variables:
 
-| Provider   | Env Variable         |
-|------------|----------------------|
-| Anthropic  | `ANTHROPIC_API_KEY`  |
-| OpenAI     | `OPENAI_API_KEY`     |
-| Google     | `GEMINI_API_KEY`     |
-| DeepSeek   | `DEEPSEEK_API_KEY`   |
-| Groq       | `GROQ_API_KEY`       |
-| Mistral    | `MISTRAL_API_KEY`    |
-| Ollama     | (none — runs locally)|
+| Provider  | Env Variable          |
+| --------- | --------------------- |
+| Anthropic | `ANTHROPIC_API_KEY`   |
+| OpenAI    | `OPENAI_API_KEY`      |
+| Google    | `GEMINI_API_KEY`      |
+| DeepSeek  | `DEEPSEEK_API_KEY`    |
+| Groq      | `GROQ_API_KEY`        |
+| Mistral   | `MISTRAL_API_KEY`     |
+| Ollama    | (none — runs locally) |
 
 ## Usage
 
@@ -117,14 +119,14 @@ gocode --help                        # Show help
 
 ### Slash Commands
 
-| Command       | Description                             |
-|---------------|-----------------------------------------|
-| `/plan`       | Switch to plan mode (think before writing) |
-| `/fast`       | Switch to fast mode (execute directly)  |
-| `/model <m>`  | Change model (e.g. `/model openai/gpt-4o`) |
-| `/cost`       | Show token usage and cost               |
-| `/compact`    | Compress conversation to free up context |
-| `/resume`     | Resume a previous session               |
+| Command      | Description                                |
+| ------------ | ------------------------------------------ |
+| `/plan`      | Switch to plan mode (think before writing) |
+| `/fast`      | Switch to fast mode (execute directly)     |
+| `/model <m>` | Change model (e.g. `/model openai/gpt-4o`) |
+| `/cost`      | Show token usage and cost                  |
+| `/compact`   | Compress conversation to free up context   |
+| `/resume`    | Resume a previous session                  |
 
 ### Permission System
 
@@ -140,11 +142,11 @@ When the agent wants to run a command or write a file, you'll see a permission p
 ╰─────────────────────────────────────────────╯
 ```
 
-| Key | Action |
-|-----|--------|
-| `y` | Allow this one command |
-| `n` | Deny this command |
-| `a` | Always allow this exact command |
+| Key | Action                                              |
+| --- | --------------------------------------------------- |
+| `y` | Allow this one command                              |
+| `n` | Deny this command                                   |
+| `a` | Always allow this exact command                     |
 | `s` | Allow all non-destructive commands for this session |
 
 Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always require explicit approval, even with `[s]`.
@@ -153,21 +155,21 @@ Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always r
 
 The agent has access to:
 
-| Tool | Description |
-|------|-------------|
-| **bash** | Execute shell commands |
-| **list_dir** | List directory contents as structured JSON |
-| **file_read** | Read file contents |
-| **file_write** | Create or overwrite files |
-| **file_edit** | Find-and-replace edits in files |
+| Tool                           | Description                                                   |
+| ------------------------------ | ------------------------------------------------------------- |
+| **bash**                       | Execute shell commands                                        |
+| **list_dir**                   | List directory contents as structured JSON                    |
+| **file_read**                  | Read file contents                                            |
+| **file_write**                 | Create or overwrite files                                     |
+| **file_edit**                  | Find-and-replace edits in files                               |
 | **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
-| **glob** | Find files by pattern |
-| **grep** | Search file contents (ripgrep) |
-| **web_search** | Search the web |
-| **web_fetch** | Fetch and read a URL |
-| **command_status** | Check unread output and state for a background command |
-| **send_command_input** | Send stdin to a background command |
-| **git** | Read-only git operations (status, diff, log, blame) |
+| **glob**                       | Find files by pattern                                         |
+| **grep**                       | Search file contents (ripgrep)                                |
+| **web_search**                 | Search the web                                                |
+| **web_fetch**                  | Fetch and read a URL                                          |
+| **command_status**             | Check unread output and state for a background command        |
+| **send_command_input**         | Send stdin to a background command                            |
+| **git**                        | Read-only git operations (status, diff, log, blame)           |
 
 ## Configuration
 
@@ -182,11 +184,11 @@ Config file: `~/.config/gocode/config.json`
 
 Environment variables override the config file:
 
-| Variable | Description |
-|----------|-------------|
-| `GOCODE_MODEL` | Model to use |
-| `GOCODE_API_KEY` | API key (overrides provider-specific keys) |
-| `GOCODE_BASE_URL` | Custom API base URL |
+| Variable                 | Description                                      |
+| ------------------------ | ------------------------------------------------ |
+| `GOCODE_MODEL`           | Model to use                                     |
+| `GOCODE_API_KEY`         | API key (overrides provider-specific keys)       |
+| `GOCODE_BASE_URL`        | Custom API base URL                              |
 | `GOCODE_PERMISSION_MODE` | `default`, `autoApprove`, or `bypassPermissions` |
 
 ## Architecture
