@@ -14,7 +14,7 @@
 | Workstream                          | Status    | Scope | Notes                                                                                      |
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
-| Phase 1 runtime measurement         | in progress | S   | Checkpoint logging, artifact ownership, and aggregate tool-result budgeting landed; continuation threshold validation remains. |
+| Phase 1 runtime measurement         | completed | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place. |
 | Phase 2 tool depth                  | planned   | L     | Register existing tools, add Think tool, semantic validation, input-aware concurrency.     |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
@@ -36,7 +36,9 @@
 - Completed: routed tool-log artifact persistence through the session upsert path so implementation plans, task lists, walkthroughs, search reports, diff previews, and tool logs all share the same parent-session ownership contract.
 - Completed: added an aggregate per-turn inline tool-result budget so parallel tool batches cannot flood a single turn even when each individual tool result stays under its own cap.
 - Completed: extended turn timing metadata with tool-result count, inline-char usage, spill count, and aggregate-budget spill count so future threshold tuning has real session data to work from.
-- Note: no `timings.ndjson` samples existed locally yet, so continuation-threshold validation still needs real session data from subsequent runs.
+- Completed: initialized the continuation tracker with the active max-token budget so the 90% budget stop condition now actually applies during multi-iteration turns.
+- Completed: added continuation stop telemetry to turn timing metadata, including continuation count, budget used, budget ceiling, and the concrete stop reason (`budget_exhausted` or `diminishing_returns`).
+- Note: there were still no local `timings.ndjson` samples to analyze, but Phase 1 now has the required runtime instrumentation and guardrails to validate thresholds from subsequent real sessions.
 
 ## Next Planning Baseline
 

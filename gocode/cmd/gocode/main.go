@@ -291,6 +291,10 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				_ = timingLogger.AppendSnapshot("turn", "query_latency", sessionID, turnID, turnMetrics, map[string]any{
 					"aggregate_tool_budget_chars": turnStats.AggregateBudgetChars,
 					"aggregate_budget_spills":     turnStats.AggregateBudgetSpills,
+					"continuation_budget_tokens":  turnStats.ContinuationBudgetTokens,
+					"continuation_count":          turnStats.ContinuationCount,
+					"continuation_stop_reason":    turnStats.ContinuationStopReason,
+					"continuation_used_tokens":    turnStats.ContinuationUsedTokens,
 					"image_count":                 len(payload.Images),
 					"message_count_after":         len(messages),
 					"message_count_before":        messageCountBefore,
@@ -400,6 +404,12 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					},
 					ApplyResultBudget: func(current []api.Message) []api.Message {
 						return current
+					},
+					ObserveContinuation: func(tracker agent.ContinuationTracker, reason string) {
+						turnStats.ContinuationBudgetTokens = tracker.MaxBudgetTokens
+						turnStats.ContinuationCount = tracker.ContinuationCount
+						turnStats.ContinuationStopReason = reason
+						turnStats.ContinuationUsedTokens = tracker.BudgetUsedTokens
 					},
 					PersistMessages: func(updated []api.Message) {
 						messages = updated
@@ -1922,11 +1932,15 @@ func budgetToolOutput(
 }
 
 type turnExecutionStats struct {
-	AggregateBudgetChars  int
-	AggregateBudgetSpills int
-	ToolInlineChars       int
-	ToolResultCount       int
-	ToolSpillCount        int
+	AggregateBudgetChars     int
+	AggregateBudgetSpills    int
+	ContinuationBudgetTokens int
+	ContinuationCount        int
+	ContinuationStopReason   string
+	ContinuationUsedTokens   int
+	ToolInlineChars          int
+	ToolResultCount          int
+	ToolSpillCount           int
 }
 
 type toolBudgetInfo struct {

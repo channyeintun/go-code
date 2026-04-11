@@ -1,11 +1,23 @@
 package agent
 
+const (
+	ContinuationStopNone               = ""
+	ContinuationStopBudgetExhausted    = "budget_exhausted"
+	ContinuationStopDiminishingReturns = "diminishing_returns"
+)
+
 // ContinuationTracker monitors whether continued iteration is worthwhile.
 type ContinuationTracker struct {
 	ContinuationCount int
 	RecentTokenDeltas []int
 	MaxBudgetTokens   int
 	BudgetUsedTokens  int
+}
+
+// ContinuationDecision describes whether another continuation is worthwhile.
+type ContinuationDecision struct {
+	ShouldStop bool
+	Reason     string
 }
 
 // NewContinuationTracker creates a tracker with the given budget.
@@ -25,11 +37,11 @@ func (t *ContinuationTracker) Record(tokensProduced int) {
 	}
 }
 
-// ShouldStop returns true when continuation is no longer useful.
-func (t *ContinuationTracker) ShouldStop() bool {
+// Decision returns whether continuation is still worthwhile and why it stopped.
+func (t *ContinuationTracker) Decision() ContinuationDecision {
 	// Stop at 90% budget
 	if t.MaxBudgetTokens > 0 && t.BudgetUsedTokens >= t.MaxBudgetTokens*9/10 {
-		return true
+		return ContinuationDecision{ShouldStop: true, Reason: ContinuationStopBudgetExhausted}
 	}
 
 	// Stop on diminishing returns: 3+ continuations, last 2 under 500 tokens
@@ -37,9 +49,14 @@ func (t *ContinuationTracker) ShouldStop() bool {
 		last := t.RecentTokenDeltas[len(t.RecentTokenDeltas)-1]
 		prev := t.RecentTokenDeltas[len(t.RecentTokenDeltas)-2]
 		if last < 500 && prev < 500 {
-			return true
+			return ContinuationDecision{ShouldStop: true, Reason: ContinuationStopDiminishingReturns}
 		}
 	}
 
-	return false
+	return ContinuationDecision{}
+}
+
+// ShouldStop returns true when continuation is no longer useful.
+func (t *ContinuationTracker) ShouldStop() bool {
+	return t.Decision().ShouldStop
 }

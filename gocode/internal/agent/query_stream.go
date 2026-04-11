@@ -34,14 +34,15 @@ const (
 
 // QueryDeps injects all side effects into the query engine.
 type QueryDeps struct {
-	CallModel         func(context.Context, api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error)
-	ExecuteToolBatch  func(context.Context, []api.ToolCall) ([]api.ToolResult, error)
-	CompactMessages   func(context.Context, []api.Message, CompactReason) ([]api.Message, error)
-	ApplyResultBudget func([]api.Message) []api.Message
-	EmitTelemetry     func(ipc.StreamEvent)
-	PersistMessages   func([]api.Message)
-	Cleanup           func()
-	Clock             func() time.Time
+	CallModel           func(context.Context, api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error)
+	ExecuteToolBatch    func(context.Context, []api.ToolCall) ([]api.ToolResult, error)
+	CompactMessages     func(context.Context, []api.Message, CompactReason) ([]api.Message, error)
+	ApplyResultBudget   func([]api.Message) []api.Message
+	ObserveContinuation func(ContinuationTracker, string)
+	EmitTelemetry       func(ipc.StreamEvent)
+	PersistMessages     func([]api.Message)
+	Cleanup             func()
+	Clock               func() time.Time
 }
 
 // QueryState tracks iteration state within a query.
@@ -80,6 +81,7 @@ func NewQueryState(req QueryRequest) *QueryState {
 		ContextWindow: req.ContextWindow,
 		MaxTokens:     req.MaxTokens,
 		MaxTurns:      50,
+		Continuation:  NewContinuationTracker(req.MaxTokens),
 	}
 }
 
@@ -91,7 +93,7 @@ func (s *QueryState) ShouldContinue() bool {
 	if s.TurnCount >= s.MaxTurns {
 		return false
 	}
-	return !s.Continuation.ShouldStop()
+	return !s.Continuation.Decision().ShouldStop
 }
 
 // QueryStream is the core streaming query interface.
@@ -120,6 +122,11 @@ func QueryStream(ctx context.Context, req QueryRequest, deps QueryDeps) iter.Seq
 			}
 
 			persistMessages(state.Messages, deps.PersistMessages)
+		}
+
+		if deps.ObserveContinuation != nil {
+			decision := state.Continuation.Decision()
+			deps.ObserveContinuation(state.Continuation, decision.Reason)
 		}
 	}
 }
