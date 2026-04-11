@@ -10,16 +10,14 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 curl -fsSL https://raw.githubusercontent.com/channyeintun/gocode/main/gocode/install.sh | sh
 ```
 
-This script downloads prebuilt `gocode` and `gocode-engine` binaries from GitHub Releases; it does not build from source. If prebuilt binaries are unavailable for your platform, this command will fail, so use the manual install flow below instead.
+This script downloads prebuilt `gocode` and `gocode-engine` release assets from GitHub Releases; it does not build from source. Current releases install a Bun launcher plus the Go engine, so Bun 1.0+ must already be installed on the machine where you run `gocode`. If prebuilt assets are unavailable for your platform, this command will fail, so use the manual install flow below instead.
 
 The installer chooses a writable install directory automatically:
 
 - `/usr/local/bin` if it is writable
 - `~/.local/bin` otherwise
 
-It installs two binaries: `gocode` and `gocode-engine`.
-
-No runtime dependencies — no Node.js, no Go, nothing else needed.
+It installs two executables: `gocode` and `gocode-engine`.
 
 After install, verify:
 
@@ -195,7 +193,7 @@ Environment variables override the config file:
 
 ```
 ┌──────────────────────────────┐
-│  gocode (Bun standalone)     │  ← Terminal UI (React Ink)
+│  gocode (Bun launcher)       │  ← Terminal UI (React Ink)
 │    Renders TUI, handles I/O  │
 │         │ stdin/stdout NDJSON │
 │  ┌──────▼────────────────┐   │
@@ -206,7 +204,7 @@ Environment variables override the config file:
 └──────────────────────────────┘
 ```
 
-Both binaries must be in the same directory (or `gocode-engine` must be in `PATH`).
+Both executables must be in the same directory (or `gocode-engine` must be in `PATH`). When using released or locally built launcher assets, Bun must also be installed on the target machine.
 
 ## Building from Source
 
@@ -218,8 +216,8 @@ bun install --frozen-lockfile   # Install JS deps from bun.lock
 bun run setup                   # Build TS and compile Go engine
 bun run start                   # Run the TUI in development
 
-make release-local     # Build standalone binaries for your platform
-make release           # Cross-compile for all platforms
+make release-local     # Build a Bun launcher + Go engine for your platform
+make release           # Package Bun-launcher release assets + per-platform engines
 make install           # Install to /usr/local/bin
 ```
 

@@ -6,7 +6,7 @@ GO_SRC      := ../cmd/gocode
 
 PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
 
-.PHONY: all clean release build-tui-launcher build-tui-standalone $(PLATFORMS)
+.PHONY: all clean release build-tui-launcher $(PLATFORMS)
 
 all: release-local
 
@@ -28,14 +28,8 @@ build-tui-launcher:
 		bin/gocode.js
 	chmod +x $(BUILD_DIR)/$(BINARY_NAME)
 
-# Build standalone TUI binary via Bun
-build-tui-standalone:
-	bun run build
-	bun build --compile --outfile=standalone-bin \
-		dist/standalone.js
-
-# Cross-compile release binaries and archives for all platforms
-release: clean build-tui-standalone
+# Build release assets for all platforms.
+release: clean build-tui-launcher
 	@for platform in $(PLATFORMS); do \
 		os=$$(echo $$platform | cut -d- -f1); \
 		arch=$$(echo $$platform | cut -d- -f2); \
@@ -45,10 +39,8 @@ release: clean build-tui-standalone
 		engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform; \
 		echo "Building $$platform..."; \
 		mkdir -p $$dir $$asset_dir; \
+		install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $$dir/$(BINARY_NAME); \
 		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$(ENGINE_NAME) $(GO_SRC); \
-		bun build --compile --outfile=$$dir/$(BINARY_NAME) \
-			--target=bun-$$os-$$arch \
-			dist/standalone.js; \
 		install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
 		install -m 755 $$dir/$(ENGINE_NAME) $$engine_asset; \
 		tar -czf $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz -C $(BUILD_DIR) $(BINARY_NAME)-$$platform; \
@@ -60,7 +52,7 @@ release: clean build-tui-standalone
 	@echo "Release artifacts in $(BUILD_DIR)/"
 
 clean:
-	rm -rf $(BUILD_DIR) standalone-bin
+	rm -rf $(BUILD_DIR)
 
 # Install locally (copies to /usr/local/bin)
 install: release-local

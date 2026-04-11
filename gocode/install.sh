@@ -63,6 +63,27 @@ download_asset() {
   curl -fsSL "$url" -o "$dest" 2>/dev/null
 }
 
+requires_bun_runtime() {
+  first_line="$(LC_ALL=C sed -n '1p' "$1" 2>/dev/null || true)"
+  [ "$first_line" = "#!/usr/bin/env bun" ]
+}
+
+ensure_bun_available() {
+  if command -v bun >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo ""
+  echo "Install failed: this gocode release uses a Bun launcher, but 'bun' was not found on PATH."
+  echo ""
+  echo "Install Bun first, then rerun this installer:"
+  echo "  https://bun.sh"
+  echo ""
+  echo "After Bun is installed, verify it with:"
+  echo "  bun --version"
+  exit 1
+}
+
 install_binary() {
   src="$1"
   dest="$2"
@@ -107,6 +128,10 @@ else
   fi
 fi
 
+if requires_bun_runtime "$BINARY_SOURCE"; then
+  ensure_bun_available
+fi
+
 # Install binaries
 echo "Installing to ${INSTALL_DIR}..."
 install_binary "$BINARY_SOURCE" "$INSTALL_DIR/$BINARY_NAME"
@@ -135,6 +160,9 @@ esac
 echo ""
 echo "Set your API key and start:"
 echo "  export ANTHROPIC_API_KEY=\"sk-ant-...\""
+if requires_bun_runtime "$BINARY_SOURCE"; then
+  echo "  bun --version"
+fi
 echo "  gocode"
 echo ""
 echo "Or use a different provider:"
