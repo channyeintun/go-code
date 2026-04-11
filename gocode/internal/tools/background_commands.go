@@ -3,12 +3,17 @@ package tools
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 const backgroundCommandMaxOutputBytes = 256 * 1024
@@ -22,6 +27,7 @@ type backgroundCommand struct {
 	cwd      string
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
+	terminal *os.File
 	output   *boundedOutput
 	running  bool
 	exitCode *int
@@ -55,40 +61,28 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	cmd := exec.Command("/bin/zsh", "-lc", command)
 	cmd.Dir = cwd
 
-	stdin, err := cmd.StdinPipe()
+	terminal, err := pty.Start(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("open stdin pipe: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("open stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("open stderr pipe: %w", err)
+		return nil, fmt.Errorf("start background command in pty: %w", err)
 	}
 
 	bg := &backgroundCommand{
-		id:      id,
-		command: command,
-		cwd:     cwd,
-		cmd:     cmd,
-		stdin:   stdin,
-		output:  &boundedOutput{},
-		running: true,
-		done:    make(chan struct{}),
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start background command: %w", err)
+		id:       id,
+		command:  command,
+		cwd:      cwd,
+		cmd:      cmd,
+		stdin:    terminal,
+		terminal: terminal,
+		output:   &boundedOutput{},
+		running:  true,
+		done:     make(chan struct{}),
 	}
 
 	backgroundCommandsMu.Lock()
 	backgroundCommands[id] = bg
 	backgroundCommandsMu.Unlock()
 
-	go streamBackgroundOutput(bg.output, stdout)
-	go streamBackgroundOutput(bg.output, stderr)
+	go streamBackgroundOutput(bg.output, terminal)
 	go waitForBackgroundCommand(bg)
 
 	return bg, nil
@@ -101,8 +95,9 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	defer bg.mu.Unlock()
 	defer close(bg.done)
 	defer scheduleBackgroundCommandCleanup(bg)
-	if bg.stdin != nil {
-		_ = bg.stdin.Close()
+	if bg.terminal != nil {
+		_ = bg.terminal.Close()
+		bg.terminal = nil
 		bg.stdin = nil
 	}
 
@@ -124,7 +119,21 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 }
 
 func streamBackgroundOutput(buffer *boundedOutput, reader io.Reader) {
-	_, _ = io.Copy(buffer, reader)
+	chunk := make([]byte, 4096)
+	for {
+		readLen, err := reader.Read(chunk)
+		if readLen > 0 {
+			_, _ = buffer.Write(chunk[:readLen])
+		}
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO) {
+			return
+		}
+		_, _ = buffer.Write([]byte(fmt.Sprintf("\n[Background PTY stream closed: %v]\n", err)))
+		return
+	}
 }
 
 func scheduleBackgroundCommandCleanup(bg *backgroundCommand) {
