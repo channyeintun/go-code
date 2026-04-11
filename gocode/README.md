@@ -110,6 +110,15 @@ gocode
 
 That's it. You'll see a terminal UI with a prompt. Type your request and press Enter.
 
+### First-Class Outputs
+
+Artifacts are first-class outputs in `gocode`, not just long-text spill buckets. When the agent produces durable structured work, it should persist that work as an artifact so it remains reviewable in the artifact panel.
+
+- Implementation plans are saved as explicit review artifacts before execution begins.
+- Task lists and walkthroughs capture ongoing progress and completed-work summaries across turns.
+- Large `web_fetch` and `git diff` results are routed into dedicated artifacts instead of overwhelming the transcript.
+- Artifact bodies are intended to be resumed, revised, and inspected as part of the normal workflow.
+
 ### Options
 
 ```

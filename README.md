@@ -8,7 +8,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 1.  **TUI (React/Ink):** A highly interactive terminal UI that provides real-time feedback, grouped tool execution transcripts, and dynamic progress indicators.
 2.  **Go Engine:** A high-performance backend that handles the agent loop, tool execution (bash, file system, git, search), and project-level orchestration with built-in permission gating.
-3.  **Artifacts:** A structured way to view and manage complex outputs like implementation plans, walkthroughs, and technical feedback in a dedicated panel.
+3.  **Artifacts:** First-class outputs in the runtime, not just overflow containers. Plans, task lists, walkthroughs, search reports, diff previews, and other structured work products are persisted, reviewable, and surfaced in a dedicated panel.
 
 ![Agentic Coding CLI Architecture](./docs/architecture.png)
 
@@ -119,6 +119,15 @@ gocode
 ```
 
 That's it. You'll see a terminal UI with a prompt. Type your request and press Enter.
+
+### First-Class Outputs
+
+Artifacts are first-class outputs in `Go Code`. When the agent produces durable structured work, it should save that work as an artifact instead of leaving it only in the chat transcript.
+
+- Implementation plans are saved as reviewable plan artifacts before execution.
+- Task lists and walkthroughs persist multi-step progress and completed-work summaries.
+- Large `web_fetch` and `git diff` results are routed into dedicated artifacts so the transcript can stay concise.
+- Artifact content is meant to be reopened, revised, resumed, and inspected across turns.
 
 ### Options
 
