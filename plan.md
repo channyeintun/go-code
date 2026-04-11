@@ -1,85 +1,227 @@
-# First-Class Output Artifacts Plan
+# Explanation-Driven Enhancement Plan
 
 ## Goal
 
-Make artifacts a primary output channel in `gocode`, closer to Antigravity's model where structured work products live as durable, reviewable documents instead of transient transcript text.
+Replace the closed parity-era roadmap with a new roadmap driven by the architecture patterns in `sourcecode-explanation/` and confirmed with targeted reads from `sourcecode/`. Improve only the areas that materially raise `gocode` quality for local coding work:
 
-## Cleanup Note
+- subagents, but not swarm/team orchestration
+- tool depth and concurrent execution
+- project memory
+- compaction and prompt-budget behavior
+- TUI/UI
+- milliseconds-level developer experience
 
-This file replaces the completed TUI parity / Phase 8 document.
+## Reference Basis
 
-Completed parity and stabilization work remains recorded in `progress.md`. `plan.md` now tracks only the next artifact-focused workstream.
+Primary reference:
+
+- `sourcecode-explanation/book/ch05-agent-loop.md`
+- `sourcecode-explanation/book/ch06-tools.md`
+- `sourcecode-explanation/book/ch07-concurrency.md`
+- `sourcecode-explanation/book/ch08-sub-agents.md`
+- `sourcecode-explanation/book/ch11-memory.md`
+- `sourcecode-explanation/book/ch13-terminal-ui.md`
+- `sourcecode-explanation/book/ch17-performance.md`
+
+Targeted source cross-checks:
+
+- `sourcecode/Tool.ts`
+- `sourcecode/tools.ts`
+- `sourcecode/query.ts`
+- `sourcecode/tasks.ts`
+- `sourcecode/main.tsx`
+
+Current implementation seams reviewed for planning:
+
+- `gocode/internal/agent/loop.go`
+- `gocode/internal/agent/memory_files.go`
+- `gocode/internal/agent/token_budget.go`
+- `gocode/internal/tools/interface.go`
+- `gocode/internal/tools/registry.go`
+- `gocode/internal/tools/orchestration.go`
+- `gocode/internal/tools/streaming_executor.go`
+- `gocode/internal/compact/pipeline.go`
+- `gocode/internal/session/store.go`
+- `gocode/tui/src/components/ArtifactView.tsx`
+- `gocode/tui/src/components/Input.tsx`
+- `gocode/tui/src/hooks/useEvents.ts`
+
+## Non-Negotiable Guardrails
+
+- Keep artifacts first-class. No roadmap item may demote implementation plans, task lists, walkthroughs, diff previews, search reports, or tool-log artifacts into transcript-only features.
+- Do not add MCP, swarm/team orchestration, remote execution, browser automation, or other product lines that do not belong to the current `gocode` scope.
+- Prefer extending the existing local engine and TUI architecture over introducing parallel subsystems.
+- Keep subagents local-first and artifact-safe. In the first version, child agents return reports to the parent rather than mutating parent session artifacts directly.
+- This roadmap is for planning and sequencing only. It does not authorize implementation shortcuts around permissions, budgeting, or artifact review.
 
 ## Current Baseline
 
-- the runtime already persists session markdown artifacts for implementation plans, task lists, walkthroughs, and oversized tool logs
-- the TUI exposes a plan panel and artifact list, but those surfaces still render artifact bodies as plain text or truncated previews
-- IPC only emits `artifact_created` and `artifact_updated`, which is not enough for focus, review, feedback, or version-aware presentation
-- plan mode can save implementation plans, but artifact approval and revision are not first-class interactions
-- long structured outputs are still transcript-first unless a specific tool persists them intentionally
+- `gocode` already has strong artifact groundwork: reviewable implementation plans, task-list and walkthrough artifacts, routed diff and search artifacts, and artifact-aware TUI panels.
+- Tool execution is no longer naive: the engine already supports per-call concurrency classification, batch execution, and a streaming executor that preserves ordered result delivery.
+- Compaction exists and works: tool-result truncation, full summarization, and partial recent-window compaction are already implemented.
+- The largest gaps are now architectural rather than cosmetic: there is no subagent runtime, no persistent memory and recall system, no cache-aware prompt budgeting, limited tool breadth compared with the reference architecture, and no serious latency instrumentation.
 
-## Phase 9: First-Class Output Artifacts (Antigravity Alignment)
+## Phase 1: Measure and Protect the Runtime
 
-1. **Artifact-First Presentation**
-   - **Purpose:** Make structured outputs feel like first-class work products, not transcript spillover.
-   - **Implementation Details:**
-     - **TUI Rendering:** Replace plain-text rendering in the plan panel and artifact list with the shared markdown renderer so alerts, tables, fenced code, and diff blocks display consistently.
-     - **Primary Surface:** Promote the most relevant artifact for the active turn into a dedicated primary panel instead of treating all artifacts as compact previews.
-     - **Metadata:** Show artifact kind, scope, version, source, and draft/final status directly in the UI.
+**Purpose:** establish hard data and guardrails before adding new agent depth.
 
-2. **Artifact Lifecycle & IPC**
-   - **Purpose:** Give artifacts a real state machine rather than only create/update broadcasts.
-   - **Implementation Details:**
-     - **Protocol Expansion:** Extend IPC beyond `artifact_created` / `artifact_updated` with events for focus, review requested, feedback submitted, status changes, and version changes.
-     - **Payload Shape:** Include artifact metadata and status in event payloads so the TUI does not infer lifecycle state from content.
-     - **Versioning:** Expose version transitions intentionally so revised artifacts remain reviewable instead of being silently replaced.
+### Scope
 
-3. **Reviewable Plans and Feedback Loops**
-   - **Purpose:** Match Antigravity's workflow where plans and other key artifacts can be explicitly reviewed, revised, and approved.
-   - **Implementation Details:**
-     - **Plan Review Gate:** Allow implementation-plan artifacts to enter a review-required state before write execution proceeds.
-     - **User Feedback:** Persist artifact-scoped review notes separately from permission feedback so "revise this artifact" becomes a first-class action.
-     - **Revision Flow:** Support revise / approve semantics for plans and walkthroughs without forcing the user to manage everything through freeform chat.
+- Add startup, model, tool, compaction, and TUI timing checkpoints inspired by `sourcecode/main.tsx` and `sourcecode/query.ts`.
+- Define an artifact ownership contract for tool outputs, future subagents, and compaction or memory outputs.
+- Add per-turn aggregate tool-result budgeting so wider concurrency and future subagents cannot flood the transcript or bypass artifact spill logic.
+- Track the latencies that matter to developer perception: boot to ready, prompt submit to first token, prompt submit to first tool result, prompt submit to artifact focus, and manual compaction duration.
 
-4. **Artifact Output Routing**
-   - **Purpose:** Route the right work products into artifacts automatically and consistently.
-   - **Implementation Details:**
-     - **Primary Artifact Types:** Keep implementation plans, task lists, walkthroughs, and tool logs as the first shipped set.
-     - **Next Additions:** Start intentionally using existing artifact kinds such as `search-report`, `diff-preview`, `diagram`, and `compact-summary` where they improve readability.
-     - **Oversized Results:** Prefer artifact spillover for long structured outputs instead of dumping large transcript blocks.
+### Exit Criteria
 
-5. **Prompt & Runtime Contract**
-   - **Purpose:** Make the model reliably treat artifacts as a deliberate output mechanism.
-   - **Implementation Details:**
-     - **System Prompt:** Tell the model when to answer inline, when to save or update an artifact, and how to structure artifact markdown for the TUI.
-     - **Plan Mode Behavior:** Keep read-first planning, but shift from "save a plan and tell the user to switch to /fast" toward "save, review, revise, then execute when the user is ready."
-     - **Tool Integration:** Ensure artifact-producing tools follow the same conventions for titles, metadata, status, and updates.
+- Every later phase can be evaluated against real latency numbers instead of guesses.
+- Artifact spill and focus behavior remain stable under heavier concurrent tool load.
+- The repo has a single source of truth for runtime guardrails before subagents or memory are introduced.
 
-6. **Follow-on Task View Integration**
-   - **Purpose:** Leave a clean path for Antigravity-style task-mode UI built on the artifact system.
-   - **Implementation Details:**
-     - **Task Status Surface:** Reuse artifact lifecycle primitives for task boundaries, execution summaries, and verification checkpoints.
-     - **Non-Goal for First Slice:** Do not block initial artifact improvements on a full `task_boundary` / `notify_user` implementation.
+## Phase 2: Deepen the Local Tool System
 
-## Out of Scope for This Slice
+**Purpose:** close the biggest execution gap first without importing unrelated feature sets.
 
-- general workflow-file execution
-- knowledge-item retrieval and indexing
-- subagent orchestration
-- browser or media embedding beyond text-first markdown artifact support
-- non-artifact TUI redesign unrelated to artifact review
+### Scope
 
-## Risks
+- Extend the `Tool` contract with semantic validation so tools can reject invalid or low-value calls before permission resolution and execution.
+- Make concurrency classification richer for `bash` and other complex tools by inspecting input shape, not only tool identity.
+- Expand the local tool surface in focused categories only:
+  - code reading and code navigation
+  - structured repository inspection
+  - safer multi-file editing and batching
+  - terminal and process follow-up that complements the existing PTY background command flow
+- Keep ordered result delivery, permission gates, tool-result budgeting, and artifact spill paths as non-negotiable invariants.
 
-- richer artifact IPC touches both engine and TUI reducers
-- review gating must avoid deadlocking plan mode or duplicating the existing permission flow
-- fuller markdown support for artifacts may reveal renderer gaps that need staged rollout
-- versioned artifact history can bloat session state if retention is not bounded
+### Notes
 
-## Definition of Done
+- Do not chase a raw `40+ tools` number just for parity optics.
+- The first target is a coherent local toolset that materially improves coding workflows without dead weight.
+- If the local tool surface grows large enough, deferred schema loading becomes worth planning; it is not the first step.
 
-- artifact panels render full markdown content instead of plain-text previews for the supported first slice
-- artifact events carry enough metadata for status, focus, and version-aware UI updates
-- implementation plans can be explicitly reviewed and revised as artifacts before execution
-- task lists, walkthroughs, and long structured outputs follow the same first-class artifact contract
-- completed parity-era plan items are no longer the active execution baseline in this file
+### Exit Criteria
+
+- The tool surface is materially broader than the current local-only set.
+- Tool validation and concurrency decisions are input-aware where it matters.
+- Larger tool batches do not regress artifact routing or transcript clarity.
+
+## Phase 3: Introduce Artifact-Safe Subagents
+
+**Purpose:** add delegation without importing swarm, remote, or team complexity.
+
+### Scope
+
+- Add a single `Agent` tool for bounded delegation with a parent-child lifecycle modeled after the explanation and source code.
+- Start with two agent types only:
+  - `general-purpose`
+  - `explore`
+- Support both blocking and background execution.
+- Give child agents scoped tool pools, isolated permission modes, and independent cancellation semantics.
+- Return a child report, transcript summary, or background handle to the parent. In v1, child agents do not directly update the parent session's task-list or implementation-plan artifacts.
+
+### Notes
+
+- No team agents.
+- No swarm messaging.
+- No remote or worktree execution in the initial scope.
+- The first implementation should prove delegation quality and transcript clarity before adding more agent types.
+
+### Exit Criteria
+
+- The model can delegate research, search, and setup work without polluting the parent turn.
+- Background children never deadlock on permission prompts.
+- Artifact ownership remains explicit and stable.
+
+## Phase 4: Build a Real Project Memory System
+
+**Purpose:** move from instruction-file loading to durable, selective project memory.
+
+### Scope
+
+- Add project-scoped memory storage outside the artifact store, following the four-type taxonomy from the explanation:
+  - `user`
+  - `feedback`
+  - `project`
+  - `reference`
+- Always load a lightweight `MEMORY.md` index and keep full memory files on demand.
+- Add an async memory recall side-query so only the most relevant memories enter the next turn.
+- Add staleness warnings for older memories so the model treats them as observations to verify, not immutable facts.
+- Reuse existing file tools for the write path instead of inventing a separate memory tool surface.
+
+### Notes
+
+- `AGENTS.md` and `AGENTS.local.md` remain instruction files, not project memory.
+- Memory must stay separate from artifacts so long-term observations do not pollute session deliverables.
+
+### Exit Criteria
+
+- `gocode` can remember durable project guidance across sessions.
+- Memory recall stays selective and bounded.
+- Old memories surface with age-aware caveats instead of false authority.
+
+## Phase 5: Upgrade Compaction and Prompt Budgeting
+
+**Purpose:** reclaim context and cost headroom without weakening current compaction behavior.
+
+### Scope
+
+- Keep the existing three-stage compaction pipeline and add tighter output slot reservation with escalation only on truncation.
+- Reorder prompt construction for cache stability: stable sections first, volatile sections later.
+- Add section-level memoization for system prompt assembly.
+- Make compaction, tool-result budgeting, and future memory recall cooperate rather than each managing context pressure in isolation.
+- Use the existing `compact-summary` artifact kind only if it improves reviewability; do not duplicate transcript content by default.
+
+### Exit Criteria
+
+- Sessions keep more usable context before compaction fires.
+- Repeated turns avoid unnecessary prompt rebuild churn.
+- Compaction remains explainable, bounded, and compatible with future subagents and memory recall.
+
+## Phase 6: Tighten the TUI and Milliseconds-Level Developer Experience
+
+**Purpose:** turn the runtime and interface improvements into felt speed.
+
+### Scope
+
+- Use Phase 1 timing data to prioritize:
+  - startup fast paths
+  - API preconnect and warmup
+  - transcript rendering hot spots
+  - prompt editor interaction polish
+  - search and index performance for large repositories
+  - new UI surfaces for subagent activity and memory usage
+- Keep artifact surfaces primary when presenting structured work.
+- Prefer measured Ink improvements over speculative renderer rewrites.
+
+### Candidate UI Improvements
+
+- clearer subagent status surfaces
+- memory recall visibility without transcript noise
+- faster transcript paging and search on long sessions
+- richer prompt editing and keybinding ergonomics
+- more actionable latency and status feedback in the footer and status line
+
+### Exit Criteria
+
+- The slowest visible interactions are instrumented and intentionally improved.
+- UI work stays anchored to measured bottlenecks instead of imitation.
+- Artifact presentation remains stronger, not weaker, after the new surfaces land.
+
+## Recommended Execution Order
+
+1. Phase 1: runtime measurement and guardrails
+2. Phase 2: tool depth and concurrency
+3. Phase 3: subagents
+4. Phase 4: memory
+5. Phase 5: compaction and prompt budgeting
+6. Phase 6: TUI and milliseconds-level developer experience
+
+This order is deliberate. Better measurement and stronger tool execution reduce risk for every later phase. Subagents become substantially more valuable once the tool system is deeper. Memory becomes more useful once parent and child agents can both consume it. UI work should reflect measured bottlenecks from the earlier phases, not guesswork.
+
+## Success Signals
+
+- Tool batches finish faster without reducing determinism.
+- The first subagent release improves search and research turns without confusing artifact ownership.
+- Memory recall changes behavior across sessions in ways the user can notice and trust.
+- Compaction fires later and with less disruption.
+- Boot-to-ready and first-response latency are tracked and improved as first-class engineering metrics.
