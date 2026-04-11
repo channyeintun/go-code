@@ -19,6 +19,9 @@ interface StatusBarProps {
   totalCostUsd: number;
   inputTokens: number;
   outputTokens: number;
+  memoryRecallUsd: number;
+  memoryRecallInputTokens: number;
+  memoryRecallOutputTokens: number;
   rateLimits: UIRateLimits;
 }
 
@@ -34,6 +37,9 @@ const StatusBar: FC<StatusBarProps> = ({
   totalCostUsd,
   inputTokens,
   outputTokens,
+  memoryRecallUsd,
+  memoryRecallInputTokens,
+  memoryRecallOutputTokens,
   rateLimits,
 }) => {
   const modeColor = mode === "plan" ? "blue" : "green";
@@ -59,6 +65,10 @@ const StatusBar: FC<StatusBarProps> = ({
   const contextColor =
     contextPercent >= 90 ? "red" : contextPercent >= 70 ? "yellow" : "gray";
   const hasRateLimits = !!rateLimits.fiveHour || !!rateLimits.sevenDay;
+  const hasMemoryRecallCost =
+    memoryRecallUsd > 0 ||
+    memoryRecallInputTokens > 0 ||
+    memoryRecallOutputTokens > 0;
 
   return (
     <Box paddingX={1} paddingY={0}>
@@ -108,6 +118,13 @@ const StatusBar: FC<StatusBarProps> = ({
         ) : null}
         <Text color="gray"> · </Text>
         <Text color="gray">{`${formatTokenCount(inputTokens)}↑ ${formatTokenCount(outputTokens)}↓`}</Text>
+        {hasMemoryRecallCost ? (
+          <>
+            <Text color="gray"> · </Text>
+            <Text color="cyan">mem</Text>
+            <Text color="gray"> {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}</Text>
+          </>
+        ) : null}
         <Text color="gray"> · </Text>
         <Text color="gray">{`$${totalCostUsd.toFixed(4)}`}</Text>
       </Text>

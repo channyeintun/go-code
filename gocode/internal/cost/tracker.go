@@ -24,6 +24,9 @@ type Tracker struct {
 	TotalOutputTokens        int
 	TotalCacheReadTokens     int
 	TotalCacheCreationTokens int
+	MemoryRecallCostUSD      float64
+	MemoryRecallInputTokens  int
+	MemoryRecallOutputTokens int
 	TotalAPIDuration         time.Duration
 	TotalToolDuration        time.Duration
 	TotalLinesAdded          int
@@ -62,6 +65,17 @@ func (t *Tracker) RecordAPICall(model string, inputTokens, outputTokens, cacheRe
 	entry.CallCount++
 }
 
+// RecordMemoryRecallCall records usage from the memory side-query while still contributing to aggregate totals.
+func (t *Tracker) RecordMemoryRecallCall(model string, inputTokens, outputTokens, cacheRead, cacheCreation int, duration time.Duration, costUSD float64) {
+	t.RecordAPICall(model, inputTokens, outputTokens, cacheRead, cacheCreation, duration, costUSD)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.MemoryRecallCostUSD += costUSD
+	t.MemoryRecallInputTokens += inputTokens
+	t.MemoryRecallOutputTokens += outputTokens
+}
+
 // RecordToolDuration records time spent executing a tool.
 func (t *Tracker) RecordToolDuration(d time.Duration) {
 	t.mu.Lock()
@@ -84,6 +98,9 @@ type TrackerSnapshot struct {
 	TotalOutputTokens        int
 	TotalCacheReadTokens     int
 	TotalCacheCreationTokens int
+	MemoryRecallCostUSD      float64
+	MemoryRecallInputTokens  int
+	MemoryRecallOutputTokens int
 	TotalAPIDuration         time.Duration
 	TotalToolDuration        time.Duration
 	TotalLinesAdded          int
@@ -101,6 +118,9 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 		TotalOutputTokens:        t.TotalOutputTokens,
 		TotalCacheReadTokens:     t.TotalCacheReadTokens,
 		TotalCacheCreationTokens: t.TotalCacheCreationTokens,
+		MemoryRecallCostUSD:      t.MemoryRecallCostUSD,
+		MemoryRecallInputTokens:  t.MemoryRecallInputTokens,
+		MemoryRecallOutputTokens: t.MemoryRecallOutputTokens,
 		TotalAPIDuration:         t.TotalAPIDuration,
 		TotalToolDuration:        t.TotalToolDuration,
 		TotalLinesAdded:          t.TotalLinesAdded,
@@ -124,6 +144,9 @@ func (t *Tracker) MergeSnapshot(snapshot TrackerSnapshot) {
 	t.TotalOutputTokens += snapshot.TotalOutputTokens
 	t.TotalCacheReadTokens += snapshot.TotalCacheReadTokens
 	t.TotalCacheCreationTokens += snapshot.TotalCacheCreationTokens
+	t.MemoryRecallCostUSD += snapshot.MemoryRecallCostUSD
+	t.MemoryRecallInputTokens += snapshot.MemoryRecallInputTokens
+	t.MemoryRecallOutputTokens += snapshot.MemoryRecallOutputTokens
 	t.TotalAPIDuration += snapshot.TotalAPIDuration
 	t.TotalToolDuration += snapshot.TotalToolDuration
 	t.TotalLinesAdded += snapshot.TotalLinesAdded

@@ -1275,9 +1275,12 @@ func mergeUsage(current api.Usage, next api.Usage) api.Usage {
 func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 	snapshot := tracker.Snapshot()
 	return bridge.Emit(ipc.EventCostUpdate, ipc.CostUpdatePayload{
-		TotalUSD:     snapshot.TotalCostUSD,
-		InputTokens:  snapshot.TotalInputTokens,
-		OutputTokens: snapshot.TotalOutputTokens,
+		TotalUSD:                 snapshot.TotalCostUSD,
+		InputTokens:              snapshot.TotalInputTokens,
+		OutputTokens:             snapshot.TotalOutputTokens,
+		MemoryRecallUSD:          snapshot.MemoryRecallCostUSD,
+		MemoryRecallInputTokens:  snapshot.MemoryRecallInputTokens,
+		MemoryRecallOutputTokens: snapshot.MemoryRecallOutputTokens,
 	})
 }
 

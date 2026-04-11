@@ -141,6 +141,9 @@ export interface CostUpdatePayload {
   total_usd: number;
   input_tokens: number;
   output_tokens: number;
+  memory_recall_usd?: number;
+  memory_recall_input_tokens?: number;
+  memory_recall_output_tokens?: number;
 }
 
 export interface RateLimitWindowPayload {

@@ -144,9 +144,12 @@ type ContextWindowPayload struct {
 }
 
 type CostUpdatePayload struct {
-	TotalUSD     float64 `json:"total_usd"`
-	InputTokens  int     `json:"input_tokens"`
-	OutputTokens int     `json:"output_tokens"`
+	TotalUSD                 float64 `json:"total_usd"`
+	InputTokens              int     `json:"input_tokens"`
+	OutputTokens             int     `json:"output_tokens"`
+	MemoryRecallUSD          float64 `json:"memory_recall_usd,omitempty"`
+	MemoryRecallInputTokens  int     `json:"memory_recall_input_tokens,omitempty"`
+	MemoryRecallOutputTokens int     `json:"memory_recall_output_tokens,omitempty"`
 }
 
 type RateLimitWindowPayload struct {

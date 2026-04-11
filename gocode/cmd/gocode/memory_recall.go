@@ -120,7 +120,7 @@ func (s memoryRecallSelector) queryMemoryRecall(ctx context.Context, userPrompt 
 	}
 
 	if s.tracker != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0 || usage.CacheReadTokens > 0 || usage.CacheCreationTokens > 0) {
-		s.tracker.RecordAPICall(
+		s.tracker.RecordMemoryRecallCall(
 			s.client.ModelID(),
 			usage.InputTokens,
 			usage.OutputTokens,

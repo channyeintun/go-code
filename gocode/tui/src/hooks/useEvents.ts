@@ -149,7 +149,14 @@ export interface EngineUIState {
   maxContextWindow: number | null;
   maxOutputTokens: number | null;
   currentContextUsage: number | null;
-  cost: { totalUsd: number; inputTokens: number; outputTokens: number };
+  cost: {
+    totalUsd: number;
+    inputTokens: number;
+    outputTokens: number;
+    memoryRecallUsd: number;
+    memoryRecallInputTokens: number;
+    memoryRecallOutputTokens: number;
+  };
   rateLimits: UIRateLimits;
   artifacts: UIArtifact[];
   focusedArtifactId: string | null;
@@ -184,7 +191,14 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   maxContextWindow: null,
   maxOutputTokens: null,
   currentContextUsage: null,
-  cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
+  cost: {
+    totalUsd: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    memoryRecallUsd: 0,
+    memoryRecallInputTokens: 0,
+    memoryRecallOutputTokens: 0,
+  },
   rateLimits: { fiveHour: null, sevenDay: null },
   artifacts: [],
   focusedArtifactId: null,
@@ -535,6 +549,16 @@ export function useEvents(initialModel: string, initialMode: string) {
             totalUsd: p.total_usd,
             inputTokens: p.input_tokens,
             outputTokens: p.output_tokens,
+            memoryRecallUsd:
+              typeof p.memory_recall_usd === "number" ? p.memory_recall_usd : 0,
+            memoryRecallInputTokens:
+              typeof p.memory_recall_input_tokens === "number"
+                ? p.memory_recall_input_tokens
+                : 0,
+            memoryRecallOutputTokens:
+              typeof p.memory_recall_output_tokens === "number"
+                ? p.memory_recall_output_tokens
+                : 0,
           },
         }));
         break;
