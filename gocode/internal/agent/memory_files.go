@@ -160,10 +160,6 @@ func readMemoryIndex(path string) (string, error) {
 
 // FormatMemoryPrompt renders loaded instruction files into a system prompt section.
 func FormatMemoryPrompt(files []MemoryFile) string {
-	if len(files) == 0 {
-		return ""
-	}
-
 	instructions := make([]MemoryFile, 0, len(files))
 	memoryIndexes := make([]MemoryFile, 0, len(files))
 	for _, f := range files {
@@ -176,6 +172,7 @@ func FormatMemoryPrompt(files []MemoryFile) string {
 	}
 
 	var b strings.Builder
+	writeGuidance := formatMemoryWriteGuidance()
 	if len(instructions) > 0 {
 		b.WriteString("Project instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions override default behavior and should be followed exactly when applicable.\n\n")
 
@@ -204,6 +201,17 @@ func FormatMemoryPrompt(files []MemoryFile) string {
 		}
 	}
 
+	if writeGuidance != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(writeGuidance)
+	}
+
+	if b.Len() == 0 {
+		return ""
+	}
+
 	return strings.TrimSpace(b.String())
 }
 
@@ -214,6 +222,15 @@ func userMemoryIndexPath() string {
 func projectMemoryIndexPath(cwd string) string {
 	projectRoot := findProjectScopeRoot(cwd)
 	return filepath.Join(config.ConfigDir(), "projects", projectSlug(projectRoot), "memory", "MEMORY.md")
+}
+
+func userMemoryDirPath() string {
+	return filepath.Join(config.ConfigDir(), "memory")
+}
+
+func projectMemoryDirPath(cwd string) string {
+	projectRoot := findProjectScopeRoot(cwd)
+	return filepath.Join(config.ConfigDir(), "projects", projectSlug(projectRoot), "memory")
 }
 
 func findProjectScopeRoot(start string) string {
@@ -293,4 +310,37 @@ func formatMemoryAge(age time.Duration) string {
 		return "1 month"
 	}
 	return fmt.Sprintf("%d months", months)
+}
+
+func formatMemoryWriteGuidance() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	projectMemoryDir := projectMemoryDirPath(cwd)
+	projectIndexPath := projectMemoryIndexPath(cwd)
+	userMemoryDir := userMemoryDirPath()
+	userIndexPath := userMemoryIndexPath()
+
+	var b strings.Builder
+	b.WriteString("Durable memory write guidance:\n")
+	b.WriteString("- Use existing file tools to create or update memory files. Do not treat AGENTS.md or AGENTS.local.md as long-term memory storage.\n")
+	b.WriteString("- Project memory files belong under: ")
+	b.WriteString(projectMemoryDir)
+	b.WriteString("\n")
+	b.WriteString("- Project memory index path: ")
+	b.WriteString(projectIndexPath)
+	b.WriteString("\n")
+	b.WriteString("- User-global memory files belong under: ")
+	b.WriteString(userMemoryDir)
+	b.WriteString("\n")
+	b.WriteString("- User-global memory index path: ")
+	b.WriteString(userIndexPath)
+	b.WriteString("\n")
+	b.WriteString("- Memory file types: user, feedback, project, reference. Prefer short Markdown files with YAML frontmatter that records at least title, type, and updated_at.\n")
+	b.WriteString("- When writing a new memory file, also add or update a concise entry in the appropriate MEMORY.md index so future recall can find it.\n")
+	b.WriteString("- Store only durable, non-derivable guidance. If a fact can be re-derived from the repository state, prefer not to save it as memory.\n")
+
+	return strings.TrimSpace(b.String())
 }

@@ -17,7 +17,7 @@
 | Phase 1 runtime measurement         | completed   | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place.                                                                                                    |
 | Phase 2 tool depth                  | in progress | L     | File-history tools, semantic validation, input-aware bash concurrency, Think, stronger Go-aware navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains. |
 | Phase 3 subagents                   | in progress | XL    | Fresh-context explore, permission-isolated general-purpose child agents, and full background child launch/status/stop lifecycle are landed.                                                                               |
-| Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading plus age-aware staleness cues are wired into prompt assembly; recall and write-path support remain.                                                                              |
+| Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, age-aware staleness cues, and prompt-level write-path guidance are wired into prompt assembly; recall remains.                                                                  |
 | Phase 5 compaction and cache        | planned     | M     | Output slot reservation, prompt memoization, provider-gated cache stability.                                                                                                                                              |
 | Phase 6 UI and developer experience | planned     | M     | Data-driven: API preconnect, measured Ink optimizations, subagent/memory UI surfaces.                                                                                                                                     |
 
@@ -76,6 +76,7 @@
 - Completed: extended the prompt memory loader to discover user-global and project-scoped `MEMORY.md` indexes from the config tree alongside existing `AGENTS.md` instruction files.
 - Completed: applied tighter `MEMORY.md` index caps (200 lines / 25KB) and separated durable memory indexes from hard instructions in the formatted system-prompt section.
 - Completed: added age-aware staleness warnings for older loaded memory indexes so memories older than yesterday are presented as context to verify rather than unconditional facts.
+- Completed: added prompt-level memory write guidance with concrete project and user memory paths plus index-update instructions so durable memories can be written through existing file tools without a custom memory tool.
 
 ## Next Planning Baseline
 
