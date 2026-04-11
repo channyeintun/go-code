@@ -160,35 +160,36 @@ Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always r
 
 The agent has access to:
 
-| Tool                           | Description                                                   |
-| ------------------------------ | ------------------------------------------------------------- |
-| **agent**                      | Spawn bounded child agents, including async background runs   |
-| **agent_status**               | Check a background child agent and retrieve its final report  |
-| **agent_stop**                 | Cancel a background child agent and return its latest status  |
-| **bash**                       | Execute shell commands                                        |
-| **think**                      | Record scratchpad reasoning with no side effects              |
-| **list_dir**                   | List directory contents as structured JSON                    |
-| **file_read**                  | Read file contents                                            |
-| **file_write**                 | Create or overwrite files                                     |
-| **file_edit**                  | Find-and-replace edits in files                               |
-| **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
-| **file_diff_preview**           | Preview a compact diff against another file or inline content |
-| **glob**                       | Find files by pattern                                         |
-| **grep**                       | Search file contents (ripgrep)                                |
-| **go_definition**              | Resolve Go symbol definitions with parser-backed locations    |
-| **go_references**              | Find Go identifier references with parser-backed context      |
-| **project_overview**           | Summarize repository structure, manifests, and languages      |
-| **dependency_overview**        | Summarize dependencies from common project manifests          |
-| **symbol_search**              | Find likely symbol definitions across source files            |
-| **web_search**                 | Search the web                                                |
-| **web_fetch**                  | Fetch and read a URL                                          |
+| Tool                           | Description                                                              |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| **agent**                      | Spawn bounded child agents, including async background runs              |
+| **agent_status**               | Check a background child agent and retrieve its final report             |
+| **agent_stop**                 | Cancel a background child agent and return its latest status             |
+| **bash**                       | Execute shell commands                                                   |
+| **think**                      | Record scratchpad reasoning with no side effects                         |
+| **list_dir**                   | List directory contents as structured JSON                               |
+| **file_read**                  | Read file contents                                                       |
+| **file_write**                 | Create or overwrite files                                                |
+| **file_edit**                  | Find-and-replace edits in files                                          |
+| **multi_replace_file_content** | Apply multiple validated block replacements in one file write            |
+| **file_diff_preview**          | Preview a compact diff against another file or inline content            |
+| **glob**                       | Find files by pattern                                                    |
+| **grep**                       | Search file contents (ripgrep)                                           |
+| **go_definition**              | Resolve Go symbol definitions with parser-backed locations               |
+| **go_references**              | Find Go identifier references with parser-backed context                 |
+| **project_overview**           | Summarize repository structure, manifests, and languages                 |
+| **dependency_overview**        | Summarize dependencies from common project manifests                     |
+| **symbol_search**              | Find likely symbol definitions across source files                       |
+| **web_search**                 | Search the web                                                           |
+| **web_fetch**                  | Fetch and read a URL                                                     |
 | **list_commands**              | List background commands with recent activity and unread output previews |
-| **command_status**             | Check command metadata, timing, unread output, and state      |
-| **send_command_input**         | Send stdin and get the updated background command status      |
-| **stop_command**               | Stop a running background command and return final status     |
-| **file_history**               | Inspect tracked file history, create snapshots, and diff them |
-| **file_history_rewind**        | Restore tracked files to a previous file-history snapshot     |
-| **git**                        | Read-only git operations (status, diff, log, blame)           |
+| **command_status**             | Check command metadata, timing, unread output, and state                 |
+| **send_command_input**         | Send stdin and get the updated background command status                 |
+| **stop_command**               | Stop a running background command and return final status                |
+| **forget_command**             | Remove a retained background command and return final metadata           |
+| **file_history**               | Inspect tracked file history, create snapshots, and diff them            |
+| **file_history_rewind**        | Restore tracked files to a previous file-history snapshot                |
+| **git**                        | Read-only git operations (status, diff, log, blame)                      |
 
 ## Configuration
 

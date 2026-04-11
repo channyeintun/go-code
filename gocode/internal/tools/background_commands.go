@@ -255,6 +255,46 @@ func getBackgroundCommand(commandID string) (*backgroundCommand, error) {
 	return bg, nil
 }
 
+func forgetBackgroundCommand(commandID string) (backgroundCommandResult, error) {
+	backgroundCommandsMu.Lock()
+	bg, ok := backgroundCommands[commandID]
+	if !ok {
+		backgroundCommandsMu.Unlock()
+		return backgroundCommandResult{}, fmt.Errorf("command %q not found", commandID)
+	}
+
+	bg.consumeMu.Lock()
+	defer bg.consumeMu.Unlock()
+
+	bg.mu.Lock()
+	if bg.running {
+		bg.mu.Unlock()
+		backgroundCommandsMu.Unlock()
+		return backgroundCommandResult{}, fmt.Errorf("command %q is still running; stop it before forgetting it", bg.id)
+	}
+
+	result := backgroundCommandResult{
+		CommandID: bg.id,
+		Command:   bg.command,
+		Cwd:       bg.cwd,
+		Running:   false,
+		StartedAt: bg.startedAt,
+		UpdatedAt: bg.updatedAt,
+		Error:     bg.errText,
+	}
+	if bg.exitCode != nil {
+		copied := *bg.exitCode
+		result.ExitCode = &copied
+	}
+	bg.mu.Unlock()
+
+	delete(backgroundCommands, commandID)
+	backgroundCommandsMu.Unlock()
+
+	result.Output = bg.output.ReadDelta()
+	return result, nil
+}
+
 func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (backgroundCommandResult, error) {
 	bg.consumeMu.Lock()
 	defer bg.consumeMu.Unlock()
