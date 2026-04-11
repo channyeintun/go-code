@@ -482,34 +482,62 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "tool_result": {
         const p = event.payload as ToolResultPayload;
-        setUIState((s) => ({
-          ...s,
-          activeTurnStatus: "working",
-          isStreaming: true,
-          transcript: appendTranscriptEntry(s.transcript, {
-            id: p.tool_id,
-            kind: "tool_call",
-          }),
-          toolCalls: upsertToolCall(s.toolCalls, {
-            id: p.tool_id,
-            name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
-            input: p.input ?? toolCallInput(s.toolCalls, p.tool_id),
-            status: "completed",
-            output: p.output,
-            truncated: p.truncated,
-            error: undefined,
-            permissionRequestId: undefined,
-            filePath: p.file_path,
-            preview: p.preview,
-            insertions: p.insertions,
-            deletions: p.deletions,
-          }),
-          backgroundAgents: applyBackgroundAgentResult(s.backgroundAgents, p),
-          backgroundCommands: applyBackgroundCommandResult(
+        setUIState((s) => {
+          const backgroundNotice = buildBackgroundCommandNotice(
             s.backgroundCommands,
             p,
-          ),
-        }));
+          );
+          const nextBackgroundCommands = applyBackgroundCommandResult(
+            s.backgroundCommands,
+            p,
+          );
+          const noticeMessage = backgroundNotice
+            ? createSystemMessage(backgroundNotice.text, backgroundNotice.tone)
+            : null;
+
+          return {
+            ...s,
+            activeTurnStatus: "working",
+            isStreaming: true,
+            transcript: appendTranscriptEntry(
+              noticeMessage
+                ? appendTranscriptEntry(s.transcript, {
+                    id: p.tool_id,
+                    kind: "tool_call",
+                  })
+                : s.transcript,
+              noticeMessage
+                ? {
+                    id: noticeMessage.id,
+                    kind: "message",
+                  }
+                : {
+                    id: p.tool_id,
+                    kind: "tool_call",
+                  },
+            ),
+            toolCalls: upsertToolCall(s.toolCalls, {
+              id: p.tool_id,
+              name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
+              input: p.input ?? toolCallInput(s.toolCalls, p.tool_id),
+              status: "completed",
+              output: p.output,
+              truncated: p.truncated,
+              error: undefined,
+              permissionRequestId: undefined,
+              filePath: p.file_path,
+              preview: p.preview,
+              insertions: p.insertions,
+              deletions: p.deletions,
+            }),
+            backgroundAgents: applyBackgroundAgentResult(s.backgroundAgents, p),
+            backgroundCommands: nextBackgroundCommands,
+            messages: noticeMessage
+              ? [...s.messages, noticeMessage]
+              : s.messages,
+            statusLine: backgroundNotice?.text ?? s.statusLine,
+          };
+        });
         break;
       }
       case "tool_error": {
@@ -1147,6 +1175,11 @@ interface BackgroundAgentNotice {
   tone: UISystemMessage["tone"];
 }
 
+interface BackgroundCommandNotice {
+  text: string;
+  tone: UISystemMessage["tone"];
+}
+
 function applyBackgroundAgentResult(
   agents: UIBackgroundAgent[],
   payload: ToolResultPayload,
@@ -1171,6 +1204,41 @@ function applyBackgroundCommandResult(
     (nextCommands, update) => upsertBackgroundCommand(nextCommands, update),
     commands,
   );
+}
+
+function buildBackgroundCommandNotice(
+  commands: UIBackgroundCommand[],
+  payload: ToolResultPayload,
+): BackgroundCommandNotice | null {
+  if (payload.name === "list_commands") {
+    return null;
+  }
+
+  const updates = parseBackgroundCommandResult(payload);
+  if (updates.length === 0) {
+    return null;
+  }
+
+  let previousCommands = commands;
+  let nextNotice: BackgroundCommandNotice | null = null;
+
+  for (const update of updates) {
+    const previousCommand = previousCommands.find(
+      (command) => command.commandId === update.commandId,
+    );
+    const mergedCommand = mergeBackgroundCommand(previousCommand, update);
+    const notice = buildSingleBackgroundCommandNotice(
+      payload,
+      previousCommand,
+      mergedCommand,
+    );
+    if (notice) {
+      nextNotice = notice;
+    }
+    previousCommands = upsertBackgroundCommand(previousCommands, update);
+  }
+
+  return nextNotice;
 }
 
 function parseBackgroundAgentResult(
@@ -1417,27 +1485,7 @@ function upsertBackgroundCommand(
   const existing = commands.find(
     (command) => command.commandId === nextCommand.commandId,
   );
-  const merged: UIBackgroundCommand = existing
-    ? {
-        ...existing,
-        ...nextCommand,
-        command: nextCommand.command || existing.command,
-        cwd: nextCommand.cwd ?? existing.cwd,
-        startedAt: nextCommand.startedAt ?? existing.startedAt,
-        updatedAt: nextCommand.updatedAt ?? existing.updatedAt,
-        preview: nextCommand.preview ?? existing.preview,
-        previewKind: nextCommand.previewKind ?? existing.previewKind,
-        unreadBytes:
-          nextCommand.previewKind === "unread" || nextCommand.unreadBytes > 0
-            ? nextCommand.unreadBytes
-            : existing.unreadBytes,
-        exitCode:
-          nextCommand.exitCode !== undefined
-            ? nextCommand.exitCode
-            : existing.exitCode,
-        error: nextCommand.error ?? existing.error,
-      }
-    : nextCommand;
+  const merged = mergeBackgroundCommand(existing, nextCommand);
 
   const remaining = commands.filter(
     (command) => command.commandId !== merged.commandId,
@@ -1445,6 +1493,35 @@ function upsertBackgroundCommand(
   return [merged, ...remaining]
     .sort(compareBackgroundCommands)
     .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
+}
+
+function mergeBackgroundCommand(
+  existing: UIBackgroundCommand | undefined,
+  nextCommand: UIBackgroundCommand,
+): UIBackgroundCommand {
+  if (!existing) {
+    return nextCommand;
+  }
+
+  return {
+    ...existing,
+    ...nextCommand,
+    command: nextCommand.command || existing.command,
+    cwd: nextCommand.cwd ?? existing.cwd,
+    startedAt: nextCommand.startedAt ?? existing.startedAt,
+    updatedAt: nextCommand.updatedAt ?? existing.updatedAt,
+    preview: nextCommand.preview ?? existing.preview,
+    previewKind: nextCommand.previewKind ?? existing.previewKind,
+    unreadBytes:
+      nextCommand.previewKind === "unread" || nextCommand.unreadBytes > 0
+        ? nextCommand.unreadBytes
+        : existing.unreadBytes,
+    exitCode:
+      nextCommand.exitCode !== undefined
+        ? nextCommand.exitCode
+        : existing.exitCode,
+    error: nextCommand.error ?? existing.error,
+  };
 }
 
 function compareBackgroundAgents(
@@ -1593,6 +1670,76 @@ function buildBackgroundAgentNotice(
     default:
       return null;
   }
+}
+
+function buildSingleBackgroundCommandNotice(
+  payload: ToolResultPayload,
+  previousCommand: UIBackgroundCommand | undefined,
+  nextCommand: UIBackgroundCommand,
+): BackgroundCommandNotice | null {
+  const subject = backgroundCommandSubject(nextCommand);
+
+  if (payload.name === "bash" && !previousCommand && nextCommand.running) {
+    return {
+      text: `${subject} started in the background.`,
+      tone: "info",
+    };
+  }
+
+  if (previousCommand?.status === nextCommand.status) {
+    if (
+      nextCommand.previewKind === "unread" &&
+      nextCommand.unreadBytes > previousCommand.unreadBytes &&
+      nextCommand.status === "running"
+    ) {
+      return {
+        text: `${subject} produced new unread output.`,
+        tone: "info",
+      };
+    }
+    return null;
+  }
+
+  switch (nextCommand.status) {
+    case "running":
+      return previousCommand
+        ? {
+            text: `${subject} is still running.`,
+            tone: "info",
+          }
+        : null;
+    case "completed":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} completed.`,
+          nextCommand.preview || "",
+        ),
+        tone: "success",
+      };
+    case "failed":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} failed.`,
+          nextCommand.error || nextCommand.preview || "",
+        ),
+        tone: "error",
+      };
+    default:
+      return null;
+  }
+}
+
+function backgroundCommandSubject(command: UIBackgroundCommand): string {
+  const label = command.command || command.commandId;
+  return `Background command ${truncateNoticeLabel(label)}`;
+}
+
+function truncateNoticeLabel(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 72) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 69)}...`;
 }
 
 function backgroundAgentSubject(agent: UIBackgroundAgent): string {
