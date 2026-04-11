@@ -168,6 +168,8 @@ export interface EngineUIState {
   isStreaming: boolean;
 }
 
+const MAX_RETAINED_BACKGROUND_AGENTS = 24;
+
 const initialState = (model: string, mode: string): EngineUIState => ({
   ready: false,
   messages: [],
@@ -947,7 +949,9 @@ function upsertBackgroundAgent(
     : nextAgent;
 
   const remaining = agents.filter((agent) => agent.agentId !== merged.agentId);
-  return [merged, ...remaining].sort(compareBackgroundAgents);
+  return [merged, ...remaining]
+    .sort(compareBackgroundAgents)
+    .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
 }
 
 function compareBackgroundAgents(

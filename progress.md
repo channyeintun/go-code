@@ -72,6 +72,7 @@
 - Completed: wired the TUI reducer to merge live background-agent events with existing tool-result-derived state, so the Background Agents panel updates even when no follow-up `agent_status` poll is run.
 - Completed: added transcript-level background-agent notices for launch, stop, completion, cancellation, and failure so important child-agent state transitions are visible in the main conversation flow instead of only in the side panel.
 - Completed: upgraded the Background Agents panel to separate active and recent child runs, show compact status counts, and surface transcript/result/update hints so the panel is useful without digging through raw session files.
+- Completed: capped retained background-agent entries in TUI state so long sessions do not accumulate an unbounded child-agent list after repeated background runs.
 
 ## Next Planning Baseline
 
