@@ -5,7 +5,7 @@ import {
   formatTokenCount,
   getEffectiveContextWindow,
 } from "../utils/modelContext.js";
-import type { UIRateLimits } from "../hooks/useEvents.js";
+import type { UIBackgroundCommand, UIRateLimits } from "../hooks/useEvents.js";
 
 interface StatusBarProps {
   ready: boolean;
@@ -25,6 +25,7 @@ interface StatusBarProps {
   childAgentUsd: number;
   childAgentInputTokens: number;
   childAgentOutputTokens: number;
+  backgroundCommands: UIBackgroundCommand[];
   rateLimits: UIRateLimits;
 }
 
@@ -46,6 +47,7 @@ const StatusBar: FC<StatusBarProps> = ({
   childAgentUsd,
   childAgentInputTokens,
   childAgentOutputTokens,
+  backgroundCommands,
   rateLimits,
 }) => {
   const modeColor = mode === "plan" ? "blue" : "green";
@@ -79,6 +81,8 @@ const StatusBar: FC<StatusBarProps> = ({
     childAgentUsd > 0 ||
     childAgentInputTokens > 0 ||
     childAgentOutputTokens > 0;
+  const backgroundCommandSummary =
+    summarizeBackgroundCommands(backgroundCommands);
 
   return (
     <Box paddingX={1} paddingY={0}>
@@ -132,14 +136,27 @@ const StatusBar: FC<StatusBarProps> = ({
           <>
             <Text color="gray"> · </Text>
             <Text color="cyan">mem</Text>
-            <Text color="gray"> {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}</Text>
+            <Text color="gray">
+              {" "}
+              {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}
+            </Text>
           </>
         ) : null}
         {hasChildAgentCost ? (
           <>
             <Text color="gray"> · </Text>
             <Text color="cyan">agent</Text>
-            <Text color="gray"> {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}</Text>
+            <Text color="gray">
+              {" "}
+              {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}
+            </Text>
+          </>
+        ) : null}
+        {backgroundCommandSummary ? (
+          <>
+            <Text color="gray"> · </Text>
+            <Text color="yellow">cmd</Text>
+            <Text color="gray"> {backgroundCommandSummary}</Text>
           </>
         ) : null}
         <Text color="gray"> · </Text>
@@ -188,4 +205,35 @@ function rateLimitColor(usedPercentage: number): "gray" | "yellow" | "red" {
     return "yellow";
   }
   return "gray";
+}
+
+function summarizeBackgroundCommands(
+  backgroundCommands: UIBackgroundCommand[],
+): string | null {
+  if (!Array.isArray(backgroundCommands) || backgroundCommands.length === 0) {
+    return null;
+  }
+
+  const activeCount = backgroundCommands.filter(
+    (command) => command.status === "running",
+  ).length;
+  const unreadCount = backgroundCommands.filter(
+    (command) => command.previewKind === "unread" && command.unreadBytes > 0,
+  ).length;
+  const failedCount = backgroundCommands.filter(
+    (command) => command.status === "failed",
+  ).length;
+
+  const parts: string[] = [];
+  if (activeCount > 0) {
+    parts.push(`${activeCount} run`);
+  }
+  if (unreadCount > 0) {
+    parts.push(`${unreadCount} unread`);
+  }
+  if (failedCount > 0) {
+    parts.push(`${failedCount} failed`);
+  }
+
+  return parts.length > 0 ? parts.join(" ") : null;
 }

@@ -310,6 +310,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         childAgentUsd={uiState.cost.childAgentUsd}
         childAgentInputTokens={uiState.cost.childAgentInputTokens}
         childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
+        backgroundCommands={uiState.backgroundCommands}
         rateLimits={uiState.rateLimits}
       />
 

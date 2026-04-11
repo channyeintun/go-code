@@ -101,6 +101,7 @@
 - Completed: taught the TUI to parse `bash` background launches plus `list_commands`, `command_status`, `send_command_input`, and `stop_command` results into retained background-command state instead of leaving command lifecycle updates buried in raw JSON tool output.
 - Completed: added a compact Background Commands panel to the Ink TUI so active and recent retained shell commands show status, cwd, timing, failure metadata, and unread or latest output previews during long sessions.
 - Completed: added transcript and status-line lifecycle notices for background shell commands so background launches, completions, failures, and newly unread output surface in the main session flow instead of only in the retained commands panel.
+- Completed: surfaced a compact background-command summary in the main status bar so active runs, unread output, and failures remain visible even when the retained commands panel is out of view.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.
