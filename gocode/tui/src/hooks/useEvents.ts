@@ -1320,6 +1320,7 @@ function parseBackgroundBashLaunch(
   }
 
   const command = buildBackgroundCommandEntry(result, {
+    sourceToolName: payload.name,
     fallbackCommand: input.command,
     fallbackCwd: input.cwd,
   });
@@ -1336,6 +1337,7 @@ function parseSingleBackgroundCommandResult(
   }
 
   const command = buildBackgroundCommandEntry(result, {
+    sourceToolName: payload.name,
     fallbackCommandId: input?.CommandId || input?.command_id,
     fallbackCommand: input?.command,
     fallbackCwd: input?.cwd,
@@ -1352,13 +1354,16 @@ function parseBackgroundCommandListResult(
   }
 
   return result
-    .map((entry) => buildBackgroundCommandEntry(entry))
+    .map((entry) =>
+      buildBackgroundCommandEntry(entry, { sourceToolName: payload.name }),
+    )
     .filter((entry): entry is UIBackgroundCommand => entry !== null);
 }
 
 function buildBackgroundCommandEntry(
   result: BackgroundCommandToolResult | BackgroundCommandSummaryResult,
   fallback?: {
+    sourceToolName?: string;
     fallbackCommandId?: string;
     fallbackCommand?: string;
     fallbackCwd?: string;
@@ -1386,7 +1391,12 @@ function buildBackgroundCommandEntry(
     commandId,
     command,
     cwd,
-    status: summarizeBackgroundCommandStatus(running, exitCode, error),
+    status: summarizeBackgroundCommandStatus(
+      running,
+      exitCode,
+      error,
+      fallback?.sourceToolName,
+    ),
     running,
     startedAt: stringOrUndefined(result.StartedAt),
     updatedAt: stringOrUndefined(result.UpdatedAt),
@@ -1428,9 +1438,13 @@ function summarizeBackgroundCommandStatus(
   running: boolean,
   exitCode?: number,
   error?: string,
+  sourceToolName?: string,
 ): string {
   if (running) {
     return "running";
+  }
+  if (sourceToolName === "stop_command") {
+    return "stopped";
   }
   if (typeof exitCode === "number" && exitCode !== 0) {
     return "failed";
@@ -1503,9 +1517,15 @@ function mergeBackgroundCommand(
     return nextCommand;
   }
 
+  const nextStatus =
+    existing.status === "stopped" && nextCommand.status === "failed"
+      ? "stopped"
+      : nextCommand.status;
+
   return {
     ...existing,
     ...nextCommand,
+    status: nextStatus,
     command: nextCommand.command || existing.command,
     cwd: nextCommand.cwd ?? existing.cwd,
     startedAt: nextCommand.startedAt ?? existing.startedAt,
@@ -1573,10 +1593,12 @@ function backgroundCommandStatusRank(status: string): number {
       return 0;
     case "failed":
       return 1;
-    case "completed":
+    case "stopped":
       return 2;
-    default:
+    case "completed":
       return 3;
+    default:
+      return 4;
   }
 }
 
@@ -1708,6 +1730,14 @@ function buildSingleBackgroundCommandNotice(
             tone: "info",
           }
         : null;
+    case "stopped":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} stopped.`,
+          nextCommand.preview || "",
+        ),
+        tone: "warning",
+      };
     case "completed":
       return {
         text: summarizeNoticeWithDetail(

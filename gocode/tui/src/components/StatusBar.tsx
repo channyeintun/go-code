@@ -223,6 +223,9 @@ function summarizeBackgroundCommands(
   const failedCount = backgroundCommands.filter(
     (command) => command.status === "failed",
   ).length;
+  const stoppedCount = backgroundCommands.filter(
+    (command) => command.status === "stopped",
+  ).length;
 
   const parts: string[] = [];
   if (activeCount > 0) {
@@ -233,6 +236,9 @@ function summarizeBackgroundCommands(
   }
   if (failedCount > 0) {
     parts.push(`${failedCount} failed`);
+  }
+  if (stoppedCount > 0) {
+    parts.push(`${stoppedCount} stopped`);
   }
 
   return parts.length > 0 ? parts.join(" ") : null;

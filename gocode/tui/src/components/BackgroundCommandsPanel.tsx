@@ -107,6 +107,8 @@ function statusLabel(status: string): string {
       return "RUNNING";
     case "failed":
       return "FAILED";
+    case "stopped":
+      return "STOPPED";
     case "completed":
       return "DONE";
     default:
@@ -120,6 +122,8 @@ function statusColor(status: string): "yellow" | "green" | "red" {
       return "yellow";
     case "failed":
       return "red";
+    case "stopped":
+      return "yellow";
     case "completed":
       return "green";
     default:
@@ -140,6 +144,10 @@ function formatMeta(command: UIBackgroundCommand): string {
     }
     if (command.error) {
       parts.push(truncate(command.error, 64));
+    }
+  } else if (command.status === "stopped") {
+    if (typeof command.exitCode === "number") {
+      parts.push(`exit ${command.exitCode}`);
     }
   } else if (typeof command.exitCode === "number" && command.exitCode !== 0) {
     parts.push(`exit ${command.exitCode}`);
