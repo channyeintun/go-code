@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,13 +31,16 @@ const (
 	memoryTypeProjectNote   = "project"
 	memoryTypeReferenceNote = "reference"
 
-	maxMemoryFileBytes  = 40_000
-	maxMemoryIndexBytes = 25_000
-	maxMemoryIndexLines = 200
-	maxMemoryFiles      = 20
+	maxMemoryFileBytes     = 40_000
+	maxMemoryIndexBytes    = 25_000
+	maxMemoryIndexLines    = 200
+	maxMemoryFiles         = 20
+	maxRelevantMemoryLines = 8
+	maxRecallTerms         = 12
 )
 
 var nonSlugChars = regexp.MustCompile(`[^a-z0-9]+`)
+var recallTokenPattern = regexp.MustCompile(`[a-z0-9][a-z0-9_\-/]{1,}`)
 
 // LoadMemoryFiles discovers and loads shared instruction files and durable memory indexes.
 //
@@ -163,7 +167,7 @@ func readMemoryIndex(path string) (string, error) {
 }
 
 // FormatMemoryPrompt renders loaded instruction files into a system prompt section.
-func FormatMemoryPrompt(files []MemoryFile) string {
+func FormatMemoryPrompt(files []MemoryFile, currentUserPrompt string) string {
 	instructions := make([]MemoryFile, 0, len(files))
 	memoryIndexes := make([]MemoryFile, 0, len(files))
 	for _, f := range files {
@@ -195,12 +199,16 @@ func FormatMemoryPrompt(files []MemoryFile) string {
 		b.WriteString("Durable memory indexes are shown below. Treat them as selectively relevant context, not as unconditional instructions. Prefer recent, project-specific entries when they help, and verify details against the live repository when needed.\n\n")
 
 		for _, f := range memoryIndexes {
+			recalledContent := formatRelevantMemoryIndexContent(f, currentUserPrompt)
+			if strings.TrimSpace(recalledContent) == "" {
+				continue
+			}
 			b.WriteString("<memory_file path=\"")
 			b.WriteString(f.Path)
 			b.WriteString("\" type=\"")
 			b.WriteString(f.Type)
 			b.WriteString("\">\n")
-			b.WriteString(formatMemoryIndexContent(f))
+			b.WriteString(recalledContent)
 			b.WriteString("\n</memory_file>\n\n")
 		}
 	}
@@ -277,6 +285,139 @@ func formatMemoryIndexContent(file MemoryFile) string {
 		return file.Content
 	}
 	return note + "\n" + file.Content
+}
+
+func formatRelevantMemoryIndexContent(file MemoryFile, currentUserPrompt string) string {
+	selectedLines := selectRelevantMemoryLines(file.Content, currentUserPrompt)
+	if len(selectedLines) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(selectedLines)+2)
+	if note := memoryAgeNote(file.UpdatedAt); note != "" {
+		parts = append(parts, note)
+	}
+	parts = append(parts, fmt.Sprintf("[memory-recall] Selected %d relevant index entr%s for the current request.", len(selectedLines), pluralSuffix(len(selectedLines), "y", "ies")))
+	parts = append(parts, selectedLines...)
+	return strings.Join(parts, "\n")
+}
+
+func selectRelevantMemoryLines(content, currentUserPrompt string) []string {
+	lines := strings.Split(content, "\n")
+	terms := extractRecallTerms(currentUserPrompt)
+	if len(terms) == 0 {
+		return fallbackMemoryLines(lines)
+	}
+
+	type scoredLine struct {
+		line  string
+		score int
+		idx   int
+	}
+
+	scored := make([]scoredLine, 0, len(lines))
+	for idx, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "[truncated") {
+			continue
+		}
+		score := scoreMemoryLine(line, terms)
+		if score <= 0 {
+			continue
+		}
+		scored = append(scored, scoredLine{line: line, score: score, idx: idx})
+	}
+
+	if len(scored) == 0 {
+		return fallbackMemoryLines(lines)
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].idx < scored[j].idx
+	})
+
+	limit := minInt(maxRelevantMemoryLines, len(scored))
+	selected := scored[:limit]
+	sort.SliceStable(selected, func(i, j int) bool {
+		return selected[i].idx < selected[j].idx
+	})
+
+	result := make([]string, 0, limit)
+	for _, item := range selected {
+		result = append(result, item.line)
+	}
+	return result
+}
+
+func fallbackMemoryLines(lines []string) []string {
+	result := make([]string, 0, maxRelevantMemoryLines)
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "[truncated") {
+			continue
+		}
+		result = append(result, line)
+		if len(result) >= maxRelevantMemoryLines {
+			break
+		}
+	}
+	return result
+}
+
+func extractRecallTerms(prompt string) []string {
+	matches := recallTokenPattern.FindAllString(strings.ToLower(prompt), -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(matches))
+	terms := make([]string, 0, minInt(maxRecallTerms, len(matches)))
+	for _, match := range matches {
+		if isLowSignalRecallTerm(match) {
+			continue
+		}
+		if _, ok := seen[match]; ok {
+			continue
+		}
+		seen[match] = struct{}{}
+		terms = append(terms, match)
+		if len(terms) >= maxRecallTerms {
+			break
+		}
+	}
+	return terms
+}
+
+func isLowSignalRecallTerm(term string) bool {
+	if len(term) < 3 {
+		return true
+	}
+	switch term {
+	case "the", "and", "for", "with", "from", "into", "that", "this", "when", "then", "than", "have", "will", "want", "need", "make", "adds", "add", "use", "using", "used", "show", "help", "continue", "please":
+		return true
+	default:
+		return false
+	}
+}
+
+func scoreMemoryLine(line string, terms []string) int {
+	lower := strings.ToLower(line)
+	score := 0
+	for _, term := range terms {
+		if strings.Contains(lower, term) {
+			score++
+		}
+	}
+	if strings.HasPrefix(line, "#") && score > 0 {
+		score++
+	}
+	if strings.HasPrefix(line, "-") || strings.HasPrefix(line, "*") {
+		score++
+	}
+	return score
 }
 
 func memoryAgeNote(updatedAt time.Time) string {
@@ -405,4 +546,18 @@ func indentLines(value, indent string) string {
 		lines[i] = indent + lines[i]
 	}
 	return strings.Join(lines, "\n")
+}
+
+func pluralSuffix(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }

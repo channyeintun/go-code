@@ -38,6 +38,7 @@ func runIteration(
 		basePrompt,
 		state.SystemContext,
 		state.TurnContext,
+		currentUserPrompt,
 		skillspkg.FormatPromptSection(selectedSkills),
 	)
 

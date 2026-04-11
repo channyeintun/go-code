@@ -131,9 +131,9 @@ func QueryStream(ctx context.Context, req QueryRequest, deps QueryDeps) iter.Seq
 	}
 }
 
-func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext, skillPrompt string) string {
+func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext, currentUserPrompt string, skillPrompt string) string {
 	contextPrompt := strings.TrimSpace(FormatContextPrompt(sys, turn))
-	memoryPrompt := strings.TrimSpace(FormatMemoryPrompt(sys.MemoryFiles))
+	memoryPrompt := strings.TrimSpace(FormatMemoryPrompt(sys.MemoryFiles, currentUserPrompt))
 	skillPrompt = strings.TrimSpace(skillPrompt)
 	basePrompt = strings.TrimSpace(basePrompt)
 	parts := make([]string, 0, 4)
