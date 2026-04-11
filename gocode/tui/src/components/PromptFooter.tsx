@@ -29,6 +29,8 @@ interface PromptFooterProps {
     totalMs: number | null;
   };
   cursorOffset?: number;
+  blockedReason?: string | null;
+  queuedPromptCount?: number;
 }
 
 const INPUT_HINT =
@@ -51,6 +53,8 @@ const PromptFooter: FC<PromptFooterProps> = ({
   memoryRecall,
   turnTiming,
   cursorOffset = 0,
+  blockedReason,
+  queuedPromptCount = 0,
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -95,6 +99,10 @@ const PromptFooter: FC<PromptFooterProps> = ({
     [cursorOffset, promptValue],
   );
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
+  const activityDetails = useMemo(
+    () => buildActivityDetails(blockedReason, queuedPromptCount),
+    [blockedReason, queuedPromptCount],
+  );
   const hint = disabled ? DISABLED_HINT : INPUT_HINT;
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
@@ -140,6 +148,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
           </Text>
           {"  "}
           <Text>{activityLabel}</Text>
+          {activityDetails ? `  ${activityDetails}` : ""}
           {latencyText ? `  ${latencyText}` : ""}
           {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
           {promptMetrics ? `  ${promptMetrics}` : ""}
@@ -235,6 +244,22 @@ function buildPromptMetrics(
   const lineCount = promptValue.split("\n").length;
 
   return `${promptValue.length}ch ${lineCount}ln L${line}:C${column}`;
+}
+
+function buildActivityDetails(
+  blockedReason: string | null | undefined,
+  queuedPromptCount: number,
+): string | null {
+  const parts: string[] = [];
+  if (blockedReason) {
+    parts.push(blockedReason);
+  }
+  if (queuedPromptCount > 0) {
+    parts.push(
+      queuedPromptCount === 1 ? "1 queued" : `${queuedPromptCount} queued`,
+    );
+  }
+  return parts.length > 0 ? parts.join("  ") : null;
 }
 
 function buildMemoryRecallText(

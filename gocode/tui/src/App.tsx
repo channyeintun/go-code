@@ -240,6 +240,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     transcriptSearchActive ||
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null;
+  const promptBlockedReason = getPromptBlockedReason({
+    isEngineReady,
+    engineError: engine.error,
+    transcriptSearchActive,
+    isStreaming: uiState.isStreaming,
+  });
 
   const openTranscriptSearch = useCallback(() => {
     setTranscriptSearchActive(true);
@@ -313,6 +319,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         pendingArtifactReview={uiState.pendingArtifactReview}
         backgroundCommands={uiState.backgroundCommands}
         rateLimits={uiState.rateLimits}
+        queuedPromptCount={queuedPrompts.length}
       />
 
       <Box flexDirection="column" flexGrow={1}>
@@ -472,6 +479,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             memoryRecall={uiState.memoryRecall}
             turnTiming={uiState.turnTiming}
             cursorOffset={prompt.cursorOffset}
+            blockedReason={promptBlockedReason}
+            queuedPromptCount={queuedPrompts.length}
           />
         </Box>
       )}
@@ -521,4 +530,30 @@ function summarizeQueuedPrompt(queuedPrompt: QueuedPrompt): string {
       : ` [${queuedPrompt.images.length} images]`;
 
   return `${summary}${suffix}`;
+}
+
+function getPromptBlockedReason({
+  isEngineReady,
+  engineError,
+  transcriptSearchActive,
+  isStreaming,
+}: {
+  isEngineReady: boolean;
+  engineError: string | null;
+  transcriptSearchActive: boolean;
+  isStreaming: boolean;
+}): string | null {
+  if (engineError) {
+    return "engine error";
+  }
+  if (!isEngineReady) {
+    return "booting";
+  }
+  if (transcriptSearchActive) {
+    return "search open";
+  }
+  if (isStreaming) {
+    return "turn active";
+  }
+  return null;
 }

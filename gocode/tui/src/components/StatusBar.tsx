@@ -35,6 +35,7 @@ interface StatusBarProps {
   pendingArtifactReview?: UIArtifactReview | null;
   backgroundCommands: UIBackgroundCommand[];
   rateLimits: UIRateLimits;
+  queuedPromptCount?: number;
 }
 
 const StatusBar: FC<StatusBarProps> = ({
@@ -60,6 +61,7 @@ const StatusBar: FC<StatusBarProps> = ({
   pendingArtifactReview,
   backgroundCommands,
   rateLimits,
+  queuedPromptCount = 0,
 }) => {
   const modeColor = mode === "plan" ? "blue" : "green";
   const readinessLabel = ready ? "READY" : "BOOTING";
@@ -173,6 +175,17 @@ const StatusBar: FC<StatusBarProps> = ({
             <Text color="gray"> · </Text>
             <Text color="yellow">cmd</Text>
             <Text color="gray"> {backgroundCommandSummary}</Text>
+          </>
+        ) : null}
+        {queuedPromptCount > 0 ? (
+          <>
+            <Text color="gray"> · </Text>
+            <Text color="yellow">queue</Text>
+            <Text color="gray">
+              {queuedPromptCount === 1
+                ? " 1 prompt"
+                : ` ${queuedPromptCount} prompts`}
+            </Text>
           </>
         ) : null}
         {artifactSummary ? (

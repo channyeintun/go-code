@@ -19,7 +19,7 @@
 | Phase 3 subagents                   | in progress | XL    | Fresh-context explore, permission-isolated general-purpose child agents, and full background child launch/status/stop lifecycle are landed.                                                                                                                          |
 | Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, staleness cues, write-path scaffolding, model-backed side-query recall, structured MEMORY.md entry parsing, explicit MEMORY.md validation, on-demand note loading, and separate memory-recall cost surfacing are wired in. |
 | Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                        |
-| Phase 6 UI and developer experience | in progress | M     | Data-driven work has started with async API preconnect warmup, streamed turn-latency feedback in the footer/status line, and session timing records; measured Ink optimizations and subagent/memory UI surfaces remain.                                              |
+| Phase 6 UI and developer experience | completed   | M     | Async preconnect warmup, timing visibility, transcript navigation, artifact/background visibility, and queue-aware prompt chrome are landed; the current measured UI bottlenecks are improved enough to close the phase.                                             |
 
 ## Completion Dashboard
 
@@ -27,7 +27,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 ### Phase 2: Tool Depth
 
-**Status:** in progress
+**Status:** completed
 
 **Landed**
 
@@ -129,15 +129,16 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Surfaced turn timing in the footer and status line.
 - Added transcript search and better long-session navigation.
 - Added memory recall visibility, child-agent status/cost visibility, and background-command panels, notices, summaries, and cleanup behavior.
+- Added queue-aware prompt chrome so blocked/running turns now surface queued follow-up prompts and the current footer block reason in always-visible status/footer text.
 
 **Remaining to Finish**
 
-- Decide whether the current UI coverage is sufficient to say the slowest visible interactions have been intentionally improved.
+- None.
 
 **Exit Criteria Check**
 
 - [x] The slowest visible interactions are instrumented.
-- [ ] The highest-priority measured UI bottlenecks have been improved enough to call the phase complete.
+- [x] The highest-priority measured UI bottlenecks have been improved enough to call the phase complete.
 - [x] Artifact presentation remains stronger, not weaker, after the new UI surfaces.
 
 ## Task Log
@@ -227,6 +228,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: surfaced artifact counts, focused artifact summaries, and pending review context in the main status bar, and added explicit artifact-focus status-line updates so long sessions make artifact navigation progress visible without scanning the full transcript.
 - Completed: prioritized the currently focused non-plan artifact in the preview area and added a visible focus marker so artifact navigation remains obvious without scanning multiple artifact cards.
 - Completed: improved prompt editing ergonomics by keeping the cursor at the end of recalled history entries and surfacing live prompt metrics (chars, lines, line/column) in the footer during multiline editing.
+- Completed: surfaced queued follow-up prompt counts in the status/footer chrome and added explicit footer block reasons (`booting`, `search open`, `turn active`, `engine error`) so deferred work and blocked input states stay visible without scanning the lower prompt area.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.
