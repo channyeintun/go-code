@@ -47,6 +47,7 @@ var generalPurposeSubagentTools = []string{
 	"list_dir",
 	"file_read",
 	"file_diff_preview",
+	"create_file",
 	"file_write",
 	"file_edit",
 	"multi_replace_file_content",

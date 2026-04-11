@@ -168,8 +168,9 @@ The agent has access to:
 | **bash**                       | Execute shell commands                                                   |
 | **think**                      | Record scratchpad reasoning with no side effects                         |
 | **list_dir**                   | List directory contents as structured JSON                               |
+| **create_file**                | Create a new file and fail if it already exists                          |
 | **file_read**                  | Read text files with range support and safer partial-read guidance       |
-| **file_write**                 | Create files or overwrite existing ones only when explicitly allowed     |
+| **file_write**                 | Overwrite the full contents of an existing file                          |
 | **file_edit**                  | Exact find-and-replace edits in existing files                           |
 | **multi_replace_file_content** | Apply multiple validated block replacements in one file write            |
 | **file_diff_preview**          | Preview a compact diff against another file or inline content            |

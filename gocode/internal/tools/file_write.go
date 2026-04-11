@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// FileWriteTool creates or overwrites a file on disk.
+// FileWriteTool overwrites an existing file on disk.
 type FileWriteTool struct{}
 
 // NewFileWriteTool constructs the file write tool.
@@ -21,7 +21,7 @@ func (t *FileWriteTool) Name() string {
 }
 
 func (t *FileWriteTool) Description() string {
-	return "Create a text file, or overwrite an existing text file only when overwrite is true."
+	return "Overwrite the full contents of an existing text file on disk. Use create_file to create new files."
 }
 
 func (t *FileWriteTool) InputSchema() any {
@@ -35,10 +35,6 @@ func (t *FileWriteTool) InputSchema() any {
 			"content": map[string]any{
 				"type":        "string",
 				"description": "The full text content to write to the file.",
-			},
-			"overwrite": map[string]any{
-				"type":        "boolean",
-				"description": "When true, allow overwriting an existing file. Defaults to false.",
 			},
 		},
 		"required": []string{"file_path", "content"},
@@ -63,9 +59,6 @@ func (t *FileWriteTool) Validate(input ToolInput) error {
 	}
 	if info.IsDir() {
 		return fmt.Errorf("%q is a directory", resolvedPath)
-	}
-	if !boolParam(input.Params, "overwrite") {
-		return fmt.Errorf("file already exists: %s (set overwrite=true to replace it, or use file_edit for in-place changes)", resolvedPath)
 	}
 	return nil
 }
@@ -98,20 +91,16 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 	if !ok {
 		return ToolOutput{}, fmt.Errorf("file_write requires content")
 	}
-	overwrite := boolParam(input.Params, "overwrite")
 
-	writeType := "created"
+	writeType := "overwritten"
 	oldContent := ""
 	if _, err := os.Stat(filePath); err != nil {
 		if os.IsNotExist(err) {
+			return ToolOutput{}, fmt.Errorf("file does not exist: %s (use create_file to create it)", filePath)
 		} else {
 			return ToolOutput{}, fmt.Errorf("stat file %q: %w", filePath, err)
 		}
 	} else {
-		if !overwrite {
-			return ToolOutput{}, fmt.Errorf("file already exists: %s (set overwrite=true to replace it, or use file_edit for in-place changes)", filePath)
-		}
-		writeType = "overwritten"
 		previousBytes, err := os.ReadFile(filePath)
 		if err != nil {
 			return ToolOutput{}, fmt.Errorf("read existing file %q: %w", filePath, err)

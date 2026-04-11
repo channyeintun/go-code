@@ -24,7 +24,10 @@ function summarizeInput(name: string, raw: string): string {
     if ((name === "agent_status" || name === "agent_stop") && obj.agent_id)
       return obj.agent_id;
     if (
-      (name === "file_read" || name === "file_write" || name === "file_edit") &&
+      (name === "create_file" ||
+        name === "file_read" ||
+        name === "file_write" ||
+        name === "file_edit") &&
       obj.file_path
     )
       return obj.file_path;
@@ -108,9 +111,16 @@ function describeTool(toolCall: UIToolCall): ToolDescriptor {
           summarizeInput(toolCall.name, toolCall.input),
         ),
       };
+    case "create_file":
+      return {
+        title: "Create File",
+        summary: basenameOrFallback(
+          summarizeInput(toolCall.name, toolCall.input),
+        ),
+      };
     case "file_write":
       return {
-        title: "Write File",
+        title: "Overwrite File",
         summary: basenameOrFallback(
           summarizeInput(toolCall.name, toolCall.input),
         ),
@@ -171,7 +181,10 @@ function permissionLabel(toolCall: UIToolCall): string {
   switch (toolCall.name) {
     case "bash":
       return "Waiting for permission to run command…";
+    case "create_file":
+      return "Waiting for permission to create file…";
     case "file_write":
+      return "Waiting for permission to overwrite file…";
     case "file_edit":
       return "Waiting for permission to modify file…";
     case "web_fetch":
@@ -192,8 +205,10 @@ function runningLabel(toolCall: UIToolCall): string {
       return `Running command…${progressSuffix}`;
     case "file_read":
       return `Reading file…${progressSuffix}`;
+    case "create_file":
+      return `Creating file…${progressSuffix}`;
     case "file_write":
-      return `Writing file…${progressSuffix}`;
+      return `Overwriting file…${progressSuffix}`;
     case "file_edit":
       return `Editing file…${progressSuffix}`;
     case "grep":
@@ -218,7 +233,11 @@ function runningLabel(toolCall: UIToolCall): string {
 }
 
 function renderError(toolCall: UIToolCall) {
-  if (toolCall.name === "file_write" || toolCall.name === "file_edit") {
+  if (
+    toolCall.name === "create_file" ||
+    toolCall.name === "file_write" ||
+    toolCall.name === "file_edit"
+  ) {
     return (
       <Text color="red">
         File update failed: {summarizeOutput(toolCall.error ?? "Tool failed")}
@@ -242,6 +261,7 @@ function renderError(toolCall: UIToolCall) {
 function renderSuccess(toolCall: UIToolCall) {
   switch (toolCall.name) {
     case "file_write":
+    case "create_file":
     case "file_edit":
       return renderFileMutation(toolCall);
     case "file_read":

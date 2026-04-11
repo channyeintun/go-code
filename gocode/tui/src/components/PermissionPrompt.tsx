@@ -238,7 +238,9 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         <Text color="gray">
           Risk: <Text color={riskColor}>{risk || "normal"}</Text>
         </Text>
-        {riskReason?.trim() ? <Text color="yellow">Policy: {riskReason}</Text> : null}
+        {riskReason?.trim() ? (
+          <Text color="yellow">Policy: {riskReason}</Text>
+        ) : null}
         {workingDir ? (
           <Text color="gray">
             Cwd: <Text color="white">{workingDir}</Text>
@@ -322,8 +324,11 @@ function buildQuestion(
     if (tool === "file_edit") {
       return `Allow edits to ${fileName}?`;
     }
+    if (tool === "create_file") {
+      return `Allow creation of ${fileName}?`;
+    }
     if (tool === "file_write") {
-      return `Allow writes to ${fileName}?`;
+      return `Allow overwrite of ${fileName}?`;
     }
     return `Allow access to ${fileName}?`;
   }
@@ -360,6 +365,8 @@ function formatToolLabel(tool: string): string {
   switch (tool) {
     case "bash":
       return "Bash";
+    case "create_file":
+      return "Create File";
     case "file_write":
       return "File Write";
     case "file_edit":
@@ -373,7 +380,7 @@ function inferAccessLabel(tool: string): string {
   if (tool === "bash") {
     return "execute";
   }
-  if (tool === "file_write" || tool === "file_edit") {
+  if (tool === "create_file" || tool === "file_write" || tool === "file_edit") {
     return "write";
   }
   return "ask";

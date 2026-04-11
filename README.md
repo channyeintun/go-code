@@ -175,9 +175,10 @@ The agent has access to:
 | Tool           | Description                                         |
 | -------------- | --------------------------------------------------- |
 | **bash**       | Execute shell commands                              |
-| **file_read**  | Read file contents                                  |
-| **file_write** | Create or overwrite files                           |
-| **file_edit**  | Find-and-replace edits in files                     |
+| **create_file** | Create a new file and fail if it already exists    |
+| **file_read**   | Read text file contents                            |
+| **file_write**  | Overwrite the full contents of an existing file    |
+| **file_edit**   | Find-and-replace edits in existing files           |
 | **glob**       | Find files by pattern                               |
 | **grep**       | Search file contents (ripgrep)                      |
 | **web_search** | Search the web                                      |

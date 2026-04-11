@@ -22,6 +22,7 @@ func NewRegistry() *Registry {
 	r.Register(NewBashTool())
 	r.Register(NewThinkTool())
 	r.Register(NewListDirTool())
+	r.Register(NewCreateFileTool())
 	r.Register(NewFileReadTool())
 	r.Register(NewFileWriteTool())
 	r.Register(NewFileEditTool())
