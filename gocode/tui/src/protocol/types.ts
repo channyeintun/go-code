@@ -261,6 +261,7 @@ export interface ArtifactReviewResolvedPayload {
 
 export interface BackgroundAgentUpdatedPayload {
   agent_id: string;
+  invocation_id?: string;
   description?: string;
   subagent_type?: string;
   status: string;
@@ -272,6 +273,20 @@ export interface BackgroundAgentUpdatedPayload {
   total_cost_usd?: number;
   input_tokens?: number;
   output_tokens?: number;
+  metadata?: ChildAgentMetadata;
+}
+
+export interface ChildAgentMetadata {
+  invocation_id?: string;
+  agent_id?: string;
+  description?: string;
+  subagent_type?: string;
+  lifecycle_state?: string;
+  status_message?: string;
+  session_id?: string;
+  transcript_path?: string;
+  result_path?: string;
+  tools?: string[];
 }
 
 export interface ArtifactReviewResponsePayload {

@@ -80,7 +80,9 @@ const AgentRow: FC<AgentRowProps> = ({ agent, marginTop }) => {
         <Text color={statusColor(agent.status)}>
           {statusLabel(agent.status)}
         </Text>
-        <Text bold>{agent.description || agent.agentId}</Text>
+        <Text bold>
+          {agent.description || agent.invocationId || agent.agentId}
+        </Text>
         <Text dimColor>{formatSubagentType(agent.subagentType)}</Text>
       </Box>
       <Text dimColor>{truncate(agent.summary, 120)}</Text>
@@ -127,7 +129,18 @@ function formatSubagentType(subagentType: string): string {
 }
 
 function formatMeta(agent: UIBackgroundAgent): string {
-  const parts = [agent.agentId, `updated ${formatUpdatedAt(agent.updatedAt)}`];
+  const parts = [
+    agent.invocationId ? `run ${agent.invocationId}` : agent.agentId,
+    `updated ${formatUpdatedAt(agent.updatedAt)}`,
+  ];
+
+  if (agent.agentId && agent.agentId !== agent.invocationId) {
+    parts.push(`handle ${agent.agentId}`);
+  }
+
+  if (agent.lifecycleState) {
+    parts.push(`state ${agent.lifecycleState}`);
+  }
 
   const costSummary = formatCostSummary(agent);
   if (costSummary) {
@@ -142,6 +155,9 @@ function formatMeta(agent: UIBackgroundAgent): string {
   }
   if (agent.outputFile) {
     parts.push(`result ${basename(agent.outputFile)}`);
+  }
+  if (agent.tools.length > 0) {
+    parts.push(`${agent.tools.length} tools`);
   }
 
   return parts.join(" | ");

@@ -16,7 +16,7 @@
 | Enhancement planning baseline            | completed   | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                           |
 | Phase 1 file semantics and safety        | completed   | L     | Create, overwrite, and edit intent are now split; read hardening, high-risk file approvals, stable diff previews, and file-history coverage are landed. |
 | Phase 2 edit engine hardening            | completed   | L     | The edit ladder, structured failures, patch-grade edits, and post-edit diagnostics are now surfaced across file-mutating tools.                        |
-| Phase 3 subagent lineage and metadata    | not started | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are planned but not started.                                             |
+| Phase 3 subagent lineage and metadata    | completed   | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are now landed for child runs.                                            |
 | Phase 4 child lifecycle and policy hooks | not started | M     | Shared loop alignment plus subagent start/stop hooks and block-stop reasons are planned but not started.                                                |
 
 ## Completion Dashboard
@@ -76,23 +76,23 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 ### Phase 3: Subagent Lineage and Metadata
 
-**Status:** not started
+**Status:** completed
 
 **Landed**
 
-- None yet.
+- Stable `invocation_id` values are now assigned before every child run and reused across sync results, background launches, status checks, transcripts, and result paths.
+- `agent`, `agent_status`, and `agent_stop` now carry structured child metadata alongside the existing flat fields so lifecycle, lineage, transcript, result-path, and tool-list state stay machine-readable.
+- The TUI background-agent state now consumes structured child metadata directly and renders child runs by stable invocation lineage instead of inferring everything from mixed `agent_id` and summary strings.
 
 **Remaining to Finish**
 
-- Add stable invocation ids across child launch, status, transcript, IPC, and cost surfaces.
-- Extend `agent` and `agent_status` with structured child metadata.
-- Update the TUI to render structured child state directly.
+- None.
 
 **Exit Criteria Check**
 
-- [ ] Every child run is traceable from parent launch through completion or cancellation.
-- [ ] Background and sync child runs expose enough metadata to debug them without opening raw transcripts by default.
-- [ ] Child-agent lifecycle and cost data remain attributable without ambiguity.
+- [x] Every child run is traceable from parent launch through completion or cancellation.
+- [x] Background and sync child runs expose enough metadata to debug them without opening raw transcripts by default.
+- [x] Child-agent lifecycle and cost data remain attributable without ambiguity.
 
 ### Phase 4: Shared Child Lifecycle and Policy Hooks
 
@@ -132,6 +132,8 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: added a dedicated `apply_patch` tool for structured multi-file edits and wired it through permission summaries, risk assessment, compaction, runtime tool guidance, and TUI file-mutation rendering.
 - Completed: defined the runtime edit ladder explicitly in the system prompt, tool descriptions, recovery hints, and README guidance so structural edits have a clear path to `apply_patch`.
 - Completed: finished Phase 2 by adding post-edit diagnostics for file-mutating tools and surfacing those diagnostics in the file-mutation UI when local Go or TypeScript checkers are available.
+- Completed: finished Phase 3 by assigning stable child invocation ids, returning structured child metadata from the `agent` flow, and updating the TUI background-agent state to consume that metadata directly.
+- Note: a dedicated per-child active-tool field remains optional future polish, but the current lifecycle, transcript, result-path, tool-list, and cost metadata already satisfies the Phase 3 debugging and attribution bar.
 
 ## Next Planning Baseline
 

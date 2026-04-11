@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/channyeintun/gocode/internal/ipc"
+	"github.com/channyeintun/gocode/internal/session"
 	toolpkg "github.com/channyeintun/gocode/internal/tools"
 )
 
@@ -19,6 +20,7 @@ const backgroundAgentRetention = 5 * time.Minute
 type backgroundAgent struct {
 	mu           sync.Mutex
 	id           string
+	invocationID string
 	description  string
 	subagentType string
 	result       toolpkg.AgentRunResult
@@ -89,6 +91,7 @@ func emitBackgroundAgentUpdated(bridge *ipc.Bridge, bg *backgroundAgent, result 
 	}
 	_ = bridge.Emit(ipc.EventBackgroundAgentUpdated, ipc.BackgroundAgentUpdatedPayload{
 		AgentID:        bg.id,
+		InvocationID:   firstNonEmpty(result.InvocationID, bg.invocationID, result.SessionID),
 		Description:    bg.description,
 		SubagentType:   firstNonEmpty(result.SubagentType, bg.subagentType),
 		Status:         result.Status,
@@ -100,7 +103,27 @@ func emitBackgroundAgentUpdated(bridge *ipc.Bridge, bg *backgroundAgent, result 
 		TotalCostUSD:   result.TotalCostUSD,
 		InputTokens:    result.InputTokens,
 		OutputTokens:   result.OutputTokens,
+		Metadata:       toIPCChildAgentMetadata(buildChildMetadata(result, bg.description)),
 	})
+}
+
+func toIPCChildAgentMetadata(metadata *toolpkg.ChildAgentMetadata) *ipc.ChildAgentMetadataPayload {
+	if metadata == nil {
+		return nil
+	}
+	tools := append([]string(nil), metadata.Tools...)
+	return &ipc.ChildAgentMetadataPayload{
+		InvocationID:   metadata.InvocationID,
+		AgentID:        metadata.AgentID,
+		Description:    metadata.Description,
+		SubagentType:   metadata.SubagentType,
+		LifecycleState: metadata.LifecycleState,
+		StatusMessage:  metadata.StatusMessage,
+		SessionID:      metadata.SessionID,
+		TranscriptPath: metadata.TranscriptPath,
+		ResultPath:     metadata.ResultPath,
+		Tools:          tools,
+	}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -117,23 +140,33 @@ func launchBackgroundAgent(
 	bridge *ipc.Bridge,
 	description string,
 	subagentType string,
+	invocationID string,
+	sessionStore *session.Store,
 	execute func(context.Context) (toolpkg.AgentRunResult, error),
 ) toolpkg.AgentRunResult {
 	agentID := newBackgroundAgentID()
 	ctx, cancel := context.WithCancel(context.Background())
+	transcriptPath := filepath.Join(sessionStore.SessionDir(invocationID), "transcript.ndjson")
+	resultFile := filepath.Join(sessionStore.SessionDir(invocationID), "agent-result.json")
 	bg := &backgroundAgent{
 		id:           agentID,
+		invocationID: invocationID,
 		description:  description,
 		subagentType: subagentType,
 		done:         make(chan struct{}),
 		cancel:       cancel,
 		running:      true,
 		result: toolpkg.AgentRunResult{
-			Status:       "running",
-			AgentID:      agentID,
-			SubagentType: subagentType,
+			Status:         "running",
+			InvocationID:   invocationID,
+			AgentID:        agentID,
+			SubagentType:   subagentType,
+			SessionID:      invocationID,
+			TranscriptPath: transcriptPath,
+			OutputFile:     resultFile,
 		},
 	}
+	bg.result = withChildMetadata(bg.result, description)
 	registerBackgroundAgent(bg)
 	emitBackgroundAgentUpdated(bridge, bg, bg.result)
 
@@ -148,19 +181,21 @@ func launchBackgroundAgent(
 			if err == context.Canceled {
 				bg.result.Status = "cancelled"
 				bg.result.Error = "background child agent cancelled"
+				bg.result = withChildMetadata(bg.result, bg.description)
 				writeBackgroundAgentResultFile(bg.result)
 				emitBackgroundAgentUpdated(bridge, bg, bg.result)
 				return
 			}
 			bg.result.Status = "failed"
 			bg.result.Error = err.Error()
+			bg.result = withChildMetadata(bg.result, bg.description)
 			writeBackgroundAgentResultFile(bg.result)
 			emitBackgroundAgentUpdated(bridge, bg, bg.result)
 			return
 		}
 		result.Status = "completed"
 		result.AgentID = agentID
-		bg.result = result
+		bg.result = withChildMetadata(result, bg.description)
 		writeBackgroundAgentResultFile(bg.result)
 		emitBackgroundAgentUpdated(bridge, bg, bg.result)
 	}()
@@ -173,9 +208,13 @@ func launchBackgroundAgent(
 	}()
 
 	return toolpkg.AgentRunResult{
-		Status:       "async_launched",
-		AgentID:      agentID,
-		SubagentType: subagentType,
+		Status:         "async_launched",
+		InvocationID:   invocationID,
+		AgentID:        agentID,
+		SubagentType:   subagentType,
+		SessionID:      invocationID,
+		TranscriptPath: transcriptPath,
+		OutputFile:     resultFile,
 	}
 }
 
@@ -217,6 +256,7 @@ func stopBackgroundAgent(ctx context.Context, bridge *ipc.Bridge, req toolpkg.Ag
 	}
 	if bg.running {
 		bg.result.Status = "cancelling"
+		bg.result = withChildMetadata(bg.result, bg.description)
 		shouldEmit = true
 	}
 	current := bg.result

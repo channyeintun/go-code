@@ -5,6 +5,7 @@ import type {
   ArtifactReviewRequestedPayload,
   ArtifactReviewResolvedPayload,
   BackgroundAgentUpdatedPayload,
+  ChildAgentMetadata,
   ArtifactStatusChangedPayload,
   ArtifactUpdatedPayload,
   CompactEndPayload,
@@ -110,13 +111,17 @@ export interface UIToolCall {
 
 export interface UIBackgroundAgent {
   agentId: string;
+  invocationId: string;
   description: string;
   subagentType: string;
   status: string;
   summary: string;
+  lifecycleState?: string;
+  statusMessage?: string;
   sessionId?: string;
   transcriptPath?: string;
   outputFile?: string;
+  tools: string[];
   error?: string;
   totalCostUsd: number;
   inputTokens: number;
@@ -850,15 +855,32 @@ export function useEvents(initialModel: string, initialMode: string) {
           const previousAgent = s.backgroundAgents.find(
             (agent) => agent.agentId === p.agent_id,
           );
+          const metadata = normalizeChildAgentMetadata(p.metadata, {
+            invocationId: p.invocation_id,
+            description: p.description,
+            subagentType: p.subagent_type,
+            sessionId: p.session_id,
+            transcriptPath: p.transcript_path,
+            resultPath: p.output_file,
+          });
           const nextAgent = {
             agentId: p.agent_id,
-            description: stringOrEmpty(p.description),
-            subagentType: stringOrEmpty(p.subagent_type),
+            invocationId: metadata.invocationId,
+            description: metadata.description,
+            subagentType: metadata.subagentType,
             status: normalizeBackgroundAgentStatus(p.status),
-            summary: summarizeBackgroundAgent(p.status, p.summary, p.error),
-            sessionId: stringOrUndefined(p.session_id),
-            transcriptPath: stringOrUndefined(p.transcript_path),
-            outputFile: stringOrUndefined(p.output_file),
+            summary: summarizeBackgroundAgent(
+              p.status,
+              p.summary,
+              p.error,
+              metadata.statusMessage,
+            ),
+            lifecycleState: metadata.lifecycleState,
+            statusMessage: metadata.statusMessage,
+            sessionId: metadata.sessionId,
+            transcriptPath: metadata.transcriptPath,
+            outputFile: metadata.resultPath,
+            tools: metadata.tools,
             error: stringOrUndefined(p.error),
             totalCostUsd: numberOrZero(p.total_cost_usd),
             inputTokens: numberOrZero(p.input_tokens),
@@ -1178,6 +1200,7 @@ interface AgentToolInput {
 
 interface AgentToolResult {
   status?: string;
+  invocation_id?: string;
   agent_id?: string;
   subagent_type?: string;
   session_id?: string;
@@ -1188,6 +1211,7 @@ interface AgentToolResult {
   total_cost_usd?: number;
   input_tokens?: number;
   output_tokens?: number;
+  metadata?: ChildAgentMetadata;
 }
 
 interface BackgroundCommandToolInput {
@@ -1354,16 +1378,34 @@ function parseBackgroundAgentResult(
     return null;
   }
 
+  const metadata = normalizeChildAgentMetadata(result.metadata, {
+    invocationId: result.invocation_id || result.session_id,
+    description: input?.description,
+    subagentType: result.subagent_type || input?.subagent_type,
+    sessionId: result.session_id,
+    transcriptPath: result.transcript_path,
+    resultPath: result.output_file,
+  });
+
   const status = normalizeBackgroundAgentStatus(result.status);
   return {
     agentId,
-    description: stringOrEmpty(input?.description),
-    subagentType: stringOrEmpty(result.subagent_type || input?.subagent_type),
+    invocationId: metadata.invocationId,
+    description: metadata.description,
+    subagentType: metadata.subagentType,
     status,
-    summary: summarizeBackgroundAgent(status, result.summary, result.error),
-    sessionId: stringOrUndefined(result.session_id),
-    transcriptPath: stringOrUndefined(result.transcript_path),
-    outputFile: stringOrUndefined(result.output_file),
+    summary: summarizeBackgroundAgent(
+      status,
+      result.summary,
+      result.error,
+      metadata.statusMessage,
+    ),
+    lifecycleState: metadata.lifecycleState,
+    statusMessage: metadata.statusMessage,
+    sessionId: metadata.sessionId,
+    transcriptPath: metadata.transcriptPath,
+    outputFile: metadata.resultPath,
+    tools: metadata.tools,
     error: stringOrUndefined(result.error),
     totalCostUsd: numberOrZero(result.total_cost_usd),
     inputTokens: numberOrZero(result.input_tokens),
@@ -1568,12 +1610,16 @@ function upsertBackgroundAgent(
     ? {
         ...existing,
         ...nextAgent,
+        invocationId: nextAgent.invocationId || existing.invocationId,
         description: nextAgent.description || existing.description,
         subagentType: nextAgent.subagentType || existing.subagentType,
         summary: nextAgent.summary || existing.summary,
+        lifecycleState: nextAgent.lifecycleState || existing.lifecycleState,
+        statusMessage: nextAgent.statusMessage || existing.statusMessage,
         sessionId: nextAgent.sessionId ?? existing.sessionId,
         transcriptPath: nextAgent.transcriptPath ?? existing.transcriptPath,
         outputFile: nextAgent.outputFile ?? existing.outputFile,
+        tools: nextAgent.tools.length > 0 ? nextAgent.tools : existing.tools,
         error: nextAgent.error ?? existing.error,
         totalCostUsd:
           nextAgent.totalCostUsd > 0
@@ -1594,6 +1640,52 @@ function upsertBackgroundAgent(
   return [merged, ...remaining]
     .sort(compareBackgroundAgents)
     .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
+}
+
+function normalizeChildAgentMetadata(
+  metadata?: ChildAgentMetadata,
+  fallback?: {
+    invocationId?: string;
+    description?: string;
+    subagentType?: string;
+    sessionId?: string;
+    transcriptPath?: string;
+    resultPath?: string;
+  },
+): {
+  invocationId: string;
+  description: string;
+  subagentType: string;
+  lifecycleState?: string;
+  statusMessage?: string;
+  sessionId?: string;
+  transcriptPath?: string;
+  resultPath?: string;
+  tools: string[];
+} {
+  return {
+    invocationId: stringOrEmpty(
+      metadata?.invocation_id || fallback?.invocationId || fallback?.sessionId,
+    ),
+    description: stringOrEmpty(metadata?.description || fallback?.description),
+    subagentType: stringOrEmpty(
+      metadata?.subagent_type || fallback?.subagentType,
+    ),
+    lifecycleState: stringOrUndefined(metadata?.lifecycle_state),
+    statusMessage: stringOrUndefined(metadata?.status_message),
+    sessionId: stringOrUndefined(metadata?.session_id || fallback?.sessionId),
+    transcriptPath: stringOrUndefined(
+      metadata?.transcript_path || fallback?.transcriptPath,
+    ),
+    resultPath: stringOrUndefined(
+      metadata?.result_path || fallback?.resultPath,
+    ),
+    tools: Array.isArray(metadata?.tools)
+      ? metadata.tools.filter(
+          (toolName): toolName is string => typeof toolName === "string",
+        )
+      : [],
+  };
 }
 
 function upsertBackgroundCommand(
@@ -1725,10 +1817,16 @@ function summarizeBackgroundAgent(
   status: string,
   summary?: string,
   error?: string,
+  statusMessage?: string,
 ): string {
   const normalizedSummary = stringOrEmpty(summary);
   if (normalizedSummary.length > 0) {
     return normalizedSummary;
+  }
+
+  const normalizedStatusMessage = stringOrEmpty(statusMessage);
+  if (normalizedStatusMessage.length > 0) {
+    return normalizedStatusMessage;
   }
 
   const normalizedError = stringOrEmpty(error);
@@ -1884,7 +1982,7 @@ function truncateNoticeLabel(value: string): string {
 }
 
 function backgroundAgentSubject(agent: UIBackgroundAgent): string {
-  const label = agent.description || agent.agentId;
+  const label = agent.description || agent.invocationId || agent.agentId;
   return `Background agent ${label}`;
 }
 

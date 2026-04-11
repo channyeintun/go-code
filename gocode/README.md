@@ -162,9 +162,9 @@ The agent has access to:
 
 | Tool                           | Description                                                              |
 | ------------------------------ | ------------------------------------------------------------------------ |
-| **agent**                      | Spawn bounded child agents, including async background runs              |
-| **agent_status**               | Check a background child agent and retrieve its final report             |
-| **agent_stop**                 | Cancel a background child agent and return its latest status             |
+| **agent**                      | Spawn bounded child agents, including async runs with stable invocation lineage |
+| **agent_status**               | Check a background child agent and retrieve structured child status or its final report |
+| **agent_stop**                 | Cancel a background child agent and return its latest structured status  |
 | **bash**                       | Execute shell commands                                                   |
 | **think**                      | Record scratchpad reasoning with no side effects                         |
 | **list_dir**                   | List directory contents as structured JSON                               |

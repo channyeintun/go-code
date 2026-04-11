@@ -89,16 +89,25 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent subagent_type %q is not supported yet", subagentType)
 		}
 
+		invocationID, err := newSessionID()
+		if err != nil {
+			return toolpkg.AgentRunResult{}, err
+		}
+
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, client, activeModelID, cwd)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, client, activeModelID, cwd)
 		}
 		if req.Background {
-			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, execute)
+			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, execute)
 			launch.SubagentType = subagentType
 			launch.Tools = subagentToolNames(subagentType)
-			return launch, nil
+			return withChildMetadata(launch, strings.TrimSpace(req.Description)), nil
 		}
-		return execute(ctx)
+		result, err := execute(ctx)
+		if err != nil {
+			return toolpkg.AgentRunResult{}, err
+		}
+		return withChildMetadata(result, strings.TrimSpace(req.Description)), nil
 	}
 }
 
@@ -106,6 +115,7 @@ func executeSubagent(
 	ctx context.Context,
 	req toolpkg.AgentRunRequest,
 	subagentType string,
+	invocationID string,
 	bridge *ipc.Bridge,
 	registry *toolpkg.Registry,
 	permissionCtx *permissions.Context,
@@ -116,11 +126,7 @@ func executeSubagent(
 	activeModelID string,
 	cwd string,
 ) (toolpkg.AgentRunResult, error) {
-
-	childSessionID, err := newSessionID()
-	if err != nil {
-		return toolpkg.AgentRunResult{}, err
-	}
+	childSessionID := invocationID
 	childStartedAt := time.Now()
 	childTracker := costpkg.NewTracker()
 	childMessages := []api.Message{{Role: api.RoleUser, Content: req.Prompt}}
@@ -232,6 +238,7 @@ func executeSubagent(
 
 	return toolpkg.AgentRunResult{
 		Status:         "completed",
+		InvocationID:   invocationID,
 		SubagentType:   subagentType,
 		SessionID:      childSessionID,
 		TranscriptPath: filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson"),
@@ -242,6 +249,65 @@ func executeSubagent(
 		OutputTokens:   childSnapshot.TotalOutputTokens,
 		Tools:          toolDefinitionNames(childRegistry.Definitions()),
 	}, nil
+}
+
+func withChildMetadata(result toolpkg.AgentRunResult, description string) toolpkg.AgentRunResult {
+	result.Metadata = buildChildMetadata(result, description)
+	return result
+}
+
+func buildChildMetadata(result toolpkg.AgentRunResult, description string) *toolpkg.ChildAgentMetadata {
+	invocationID := firstNonEmpty(result.InvocationID, result.SessionID)
+	if invocationID == "" && result.AgentID == "" {
+		return nil
+	}
+	tools := append([]string(nil), result.Tools...)
+	return &toolpkg.ChildAgentMetadata{
+		InvocationID:   invocationID,
+		AgentID:        result.AgentID,
+		Description:    strings.TrimSpace(description),
+		SubagentType:   result.SubagentType,
+		LifecycleState: childLifecycleState(result.Status),
+		StatusMessage:  childStatusMessage(result),
+		SessionID:      result.SessionID,
+		TranscriptPath: result.TranscriptPath,
+		ResultPath:     result.OutputFile,
+		Tools:          tools,
+	}
+}
+
+func childLifecycleState(status string) string {
+	switch strings.TrimSpace(status) {
+	case "", "async_launched":
+		return "launching"
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+func childStatusMessage(result toolpkg.AgentRunResult) string {
+	if summary := strings.TrimSpace(result.Summary); summary != "" {
+		return summary
+	}
+	if errText := strings.TrimSpace(result.Error); errText != "" {
+		return errText
+	}
+	switch strings.TrimSpace(result.Status) {
+	case "async_launched":
+		return "Background child agent launched."
+	case "running":
+		return "Background child agent is still running."
+	case "cancelling":
+		return "Cancellation requested for background child agent."
+	case "completed":
+		return "Background child agent completed."
+	case "cancelled":
+		return "Background child agent cancelled."
+	case "failed":
+		return "Background child agent failed."
+	default:
+		return "Child agent updated."
+	}
 }
 
 func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string {

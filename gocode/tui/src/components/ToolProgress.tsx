@@ -373,12 +373,26 @@ function renderFileMutationError(toolCall: UIToolCall) {
 
 interface AgentResultSummary {
   status?: string;
+  invocation_id?: string;
   agent_id?: string;
   subagent_type?: string;
   session_id?: string;
+  transcript_path?: string;
   output_file?: string;
   summary?: string;
   error?: string;
+  metadata?: {
+    invocation_id?: string;
+    agent_id?: string;
+    description?: string;
+    subagent_type?: string;
+    lifecycle_state?: string;
+    status_message?: string;
+    session_id?: string;
+    transcript_path?: string;
+    result_path?: string;
+    tools?: string[];
+  };
 }
 
 function summarizeAgentOutput(output?: string): string {
@@ -390,25 +404,50 @@ function summarizeAgentOutput(output?: string): string {
     const result = JSON.parse(output) as AgentResultSummary;
     const lines: string[] = [];
     const status = summarizeAgentStatus(result.status);
+    const metadata = result.metadata;
     lines.push(status);
 
     if (result.summary) {
       lines.push(result.summary.trim());
     }
+    if (
+      metadata?.status_message &&
+      metadata.status_message !== result.summary
+    ) {
+      lines.push(metadata.status_message.trim());
+    }
     if (result.error) {
       lines.push(`Error: ${result.error.trim()}`);
+    }
+    if (result.invocation_id || metadata?.invocation_id || result.session_id) {
+      lines.push(
+        `Invocation: ${result.invocation_id || metadata?.invocation_id || result.session_id}`,
+      );
     }
     if (result.agent_id) {
       lines.push(`Agent ID: ${result.agent_id}`);
     }
-    if (result.subagent_type) {
-      lines.push(`Type: ${result.subagent_type}`);
+    if (result.subagent_type || metadata?.subagent_type) {
+      lines.push(`Type: ${result.subagent_type || metadata?.subagent_type}`);
     }
     if (result.session_id) {
       lines.push(`Session: ${result.session_id}`);
     }
-    if (result.output_file) {
-      lines.push(`Result file: ${basenameOrFallback(result.output_file)}`);
+    if (result.transcript_path || metadata?.transcript_path) {
+      lines.push(
+        `Transcript: ${basenameOrFallback(result.transcript_path || metadata?.transcript_path || "")}`,
+      );
+    }
+    if (result.output_file || metadata?.result_path) {
+      lines.push(
+        `Result file: ${basenameOrFallback(result.output_file || metadata?.result_path || "")}`,
+      );
+    }
+    if (metadata?.lifecycle_state) {
+      lines.push(`Lifecycle: ${metadata.lifecycle_state}`);
+    }
+    if (Array.isArray(metadata?.tools) && metadata.tools.length > 0) {
+      lines.push(`Tools: ${metadata.tools.join(", ")}`);
     }
 
     return lines.join("\n");
