@@ -45,27 +45,14 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Manual install
 
-Download the two binaries for your platform from [Releases](https://github.com/channyeintun/gocode/releases):
-
-| Platform            | `gocode` asset         | `gocode-engine` asset         |
-|---------------------|------------------------|-------------------------------|
-| macOS Apple Silicon | `gocode-darwin-arm64`  | `gocode-engine-darwin-arm64`  |
-| macOS Intel         | `gocode-darwin-amd64`  | `gocode-engine-darwin-amd64`  |
-| Linux x86_64        | `gocode-linux-amd64`   | `gocode-engine-linux-amd64`   |
-| Linux ARM64         | `gocode-linux-arm64`   | `gocode-engine-linux-arm64`   |
-
-Download and copy both files to a directory in your `PATH`:
+If you already have local `gocode` and `gocode-engine` binaries, copy both files to a directory in your `PATH`:
 
 ```bash
-curl -fsSL -o gocode https://github.com/channyeintun/gocode/releases/latest/download/gocode-darwin-arm64
-curl -fsSL -o gocode-engine https://github.com/channyeintun/gocode/releases/latest/download/gocode-engine-darwin-arm64
 sudo install -m 755 gocode /usr/local/bin/gocode
 sudo install -m 755 gocode-engine /usr/local/bin/gocode-engine
 ```
 
 `install -m 755` is used instead of `cp` so the binary is copied and marked executable in one step.
-
-Older releases may only include `gocode-<platform>.tar.gz`. The installer still supports that layout as a fallback.
 
 If you do not want to use `sudo`, install to a user-owned directory instead:
 
