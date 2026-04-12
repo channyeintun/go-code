@@ -215,9 +215,11 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				}
 				continue
 			}
-			client = resolvedClient
-			if debuglog.Enabled {
-				client = newDebugClientProxy(client)
+			if resolvedClient != client {
+				client = resolvedClient
+				if debuglog.Enabled {
+					client = newDebugClientProxy(client)
+				}
 			}
 			activeModelID = nextModelID
 			modelState.Set(client, activeModelID)

@@ -28,12 +28,17 @@ func NewContinuationTracker(maxBudget int) ContinuationTracker {
 }
 
 // Record records a continuation with its token output.
-func (t *ContinuationTracker) Record(tokensProduced int) {
-	t.ContinuationCount++
+// When isToolTurn is true the output tokens are counted toward the overall
+// budget but excluded from the diminishing-returns window, because tool-use
+// turns are productive work — not signs of the model stalling.
+func (t *ContinuationTracker) Record(tokensProduced int, isToolTurn bool) {
 	t.BudgetUsedTokens += tokensProduced
-	t.RecentTokenDeltas = append(t.RecentTokenDeltas, tokensProduced)
-	if len(t.RecentTokenDeltas) > 5 {
-		t.RecentTokenDeltas = t.RecentTokenDeltas[1:]
+	if !isToolTurn {
+		t.ContinuationCount++
+		t.RecentTokenDeltas = append(t.RecentTokenDeltas, tokensProduced)
+		if len(t.RecentTokenDeltas) > 5 {
+			t.RecentTokenDeltas = t.RecentTokenDeltas[1:]
+		}
 	}
 }
 

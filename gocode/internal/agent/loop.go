@@ -90,7 +90,8 @@ func runIteration(
 	}
 
 	if turn.outputTokens > 0 {
-		state.Continuation.Record(turn.outputTokens)
+		isToolTurn := len(turn.toolCalls) > 0
+		state.Continuation.Record(turn.outputTokens, isToolTurn)
 	}
 	if turn.stopReason == "max_tokens" {
 		postTurnPressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)

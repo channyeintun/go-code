@@ -472,3 +472,34 @@ Wiring:
   `resp.Body` through `sseBodyWithDebug()` before passing to `readSSE`.
 
 Verification: `go build ./...` passes, binary installed.
+
+---
+
+## Task 16 — Fix premature loop exit on tool-use turns + debug double-logging
+
+**Files**: `gocode/internal/agent/token_budget.go`, `gocode/internal/agent/loop.go`, `gocode/cmd/gocode/engine.go`, `progress.md`
+
+Diagnosed via `GOCODE_DEBUG=1` debug log from a GPT-5.4 code review prompt that
+produced only thinking + tool_use across 3 turns with no text output.
+
+Root causes (two bugs):
+
+1. **Continuation tracker killed the loop prematurely** — `ContinuationTracker.Record()`
+   counted tool-use turns toward the diminishing returns heuristic. Since tool
+   turns have low output tokens (225, 398, 374 — all under 500), after 3
+   continuations the tracker triggered "diminishing returns" and stopped the
+   loop before the model could produce its final text response.
+   
+   Fix: `Record()` now takes `isToolTurn bool`. Tool turns still count toward
+   the overall budget (for budget exhaustion), but are excluded from the
+   diminishing returns window (`ContinuationCount` and `RecentTokenDeltas`).
+
+2. **Debug proxy double-wrapping** — `ensureClientForSelection` returns the
+   existing (already-proxied) client when no model switch is needed, and the
+   engine re-wrapped it with a second `newDebugClientProxy`, causing every event
+   to be logged twice.
+   
+   Fix: only wrap when `resolvedClient != client` (i.e., a new client was
+   actually created).
+
+Verification: `go build ./...` passes, binary installed.
