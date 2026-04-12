@@ -178,6 +178,7 @@ func (c *OllamaClient) buildRequest(req ModelRequest) (ollamaChatRequest, error)
 		Stream:   true,
 		Tools:    buildOllamaTools(req.Tools),
 		Options: ollamaOptions{
+			NumCtx:      c.capabilities.MaxContextWindow,
 			NumPredict:  maxTokens,
 			Temperature: req.Temperature,
 			Stop:        req.StopSequences,
@@ -386,6 +387,7 @@ type ollamaChatRequest struct {
 }
 
 type ollamaOptions struct {
+	NumCtx      int      `json:"num_ctx,omitempty"`
 	NumPredict  int      `json:"num_predict,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"`
 	Stop        []string `json:"stop,omitempty"`
