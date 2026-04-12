@@ -686,7 +686,7 @@ func (s *openAICompatStreamState) emitStop(yield func(ModelEvent, error) bool) e
 	if !yield(ModelEvent{Type: ModelEventStop, StopReason: s.stopReason}, nil) {
 		return errStopStream
 	}
-	return nil
+	return errStopStream
 }
 
 type openAICompatToolCallState struct {

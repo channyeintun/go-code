@@ -309,7 +309,7 @@ func (c *AnthropicClient) handleEvent(
 		if !yield(ModelEvent{Type: ModelEventStop, StopReason: stopReason}, nil) {
 			return errStopStream
 		}
-		return nil
+		return errStopStream
 	case "error":
 		var evt anthropicStreamErrorEvent
 		if err := json.Unmarshal([]byte(data), &evt); err != nil {

@@ -232,6 +232,7 @@ func (c *GeminiClient) handleEvent(
 		if !yield(ModelEvent{Type: ModelEventStop, StopReason: state.stopReason}, nil) {
 			return errStopStream
 		}
+		return errStopStream
 	}
 
 	return nil

@@ -11,6 +11,7 @@ Current milestone: the enhancement roadmap summarized in `release-note-v2.md` ha
 - The Go runtime no longer auto-creates planner task-list or implementation-plan artifacts before the model explicitly saves them.
 - Tool-capable implementation turns now auto-continue once when the model stalls in unnecessary clarification instead of using available tools.
 - The TUI compact warning threshold now mirrors the engine for small-context models instead of warning from an effective zero threshold.
+- Provider stream adapters now stop reading immediately after a terminal stop event instead of waiting for the transport to close, preventing turns from hanging in Responding after the model has already finished.
 - There is no active execution baseline at the moment.
 - The post-ship review findings are tracked in `review.md`.
 

@@ -241,6 +241,7 @@ func (c *OllamaClient) handleChunk(
 		if !yield(ModelEvent{Type: ModelEventStop, StopReason: stopReason}, nil) {
 			return errStopStream
 		}
+		return errStopStream
 	}
 	return nil
 }
