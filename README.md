@@ -253,12 +253,12 @@ If you use GitHub Copilot, the config file will also persist Copilot credentials
 ┌──────────────────────────────┐
 │  gocode (Bun launcher)       │  ← Terminal UI (React Ink)
 │    Renders TUI, handles I/O  │
-│         │ stdin/stdout NDJSON │
-│  ┌──────▼────────────────┐   │
-│  │ gocode-engine (Go)     │   │  ← LLM client, tools, agent loop
-│  │  Streams events out    │   │
-│  │  Reads commands in     │   │
-│  └────────────────────────┘   │
+│         │ stdin/stdout NDJSON│
+│  ┌──────▼─────────────────┐  │
+│  │ gocode-engine (Go)     │  │  ← LLM client, tools, agent loop
+│  │  Streams events out    │  │
+│  │  Reads commands in     │  │
+│  └────────────────────────┘  │
 └──────────────────────────────┘
 ```
 
