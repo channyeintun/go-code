@@ -135,4 +135,31 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 6 — Fix GitHub Copilot business host derivation
+
+**Files**: `gocode/internal/api/github_copilot.go`, `progress.md`
+
+Fixed a GitHub Copilot enterprise/base-URL bug exposed by business accounts.
+
+Root cause:
+
+- Copilot access tokens include a `proxy-ep=` field such as
+  `proxy.business.githubcopilot.com`
+- our base-URL derivation removed the `proxy.` prefix entirely and produced
+  `https://business.githubcopilot.com`
+- that host does not exist, so Responses requests failed with DNS lookup errors
+
+Implementation completed:
+
+- updated `GetGitHubCopilotBaseURL` to convert `proxy.` to `api.` instead of
+  trimming it away
+- this now resolves business Copilot tokens to hosts like
+  `https://api.business.githubcopilot.com`, matching the reference
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go file
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---

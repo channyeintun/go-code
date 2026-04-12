@@ -139,7 +139,7 @@ func NormalizeGitHubCopilotDomain(input string) (string, error) {
 
 func GetGitHubCopilotBaseURL(token, enterpriseDomain string) string {
 	if host := gitHubCopilotProxyHost(token); host != "" {
-		return "https://" + strings.TrimPrefix(host, "proxy.")
+		return "https://" + strings.Replace(host, "proxy.", "api.", 1)
 	}
 	if strings.TrimSpace(enterpriseDomain) != "" {
 		return "https://copilot-api." + strings.TrimSpace(enterpriseDomain)
