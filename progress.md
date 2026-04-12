@@ -115,3 +115,31 @@ These messages are returned as `isError: true` tool results that the model reads
 directly, so making them prescriptive prevents the model from looping.
 
 ---
+
+## Task 35 — Fix hang after plan approval + remove mandatory write gate
+
+**Files**: `gocode/cmd/gocode/engine.go`, `gocode/internal/agent/modes.go`
+
+### Bug 1: hang after plan approval
+
+After the user approved an implementation plan, the engine called
+`persistCurrentMessages()` and then hit `break` — returning to idle and waiting
+for new user input. Nothing ran.
+
+**Fix**: when `reviewResult.Decision == "approved"`, inject a user message
+`"Plan approved. Implement it now."` and `continue` the inner loop so the agent
+immediately runs a fast-mode execution turn.
+
+### Bug 2: plan mode blocking writes on trivial tasks
+
+`RequirePlanBeforeWrite: true` in the plan-mode profile caused `Planner.ValidateTool`
+to block **all** write tools until a formal `save_implementation_plan` artifact
+existed — even for a one-liner like "create hello.txt with Hello world!".
+
+**Fix**: set `RequirePlanBeforeWrite: false`. Plan mode now means "think more
+carefully" (slower model, full verbosity, plan panel visible) without gating every
+write behind a mandatory plan artifact. `save_implementation_plan` remains
+available for complex multi-step tasks where the user genuinely wants to review
+before execution.
+
+---

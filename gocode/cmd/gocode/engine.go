@@ -415,7 +415,20 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					}
 					if reviewResult.Decision == "approved" {
 						// Mode already switched to fast inside handlePlanReviewGate; persist it.
+						// Inject a user message so the model knows to begin implementation, then
+						// continue the inner loop to run an immediate fast-mode execution turn.
+						turnMetrics.Mark("plan_approved")
+						turnStopReason = "plan_approved"
+						flushTurnMetrics("plan_approved")
+						messages = append(messages, api.Message{
+							Role:    api.RoleUser,
+							Content: "Plan approved. Implement it now.",
+						})
 						persistCurrentMessages()
+						if err := emitContextWindowUsage(bridge, client, messages); err != nil {
+							return err
+						}
+						continue
 					}
 					if reviewResult.Decision == "revised" {
 						turnMetrics.Mark("plan_review_revised")
