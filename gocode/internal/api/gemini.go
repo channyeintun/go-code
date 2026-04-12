@@ -427,16 +427,23 @@ func convertGeminiMessage(msg Message, toolNames map[string]string) ([]geminiCon
 
 func geminiFunctionResponsePart(result ToolResult, toolNames map[string]string) (geminiPart, error) {
 	response := map[string]any{}
-	if strings.TrimSpace(result.Output) != "" {
+	text := strings.TrimSpace(result.Output)
+	if text != "" {
 		var decoded any
 		if err := json.Unmarshal([]byte(result.Output), &decoded); err == nil {
-			response["output"] = decoded
+			// Use "error" key for error results, "output" key for success — Gemini convention.
+			if result.IsError {
+				response["error"] = decoded
+			} else {
+				response["output"] = decoded
+			}
 		} else {
-			response["output"] = result.Output
+			if result.IsError {
+				response["error"] = result.Output
+			} else {
+				response["output"] = result.Output
+			}
 		}
-	}
-	if result.IsError {
-		response["is_error"] = true
 	}
 	// Gemini requires the actual function name, not the opaque call ID.
 	name := toolNames[result.ToolCallID]

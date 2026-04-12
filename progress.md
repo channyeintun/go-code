@@ -26,3 +26,14 @@ Added `geminiContentIsOnlyFunctionResponses` helper and modified
 Gemini requires all function responses for a turn to be in one Content entry.
 
 ---
+
+## Task 28 — Use `"error"` key for error tool results
+
+**File**: `gocode/internal/api/gemini.go`
+
+`geminiFunctionResponsePart` now uses `response["error"]` when `result.IsError`,
+instead of `response["output"] + "is_error": true`. This matches the Gemini API
+convention (`{output: text}` for success, `{error: text}` for errors) used by
+pi-mono and the official SDK documentation.
+
+---
