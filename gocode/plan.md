@@ -6,27 +6,27 @@ Evaluate whether selected GoF patterns from `golang-design-patterns` should be a
 
 ## Planning Decision
 
-Design patterns are optional here, not target architecture rules. A pattern should only be introduced when it removes branching or duplication that is already making the code harder to extend or reason about. If a switch, small helper, or plain struct is still the clearest solution, keep it.
+Design patterns are not target architecture rules. A pattern is introduced only when it removes branching or duplication that is already making the code harder to extend or reason about. If a switch, small helper, or plain struct is already the clearest solution, it stays.
 
 ## Recommended Opportunities
 
-| Priority | Area                                  | Pattern                 | Why it is a reasonable fit                                                                                                                                                                                                                                 | Main files                                                                                                                                                                                                      |
-| -------- | ------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | Slash command handling                | Command                 | `handleSlashCommand` is a large branch with command-specific state transitions, persistence, and UI emission. Extracting per-command handlers behind a small registry should improve readability without changing behavior.                                | `cmd/gocode/slash_commands.go`                                                                                                                                                                                  |
-| 2        | LLM client construction               | Factory Method          | `newLLMClient` mixes provider selection, GitHub Copilot special cases, capability override logic, and concrete client construction. A provider factory layer should centralize that branching and reduce constructor duplication.                          | `cmd/gocode/engine.go`, `internal/api/provider_config.go`, `internal/api/anthropic.go`, `internal/api/openai_compat.go`, `internal/api/openai_responses.go`, `internal/api/gemini.go`, `internal/api/ollama.go` |
-| 3        | Permission decision flow              | Chain of Responsibility | Permission evaluation already runs as an ordered series of rules. The current `Check()` is short and clear (~40 lines), so this is optional. Only proceed if new rule types make the sequential if/for blocks materially harder to follow.                 | `internal/permissions/gating.go`                                                                                                                                                                                |
-| 4        | Compaction selection                  | Strategy                | The compaction pipeline already has named strategies, but selection and execution are still mostly embedded in one method. If compaction variants continue growing, promoting them to explicit strategy objects should help. This is optional, not urgent. | `internal/compact/pipeline.go`                                                                                                                                                                                  |
-| 5        | Tool execution cross-cutting behavior | Decorator               | If more execution concerns accumulate around tools, such as telemetry, truncation, artifact side effects, and permission-adjacent wrapping, decorators can keep core tool logic smaller. Only apply if wrappers reduce existing duplication.               | `internal/tools/interface.go`, `internal/tools/orchestration.go`, `internal/tools/streaming_executor.go`                                                                                                        |
+| Priority | Area                    | Pattern        | Why it is a reasonable fit                                                                                                                                                                                                        | Main files                                                                                                                                                                                                      |
+| -------- | ----------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | Slash command handling  | Command        | `handleSlashCommand` is a large branch with command-specific state transitions, persistence, and UI emission. Extracting per-command handlers behind a small registry should improve readability without changing behavior.       | `cmd/gocode/slash_commands.go`                                                                                                                                                                                  |
+| 2        | LLM client construction | Factory Method | `newLLMClient` mixes provider selection, GitHub Copilot special cases, capability override logic, and concrete client construction. A provider factory layer should centralize that branching and reduce constructor duplication. | `cmd/gocode/engine.go`, `internal/api/provider_config.go`, `internal/api/anthropic.go`, `internal/api/openai_compat.go`, `internal/api/openai_responses.go`, `internal/api/gemini.go`, `internal/api/ollama.go` |
 
 ## Areas To Leave Alone
 
-| Area                     | Why a pattern is not justified now                                                                                                        | Main files                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Execution mode profiles  | Two modes and a small switch are clearer than a State or Strategy hierarchy.                                                              | `internal/agent/modes.go`                                      |
-| Retry classification     | `ShouldRetry` is short and stable. Strategy objects would add ceremony without reducing much complexity.                                  | `internal/api/retry.go`                                        |
-| Hook discovery           | `Runner.Run` is simple file globbing plus execution. A richer lifecycle abstraction is premature.                                         | `internal/hooks/runner.go`                                     |
-| Artifact version structs | The artifact layer already has explicit versions. A Memento-style rewrite would add naming but little practical simplification right now. | `internal/artifacts/manager.go`, `internal/artifacts/store.go` |
-| Tool registry basics     | `Registry` is already a clean registry implementation. Avoid wrapping it in more pattern layers unless a real extension need emerges.     | `internal/tools/registry.go`                                   |
+| Area                     | Why a pattern is not justified now                                                                                                                                                                                                  | Main files                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Execution mode profiles  | Two modes and a small switch are clearer than a State or Strategy hierarchy.                                                                                                                                                        | `internal/agent/modes.go`                                                 |
+| Retry classification     | `ShouldRetry` is short and stable. Strategy objects would add ceremony without reducing much complexity.                                                                                                                            | `internal/api/retry.go`                                                   |
+| Hook discovery           | `Runner.Run` is simple file globbing plus execution. A richer lifecycle abstraction is premature.                                                                                                                                   | `internal/hooks/runner.go`                                                |
+| Artifact version structs | The artifact layer already has explicit versions. A Memento-style rewrite would add naming but little practical simplification right now.                                                                                           | `internal/artifacts/manager.go`, `internal/artifacts/store.go`            |
+| Tool registry basics     | `Registry` is already a clean registry implementation. Avoid wrapping it in more pattern layers unless a real extension need emerges.                                                                                               | `internal/tools/registry.go`                                              |
+| Permission decision flow | `Check()` is 40 lines of clean sequential if/for logic with obvious early returns. A Chain of Responsibility would add an interface, 5+ handler structs, and Next() plumbing to restate what already reads perfectly top-to-bottom. | `internal/permissions/gating.go`                                          |
+| Compaction pipeline      | `Compact()` is a ~35-line fixed cascade (truncate → partial → full). Three strategies, no evidence of more coming. Strategy objects would add abstraction layers to a short, clear method.                                          | `internal/compact/pipeline.go`                                            |
+| Tool execution wrappers  | Cross-cutting concerns are already handled cleanly via function injection (`PermissionGate`) and batch partitioning. No duplicated wrapping logic exists for decorators to consolidate.                                             | `internal/tools/orchestration.go`, `internal/tools/streaming_executor.go` |
 
 ## Proposed Implementation Order
 
@@ -59,42 +59,6 @@ Guardrails:
 - Preserve exact provider support and model resolution.
 - Preserve current GitHub Copilot auth refresh behavior.
 - Prefer a table-driven factory or constructor map over a heavy abstract-factory hierarchy.
-
-### Phase 3: Optional Permission Check Chain
-
-Scope:
-
-- Only proceed if new rule types or dynamic rule insertion make the current sequential if/for blocks in `Check()` materially harder to follow.
-- If done, represent deny, session allow-all, always allow, always ask, and default fallback as ordered evaluators.
-- Keep ordering explicit and stable.
-
-Guardrails:
-
-- Behavior must remain byte-for-byte compatible for current rules where practical.
-- Do not split logic across too many tiny files.
-- Skip entirely if the current ~40-line method remains the clearest option.
-
-### Phase 4: Optional Compaction Strategy Extraction
-
-Scope:
-
-- Only proceed if upcoming work adds another compaction path or makes the current method materially harder to follow.
-- If done, keep the strategy surface very small.
-
-Guardrails:
-
-- Do not refactor purely for pattern purity.
-
-### Phase 5: Optional Tool Execution Decorators
-
-Scope:
-
-- Only proceed if new execution wrappers would replace duplicated orchestration logic.
-- Keep tool implementations directly readable.
-
-Guardrails:
-
-- Do not hide basic execution flow behind too many wrappers.
 
 ## Implementation Principles
 

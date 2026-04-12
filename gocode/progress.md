@@ -24,12 +24,6 @@ Planning only. No implementation has been started.
   - [ ] Move provider branching out of `newLLMClient` in `engine.go` into the factory layer.
   - [ ] Keep GitHub Copilot special-case handling explicit without hiding it in a generic abstraction.
   - [ ] Verify all providers resolve identically to current behavior.
-- [ ] Phase 3 (optional): Refactor permission evaluation into an explicit ordered chain.
-  - [ ] Re-evaluate whether the current ~40-line `Check()` has grown enough to justify the refactor.
-  - [ ] If yes, define a chain-link interface and wire deny → session allow-all → allow → ask → default.
-  - [ ] If no, skip and document the decision.
-- [ ] Phase 4 (optional): Reassess whether compaction strategy extraction is justified.
-- [ ] Phase 5 (optional): Reassess whether tool execution decorators are justified.
 
 ## Detailed Step Log
 
@@ -46,13 +40,11 @@ Steps completed:
 
 Outcome:
 
-- The best current candidates are Command for slash command handling, Factory Method for client creation, and Chain of Responsibility for permission evaluation.
-- Strategy and Decorator are only conditional follow-ups, not default refactors.
-- Several areas are intentionally deferred to avoid overengineering.
+- Two patterns are worth applying: Command for slash command handling, and Factory Method for client creation.
+- Three others were evaluated and rejected: Chain of Responsibility for permissions (40-line method is already clear), Strategy for compaction (35-line cascade is already clear), and Decorator for tool execution (cross-cutting is already handled via function injection).
 
-## Working Rules For Later Implementation
+## Working Rules
 
-- Patterns are optional tools, not mandatory rules.
-- If a refactor increases indirection without removing meaningful complexity, skip it.
+- If a refactor increases indirection without removing meaningful complexity, do not apply it.
 - Preserve existing functionality and behavior.
 - Do not add tests.
