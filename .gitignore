@@ -48,4 +48,6 @@ sourcecode**/
 adk-go/
 AGENTS.local.md
 vscode-copilot-chat/
+gemini-cli/
+opencode/
 
