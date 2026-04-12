@@ -126,7 +126,7 @@ func (t *AgentTool) Validate(input ToolInput) error {
 	if !ok || strings.TrimSpace(prompt) == "" {
 		return fmt.Errorf("agent requires prompt")
 	}
-	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && !isSupportedAgentSubagentType(strings.TrimSpace(subagentType)) {
+	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && !IsSupportedSubagentType(strings.TrimSpace(subagentType)) {
 		return fmt.Errorf("agent subagent_type %q is not supported", subagentType)
 	}
 	return nil
@@ -161,7 +161,8 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 	return ToolOutput{Output: string(encoded)}, nil
 }
 
-func isSupportedAgentSubagentType(subagentType string) bool {
+// IsSupportedSubagentType reports whether subagentType is a recognized subagent mode.
+func IsSupportedSubagentType(subagentType string) bool {
 	switch subagentType {
 	case subagentTypeExplore, subagentTypeSearch, subagentTypeExecution, subagentTypeGeneralPurpose:
 		return true

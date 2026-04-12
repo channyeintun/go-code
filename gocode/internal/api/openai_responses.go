@@ -768,10 +768,6 @@ func resolveOpenAIResponsesToolArguments(streamed string, final string) (string,
 		}
 		lastErr = err
 	}
-
-	if lastErr == nil {
-		return "{}", nil
-	}
 	return "", lastErr
 }
 

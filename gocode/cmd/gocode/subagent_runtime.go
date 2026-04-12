@@ -124,7 +124,7 @@ func makeSubagentRunner(
 		if subagentType == "" {
 			subagentType = exploreSubagentType
 		}
-		if !isSupportedSubagentType(subagentType) {
+		if !toolpkg.IsSupportedSubagentType(subagentType) {
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent subagent_type %q is not supported yet", subagentType)
 		}
 
@@ -773,15 +773,6 @@ func executeToolCallsForSubagent(
 	}
 
 	return results, nil
-}
-
-func isSupportedSubagentType(subagentType string) bool {
-	switch strings.TrimSpace(subagentType) {
-	case exploreSubagentType, searchSubagentType, executionSubagentType, generalPurposeSubagentType:
-		return true
-	default:
-		return false
-	}
 }
 
 func subagentDisplayName(subagentType string) string {

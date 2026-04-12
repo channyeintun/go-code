@@ -1,6 +1,7 @@
 import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import type { UIToolCall } from "../hooks/useEvents.js";
+import { formatSubagentType } from "../utils/subagentLabels.js";
 import FileDiffPreview from "./FileDiffPreview.js";
 import MarkdownText from "./MarkdownText.js";
 import MessageRow from "./MessageRow.js";
@@ -495,21 +496,6 @@ function agentToolTitle(rawInput: string): string {
     return subagentType ? `${subagentType} Agent` : "Agent";
   } catch {
     return "Agent";
-  }
-}
-
-function formatSubagentType(subagentType: string): string {
-  switch (subagentType) {
-    case "search":
-      return "Search";
-    case "execution":
-      return "Execution";
-    case "general-purpose":
-      return "General Purpose";
-    case "explore":
-      return "Explore";
-    default:
-      return subagentType;
   }
 }
 

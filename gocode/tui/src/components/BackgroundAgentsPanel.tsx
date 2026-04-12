@@ -2,6 +2,7 @@ import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import type { UIBackgroundAgent } from "../hooks/useEvents.js";
 import { formatTokenCount } from "../utils/modelContext.js";
+import { formatSubagentType } from "../utils/subagentLabels.js";
 
 interface BackgroundAgentsPanelProps {
   agents: UIBackgroundAgent[];
@@ -83,7 +84,7 @@ const AgentRow: FC<AgentRowProps> = ({ agent, marginTop }) => {
         <Text bold>
           {agent.description || agent.invocationId || agent.agentId}
         </Text>
-        <Text dimColor>{formatSubagentType(agent.subagentType)}</Text>
+        <Text dimColor>{formatSubagentTypeLabel(agent.subagentType)}</Text>
       </Box>
       <Text dimColor>{truncate(agent.summary, 120)}</Text>
       <Text dimColor>{formatMeta(agent)}</Text>
@@ -124,19 +125,9 @@ function statusColor(status: string): "cyan" | "yellow" | "green" | "red" {
   }
 }
 
-function formatSubagentType(subagentType: string): string {
-  switch (subagentType) {
-    case "search":
-      return "(Search)";
-    case "execution":
-      return "(Execution)";
-    case "general-purpose":
-      return "(General Purpose)";
-    case "explore":
-      return "(Explore)";
-    default:
-      return subagentType ? `(${subagentType})` : "";
-  }
+function formatSubagentTypeLabel(subagentType: string): string {
+  const label = formatSubagentType(subagentType);
+  return label ? `(${label})` : "";
 }
 
 function formatMeta(agent: UIBackgroundAgent): string {
