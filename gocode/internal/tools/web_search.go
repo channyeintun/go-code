@@ -303,10 +303,3 @@ func stringSliceParam(params map[string]any, key string) []string {
 		return nil
 	}
 }
-
-func min(left, right int) int {
-	if left < right {
-		return left
-	}
-	return right
-}

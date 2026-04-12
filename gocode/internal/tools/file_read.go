@@ -180,13 +180,6 @@ func isLikelyBinaryFile(filePath string, sample []byte) bool {
 	return controlBytes > len(sample)/10
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func fileReadRange(params map[string]any) (int, int, error) {
 	startLine := 1
 	if value, ok := intParam(params, "start_line"); ok {

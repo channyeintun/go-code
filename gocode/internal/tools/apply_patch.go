@@ -383,7 +383,7 @@ func buildApplyPatchPreview(changes []applyPatchFileChange) string {
 	if len(changes) == 0 {
 		return ""
 	}
-	sections := make([]string, 0, minInt(len(changes), 3)+1)
+	sections := make([]string, 0, min(len(changes), 3)+1)
 	for index, change := range changes {
 		if index == 3 {
 			sections = append(sections, fmt.Sprintf("... %d more file%s", len(changes)-index, pluralSuffix(len(changes)-index)))

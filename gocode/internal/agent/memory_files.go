@@ -644,7 +644,7 @@ func selectRelevantMemoryLines(content, currentUserPrompt string) []string {
 		return scored[i].idx < scored[j].idx
 	})
 
-	limit := minInt(maxRelevantMemoryLines, len(scored))
+	limit := min(maxRelevantMemoryLines, len(scored))
 	selected := scored[:limit]
 	sort.SliceStable(selected, func(i, j int) bool {
 		return selected[i].idx < selected[j].idx
@@ -679,7 +679,7 @@ func extractRecallTerms(prompt string) []string {
 	}
 
 	seen := make(map[string]struct{}, len(matches))
-	terms := make([]string, 0, minInt(maxRecallTerms, len(matches)))
+	terms := make([]string, 0, min(maxRecallTerms, len(matches)))
 	for _, match := range matches {
 		if isLowSignalRecallTerm(match) {
 			continue
@@ -858,11 +858,4 @@ func pluralSuffix(count int, singular, plural string) string {
 		return singular
 	}
 	return plural
-}
-
-func minInt(left, right int) int {
-	if left < right {
-		return left
-	}
-	return right
 }

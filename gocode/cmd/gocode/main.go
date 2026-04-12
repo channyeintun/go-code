@@ -586,7 +586,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					titleModelID := activeModelID
 					titleCWD := cwd
 					titleBranch := agent.LoadTurnContext().GitBranch
-					titleMessages := append([]api.Message(nil), messages...)
+					titleMessages := api.DeepCopyMessages(messages)
 					go func() {
 						modelRouter := localmodel.NewRouter(titleClient)
 						title := session.GenerateTitle(modelRouter, titleMessages)

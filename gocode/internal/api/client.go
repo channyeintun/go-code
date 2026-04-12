@@ -2,11 +2,28 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"iter"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/channyeintun/gocode/internal/ipc"
 )
+
+// streamingHTTPTimeout is the per-request timeout for streaming API calls.
+// Long enough for slow models; context cancellation handles early termination.
+const streamingHTTPTimeout = 5 * time.Minute
+
+// newHTTPClient returns an *http.Client with a 5-minute timeout suitable for
+// streaming responses. Context cancellation handles premature abort.
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: streamingHTTPTimeout,
+	}
+}
 
 // ClientType identifies the API protocol to use.
 type ClientType int
@@ -156,6 +173,48 @@ func StreamEventAdapter(event ModelEvent) *ipc.StreamEvent {
 	default:
 		return nil
 	}
+}
+
+// warnCustomBaseURL prints a security warning when the caller provides a
+// non-default base URL for a provider, since the API key will be forwarded to
+// that endpoint.  Callers should opt-in explicitly via GOCODE_ALLOW_CUSTOM_BASE_URL=1.
+func warnCustomBaseURL(provider, defaultURL, actualURL string) {
+	if strings.TrimRight(actualURL, "/") == strings.TrimRight(defaultURL, "/") {
+		return
+	}
+	if os.Getenv("GOCODE_ALLOW_CUSTOM_BASE_URL") == "1" {
+		return
+	}
+	fmt.Fprintf(os.Stderr,
+		"warning: %s base_url is overridden to %q — your API key will be sent to this endpoint; "+
+			"set GOCODE_ALLOW_CUSTOM_BASE_URL=1 to suppress this warning\n",
+		provider, actualURL)
+}
+
+// DeepCopyMessages returns a deep copy of msgs where each Message's slice and
+// pointer fields are independent of the originals, safe to read from a
+// separate goroutine while the main loop continues to modify messages.
+func DeepCopyMessages(msgs []Message) []Message {
+	if msgs == nil {
+		return nil
+	}
+	copied := make([]Message, len(msgs))
+	for i, m := range msgs {
+		copied[i] = m
+		if m.ToolCalls != nil {
+			copied[i].ToolCalls = make([]ToolCall, len(m.ToolCalls))
+			copy(copied[i].ToolCalls, m.ToolCalls)
+		}
+		if m.Images != nil {
+			copied[i].Images = make([]ImageAttachment, len(m.Images))
+			copy(copied[i].Images, m.Images)
+		}
+		if m.ToolResult != nil {
+			tr := *m.ToolResult
+			copied[i].ToolResult = &tr
+		}
+	}
+	return copied
 }
 
 func closeReadCloserOnCancel(ctx context.Context, body io.Reader) func() {

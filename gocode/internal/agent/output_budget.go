@@ -9,14 +9,14 @@ func defaultOutputBudget(providerMax int) int {
 	if providerMax <= 0 {
 		return 0
 	}
-	return minInt(providerMax, defaultReservedOutputTokens)
+	return min(providerMax, defaultReservedOutputTokens)
 }
 
 func escalatedOutputBudget(providerMax int) int {
 	if providerMax <= 0 {
 		return 0
 	}
-	return minInt(providerMax, escalatedOutputTokens)
+	return min(providerMax, escalatedOutputTokens)
 }
 
 func nextOutputBudget(current, providerMax int, pressure ContextPressureDecision) int {

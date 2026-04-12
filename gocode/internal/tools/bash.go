@@ -8,17 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/channyeintun/gocode/internal/bashsecurity"
 )
 
 const defaultBashTimeout = 30 * time.Second
-
-var bashDangerousZshCommands = regexp.MustCompile(`\b(zmodload|emulate|sysopen|sysread|syswrite|zpty|ztcp|zsocket|zf_rm|zf_mv|zf_chmod|zf_mkdir|zf_chown|mapfile)\b`)
-var bashDangerousSubstitution = regexp.MustCompile(`<\(|>\(`)
-var bashIFSInjection = regexp.MustCompile(`\bIFS=`)
 
 var bashReadOnlyPrograms = map[string]struct{}{
 	"cat":   {},
@@ -48,26 +45,6 @@ var bashReadOnlyGitSubcommands = map[string]struct{}{
 	"show":      {},
 	"status":    {},
 	"tag":       {},
-}
-
-var bashDestructivePatterns = []struct {
-	pattern     *regexp.Regexp
-	description string
-}{
-	{regexp.MustCompile(`git\s+reset\s+--hard`), "git reset --hard"},
-	{regexp.MustCompile(`git\s+push\s+.*--force`), "git push --force"},
-	{regexp.MustCompile(`git\s+push\s+-f\b`), "git push -f"},
-	{regexp.MustCompile(`git\s+clean\s+-f`), "git clean -f"},
-	{regexp.MustCompile(`git\s+checkout\s+\.\s*$`), "git checkout ."},
-	{regexp.MustCompile(`git\s+commit\s+.*--amend`), "git commit --amend"},
-	{regexp.MustCompile(`--no-verify`), "--no-verify"},
-	{regexp.MustCompile(`\brm\s+-rf\b`), "rm -rf"},
-	{regexp.MustCompile(`\brm\s+-f\b`), "rm -f"},
-	{regexp.MustCompile(`(?i)\bDROP\s+TABLE\b`), "DROP TABLE"},
-	{regexp.MustCompile(`(?i)\bTRUNCATE\b`), "TRUNCATE"},
-	{regexp.MustCompile(`(?i)\bDELETE\s+FROM\b`), "DELETE FROM"},
-	{regexp.MustCompile(`\bkubectl\s+delete\b`), "kubectl delete"},
-	{regexp.MustCompile(`\bterraform\s+destroy\b`), "terraform destroy"},
 }
 
 // BashTool executes shell commands through the preferred local shell with basic security validation.
@@ -348,25 +325,11 @@ func joinOutputs(stdout, stderr string) string {
 }
 
 func validateBashSecurity(command string) string {
-	if bashDangerousZshCommands.MatchString(command) {
-		return "blocked: dangerous ZSH command detected"
-	}
-	if bashDangerousSubstitution.MatchString(command) {
-		return "blocked: dangerous process substitution pattern"
-	}
-	if bashIFSInjection.MatchString(command) {
-		return "blocked: IFS injection detected"
-	}
-	return ""
+	return bashsecurity.ValidateBashSecurity(command)
 }
 
 func checkDestructive(command string) string {
-	for _, pattern := range bashDestructivePatterns {
-		if pattern.pattern.MatchString(command) {
-			return "warning: destructive command — " + pattern.description
-		}
-	}
-	return ""
+	return bashsecurity.CheckDestructive(command)
 }
 
 func isParallelReadOnlyBashCommand(command string) bool {

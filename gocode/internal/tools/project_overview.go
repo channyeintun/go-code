@@ -201,7 +201,7 @@ func (t *ProjectOverviewTool) Execute(ctx context.Context, input ToolInput) (Too
 
 	summary := projectOverview{
 		RootPath:         rootPath,
-		FilesScanned:     minInt(filesScanned, maxFiles),
+		FilesScanned:     min(filesScanned, maxFiles),
 		Truncated:        truncated,
 		ManifestFiles:    sortedKeys(manifestSet),
 		TopLevelSections: sortSectionSummaries(topLevelCounts, maxResults),

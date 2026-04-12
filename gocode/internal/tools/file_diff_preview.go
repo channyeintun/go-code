@@ -151,7 +151,7 @@ func buildFileDiffPreview(oldContent, newContent string) (string, int, int) {
 	insertions := len(changedNew)
 	deletions := len(changedOld)
 
-	previewLines := make([]string, 0, minInt(maxDiffPreviewLines, insertions+deletions+1))
+	previewLines := make([]string, 0, min(maxDiffPreviewLines, insertions+deletions+1))
 	if prefix > 0 {
 		previewLines = append(previewLines, "@@")
 	}
@@ -181,11 +181,4 @@ func splitDiffLines(content string) []string {
 		return nil
 	}
 	return strings.Split(content, "\n")
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

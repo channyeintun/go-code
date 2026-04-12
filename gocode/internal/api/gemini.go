@@ -33,6 +33,7 @@ func NewGeminiClient(model, apiKey, baseURL string) (*GeminiClient, error) {
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
+	warnCustomBaseURL("gemini", preset.BaseURL, baseURL)
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
@@ -44,7 +45,7 @@ func NewGeminiClient(model, apiKey, baseURL string) (*GeminiClient, error) {
 		model:        model,
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
-		httpClient:   &http.Client{},
+		httpClient:   newHTTPClient(),
 		capabilities: preset.Capabilities,
 	}, nil
 }
@@ -244,6 +245,17 @@ func buildGeminiContents(systemPrompt string, messages []Message) ([]geminiConte
 		systemParts = append(systemParts, geminiPart{Text: trimmed})
 	}
 
+	// Build a map from toolCallID → toolName so function responses can reference
+	// the correct function name rather than the opaque call ID.
+	toolNames := make(map[string]string)
+	for _, msg := range messages {
+		for _, tc := range msg.ToolCalls {
+			if tc.ID != "" && tc.Name != "" {
+				toolNames[tc.ID] = tc.Name
+			}
+		}
+	}
+
 	contents := make([]geminiContent, 0, len(messages))
 	for _, msg := range messages {
 		if msg.Role == RoleSystem {
@@ -253,7 +265,7 @@ func buildGeminiContents(systemPrompt string, messages []Message) ([]geminiConte
 			continue
 		}
 
-		converted, err := convertGeminiMessage(msg)
+		converted, err := convertGeminiMessage(msg, toolNames)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -267,7 +279,7 @@ func buildGeminiContents(systemPrompt string, messages []Message) ([]geminiConte
 	return contents, instruction, nil
 }
 
-func convertGeminiMessage(msg Message) ([]geminiContent, error) {
+func convertGeminiMessage(msg Message, toolNames map[string]string) ([]geminiContent, error) {
 	trimmed := strings.TrimSpace(msg.Content)
 	parts := make([]geminiPart, 0, 1+len(msg.ToolCalls)+len(msg.Images))
 
@@ -285,7 +297,7 @@ func convertGeminiMessage(msg Message) ([]geminiContent, error) {
 			})
 		}
 		if msg.ToolResult != nil {
-			resultPart, err := geminiFunctionResponsePart(*msg.ToolResult)
+			resultPart, err := geminiFunctionResponsePart(*msg.ToolResult, toolNames)
 			if err != nil {
 				return nil, err
 			}
@@ -302,7 +314,7 @@ func convertGeminiMessage(msg Message) ([]geminiContent, error) {
 			}
 			return []geminiContent{{Role: "user", Parts: []geminiPart{{Text: trimmed}}}}, nil
 		}
-		resultPart, err := geminiFunctionResponsePart(*msg.ToolResult)
+		resultPart, err := geminiFunctionResponsePart(*msg.ToolResult, toolNames)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +348,7 @@ func convertGeminiMessage(msg Message) ([]geminiContent, error) {
 	}
 }
 
-func geminiFunctionResponsePart(result ToolResult) (geminiPart, error) {
+func geminiFunctionResponsePart(result ToolResult, toolNames map[string]string) (geminiPart, error) {
 	response := map[string]any{}
 	if strings.TrimSpace(result.Output) != "" {
 		var decoded any
@@ -349,9 +361,14 @@ func geminiFunctionResponsePart(result ToolResult) (geminiPart, error) {
 	if result.IsError {
 		response["is_error"] = true
 	}
+	// Gemini requires the actual function name, not the opaque call ID.
+	name := toolNames[result.ToolCallID]
+	if name == "" {
+		name = result.ToolCallID
+	}
 	return geminiPart{
 		FunctionResponse: &geminiFunctionResponse{
-			Name:     result.ToolCallID,
+			Name:     name,
 			Response: response,
 		},
 	}, nil

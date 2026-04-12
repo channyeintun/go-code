@@ -75,6 +75,17 @@ func Load() Config {
 	if v := os.Getenv("GOCODE_PERMISSION_MODE"); v != "" {
 		cfg.PermissionMode = v
 	}
+	if cfg.PermissionMode != "" {
+		switch cfg.PermissionMode {
+		case "default", "bypassPermissions", "autoApprove":
+			// valid
+		default:
+			fmt.Fprintf(os.Stderr,
+				"warning: unknown GOCODE_PERMISSION_MODE %q — falling back to \"default\"; valid values are: default, bypassPermissions, autoApprove\n",
+				cfg.PermissionMode)
+			cfg.PermissionMode = "default"
+		}
+	}
 	if v := os.Getenv("GOCODE_COST_WARNING_THRESHOLD_USD"); v != "" {
 		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
 			cfg.CostWarningThresholdUSD = parsed

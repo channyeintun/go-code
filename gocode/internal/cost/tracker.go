@@ -155,9 +155,15 @@ func (t *Tracker) RecordChildAgentSnapshot(snapshot TrackerSnapshot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.mergeSnapshotLocked(snapshot)
-	t.ChildAgentCostUSD += snapshot.TotalCostUSD
-	t.ChildAgentInputTokens += snapshot.TotalInputTokens
-	t.ChildAgentOutputTokens += snapshot.TotalOutputTokens
+	// Add only the child's own cost (excluding its own nested children) so that
+	// ChildAgent* fields are not double-counted: mergeSnapshotLocked already
+	// added snapshot.ChildAgentCostUSD via the ChildAgent* passthrough.
+	ownCost := snapshot.TotalCostUSD - snapshot.ChildAgentCostUSD
+	t.ChildAgentCostUSD += ownCost
+	ownInput := snapshot.TotalInputTokens - snapshot.ChildAgentInputTokens
+	t.ChildAgentInputTokens += ownInput
+	ownOutput := snapshot.TotalOutputTokens - snapshot.ChildAgentOutputTokens
+	t.ChildAgentOutputTokens += ownOutput
 }
 
 func (t *Tracker) mergeSnapshotLocked(snapshot TrackerSnapshot) {

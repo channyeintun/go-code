@@ -43,6 +43,7 @@ func NewOpenAICompatClient(provider, model, apiKey, baseURL string) (*OpenAIComp
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
+	warnCustomBaseURL(provider, preset.BaseURL, baseURL)
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
@@ -55,7 +56,7 @@ func NewOpenAICompatClient(provider, model, apiKey, baseURL string) (*OpenAIComp
 		model:        model,
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
-		httpClient:   &http.Client{},
+		httpClient:   newHTTPClient(),
 		capabilities: preset.Capabilities,
 	}, nil
 }

@@ -264,21 +264,28 @@ func countLines(data []byte) int {
 }
 
 // globalFileHistory is the package-level file history tracker, set during initialization.
-var globalFileHistory *FileHistory
+var globalFileHistory struct {
+	mu sync.RWMutex
+	h  *FileHistory
+}
 
 // SetGlobalFileHistory installs the active file history tracker.
 func SetGlobalFileHistory(h *FileHistory) {
-	globalFileHistory = h
+	globalFileHistory.mu.Lock()
+	defer globalFileHistory.mu.Unlock()
+	globalFileHistory.h = h
 }
 
 // GetGlobalFileHistory returns the active file history tracker, or nil.
 func GetGlobalFileHistory() *FileHistory {
-	return globalFileHistory
+	globalFileHistory.mu.RLock()
+	defer globalFileHistory.mu.RUnlock()
+	return globalFileHistory.h
 }
 
 // trackFileBeforeWrite records the current state of a file before modification.
 func trackFileBeforeWrite(path string) {
-	if h := globalFileHistory; h != nil {
+	if h := GetGlobalFileHistory(); h != nil {
 		_ = h.TrackEdit(path)
 	}
 }

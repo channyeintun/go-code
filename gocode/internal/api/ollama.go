@@ -33,15 +33,15 @@ func NewOllamaClient(model, apiKey, baseURL string) (*OllamaClient, error) {
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
+	warnCustomBaseURL("ollama", preset.BaseURL, baseURL)
 	if apiKey == "" {
 		apiKey = os.Getenv("OLLAMA_API_KEY")
 	}
-
 	return &OllamaClient{
 		model:        model,
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
-		httpClient:   &http.Client{},
+		httpClient:   newHTTPClient(),
 		capabilities: preset.Capabilities,
 	}, nil
 }

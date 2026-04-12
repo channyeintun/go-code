@@ -39,6 +39,7 @@ func NewAnthropicClient(model, apiKey, baseURL string) (*AnthropicClient, error)
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
+	warnCustomBaseURL("anthropic", preset.BaseURL, baseURL)
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
@@ -50,7 +51,7 @@ func NewAnthropicClient(model, apiKey, baseURL string) (*AnthropicClient, error)
 		model:        model,
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
-		httpClient:   &http.Client{},
+		httpClient:   newHTTPClient(),
 		capabilities: preset.Capabilities,
 	}, nil
 }
