@@ -20,8 +20,22 @@ type OpenAIResponsesClient struct {
 	model        string
 	baseURL      string
 	apiKey       string
+	apiKeyFunc   func() (string, error)
 	httpClient   *http.Client
 	capabilities ModelCapabilities
+}
+
+// SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
+// When set, the client calls this instead of using the static apiKey.
+func (c *OpenAIResponsesClient) SetAPIKeyFunc(fn func() (string, error)) {
+	c.apiKeyFunc = fn
+}
+
+func (c *OpenAIResponsesClient) resolveAPIKey() (string, error) {
+	if c.apiKeyFunc != nil {
+		return c.apiKeyFunc()
+	}
+	return c.apiKey, nil
 }
 
 // NewOpenAIResponsesClient constructs a streaming client for Responses-compatible providers.
@@ -69,9 +83,13 @@ func (c *OpenAIResponsesClient) Capabilities() ModelCapabilities {
 }
 
 func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
+	apiKey, err := c.resolveAPIKey()
+	if err != nil {
+		return err
+	}
 	headers := map[string]string{
 		"accept":        "application/json",
-		"authorization": "Bearer " + c.apiKey,
+		"authorization": "Bearer " + apiKey,
 	}
 	if c.provider == "github-copilot" {
 		for key, value := range GitHubCopilotStaticHeaders() {
@@ -118,6 +136,11 @@ func (c *OpenAIResponsesClient) openStream(ctx context.Context, payload openAIRe
 		return nil, fmt.Errorf("marshal OpenAI Responses request: %w", err)
 	}
 
+	apiKey, err := c.resolveAPIKey()
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		resp *http.Response
 		mu   sync.Mutex
@@ -130,7 +153,7 @@ func (c *OpenAIResponsesClient) openStream(ctx context.Context, payload openAIRe
 		}
 		req.Header.Set("content-type", "application/json")
 		req.Header.Set("accept", "text/event-stream")
-		req.Header.Set("authorization", "Bearer "+c.apiKey)
+		req.Header.Set("authorization", "Bearer "+apiKey)
 		for key, value := range extraHeaders {
 			req.Header.Set(key, value)
 		}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/channyeintun/gocode/internal/agent"
@@ -618,9 +619,11 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 			return nil, err
 		}
 		if client != nil {
+			refresher := newCopilotTokenRefresher(cfg.GitHubCopilot)
 			if capabilitiesOverride != nil {
 				client = api.WithCapabilities(client, *capabilitiesOverride)
 			}
+			api.SetAPIKeyFunc(client, refresher.resolve)
 			return client, nil
 		}
 	}
@@ -692,6 +695,53 @@ func resolveGitHubCopilotCapabilities(cfg config.Config, model string) (api.Mode
 		return api.ModelCapabilities{}, false
 	}
 	return capabilities, ok
+}
+
+// copilotTokenRefresher caches a GitHub Copilot access token and refreshes it
+// only when expired. The fast path is a single timestamp comparison.
+type copilotTokenRefresher struct {
+	mu               sync.Mutex
+	githubToken      string
+	enterpriseDomain string
+	accessToken      string
+	expiresAt        time.Time
+}
+
+func newCopilotTokenRefresher(creds config.GitHubCopilotAuth) *copilotTokenRefresher {
+	return &copilotTokenRefresher{
+		githubToken:      creds.GitHubToken,
+		enterpriseDomain: creds.EnterpriseDomain,
+		accessToken:      creds.AccessToken,
+		expiresAt:        time.UnixMilli(creds.ExpiresAtUnixMS),
+	}
+}
+
+func (r *copilotTokenRefresher) resolve() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.accessToken != "" && time.Now().Before(r.expiresAt) {
+		return r.accessToken, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	refreshed, err := api.RefreshGitHubCopilotToken(ctx, r.githubToken, r.enterpriseDomain)
+	if err != nil {
+		return "", fmt.Errorf("refresh GitHub Copilot token: %w", err)
+	}
+
+	r.accessToken = refreshed.AccessToken
+	r.expiresAt = refreshed.ExpiresAt
+
+	// Persist to config so other processes and restarts pick up the fresh token.
+	loaded := config.Load()
+	loaded.GitHubCopilot.AccessToken = refreshed.AccessToken
+	loaded.GitHubCopilot.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
+	_ = config.Save(loaded)
+
+	return r.accessToken, nil
 }
 
 const clientWarmupTimeout = 3 * time.Second

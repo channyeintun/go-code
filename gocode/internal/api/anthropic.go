@@ -27,8 +27,22 @@ type AnthropicClient struct {
 	model        string
 	baseURL      string
 	apiKey       string
+	apiKeyFunc   func() (string, error)
 	httpClient   *http.Client
 	capabilities ModelCapabilities
+}
+
+// SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
+// When set, the client calls this instead of using the static apiKey.
+func (c *AnthropicClient) SetAPIKeyFunc(fn func() (string, error)) {
+	c.apiKeyFunc = fn
+}
+
+func (c *AnthropicClient) resolveAPIKey() (string, error) {
+	if c.apiKeyFunc != nil {
+		return c.apiKeyFunc()
+	}
+	return c.apiKey, nil
 }
 
 // NewAnthropicClient constructs a streaming Anthropic client using configured defaults.
@@ -86,17 +100,21 @@ func (c *AnthropicClient) Capabilities() ModelCapabilities {
 // Warmup preconnects the Anthropic transport so the first real request avoids
 // paying the initial connection handshake cost on the critical path.
 func (c *AnthropicClient) Warmup(ctx context.Context) error {
+	apiKey, err := c.resolveAPIKey()
+	if err != nil {
+		return err
+	}
 	headers := map[string]string{
 		"accept":            "application/json",
 		"anthropic-version": anthropicVersion,
 	}
 	if c.provider == "github-copilot" {
-		headers["authorization"] = "Bearer " + c.apiKey
+		headers["authorization"] = "Bearer " + apiKey
 		for key, value := range GitHubCopilotStaticHeaders() {
 			headers[strings.ToLower(key)] = value
 		}
 	} else {
-		headers["x-api-key"] = c.apiKey
+		headers["x-api-key"] = apiKey
 	}
 
 	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/v1/messages", headers)
@@ -184,6 +202,11 @@ func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicReque
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
 
+	apiKey, err := c.resolveAPIKey()
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		resp *http.Response
 		mu   sync.Mutex
@@ -198,12 +221,12 @@ func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicReque
 		req.Header.Set("accept", "text/event-stream")
 		req.Header.Set("anthropic-version", anthropicVersion)
 		if c.provider == "github-copilot" {
-			req.Header.Set("authorization", "Bearer "+c.apiKey)
+			req.Header.Set("authorization", "Bearer "+apiKey)
 			for key, value := range GitHubCopilotStaticHeaders() {
 				req.Header.Set(key, value)
 			}
 		} else {
-			req.Header.Set("x-api-key", c.apiKey)
+			req.Header.Set("x-api-key", apiKey)
 		}
 		for key, value := range extraHeaders {
 			req.Header.Set(key, value)

@@ -190,6 +190,23 @@ type WarmupCapable interface {
 	Warmup(ctx context.Context) error
 }
 
+// APIKeyFuncSetter is implemented by clients that support lazy API key resolution.
+type APIKeyFuncSetter interface {
+	SetAPIKeyFunc(fn func() (string, error))
+}
+
+// SetAPIKeyFunc sets an API key resolver on the client if it supports it.
+// It unwraps decorator layers (e.g. WithCapabilities) to reach the inner client.
+func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
+	if setter, ok := client.(APIKeyFuncSetter); ok {
+		setter.SetAPIKeyFunc(fn)
+		return
+	}
+	if wrapper, ok := client.(*capabilitiesOverrideClient); ok {
+		SetAPIKeyFunc(wrapper.inner, fn)
+	}
+}
+
 func (c *capabilitiesOverrideClient) Warmup(ctx context.Context) error {
 	warmable, ok := c.inner.(WarmupCapable)
 	if !ok || warmable == nil {
