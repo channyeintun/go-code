@@ -318,3 +318,39 @@ Verification completed:
 - ran `make release-local` in `gocode/tui`
 
 ---
+
+## Task 12 — Align GitHub Copilot login and capability discovery with the references
+
+**Files**: `plan.md`, `gocode/internal/api/github_copilot.go`, `gocode/internal/api/client.go`, `gocode/cmd/gocode/engine.go`, `gocode/cmd/gocode/slash_commands.go`, `progress.md`
+
+Switched this phase from incremental Copilot bug fixes to a reference-alignment
+pass against `opencode` and `pi-mono`, focusing on the remaining provider-level
+ behaviors that were still missing from `gocode`.
+
+Implementation completed:
+
+- updated `plan.md` so the active work reflects the broader GitHub Copilot
+  parity pass rather than the earlier minimal `/connect` scope
+- improved GitHub Copilot device-flow polling to track the reference-style
+  interval multipliers and surface a clearer timeout when repeated `slow_down`
+  responses suggest clock drift
+- added GitHub Copilot model-policy enablement helpers and updated `/connect`
+  to best-effort enable the connected Copilot models after login instead of
+  stopping at raw token acquisition
+- added runtime GitHub Copilot `/models` discovery with a short timeout and a
+  24-hour in-memory cache so model metadata can be reused without hitting the
+  endpoint on every client creation
+- added dynamic Copilot capability resolution so the engine now derives tool
+  use, vision, reasoning support, JSON mode, and token limits from Copilot's
+  model metadata when available
+- wrapped Copilot clients with the resolved capabilities so both the main
+  session and Copilot subagents use the same discovered behavior without
+  changing the rest of the query loop
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go files
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
+---

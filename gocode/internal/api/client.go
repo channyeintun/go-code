@@ -159,10 +159,42 @@ type LLMClient interface {
 	Capabilities() ModelCapabilities
 }
 
+type capabilitiesOverrideClient struct {
+	inner        LLMClient
+	capabilities ModelCapabilities
+}
+
+func WithCapabilities(client LLMClient, capabilities ModelCapabilities) LLMClient {
+	if client == nil {
+		return nil
+	}
+	return &capabilitiesOverrideClient{inner: client, capabilities: capabilities}
+}
+
+func (c *capabilitiesOverrideClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
+	return c.inner.Stream(ctx, req)
+}
+
+func (c *capabilitiesOverrideClient) ModelID() string {
+	return c.inner.ModelID()
+}
+
+func (c *capabilitiesOverrideClient) Capabilities() ModelCapabilities {
+	return c.capabilities
+}
+
 // WarmupCapable is implemented by clients that can preconnect their transport
 // during startup without affecting normal request behavior.
 type WarmupCapable interface {
 	Warmup(ctx context.Context) error
+}
+
+func (c *capabilitiesOverrideClient) Warmup(ctx context.Context) error {
+	warmable, ok := c.inner.(WarmupCapable)
+	if !ok || warmable == nil {
+		return nil
+	}
+	return warmable.Warmup(ctx)
 }
 
 // StreamEventAdapter converts ModelEvents to IPC StreamEvents.

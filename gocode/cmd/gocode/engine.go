@@ -566,27 +566,52 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 
 	baseURL := cfg.BaseURL
 	apiKey := cfg.APIKey
+	var capabilitiesOverride *api.ModelCapabilities
+	if provider == "github-copilot" {
+		if capabilities, ok := resolveGitHubCopilotCapabilities(cfg, model); ok {
+			capabilitiesOverride = &capabilities
+		}
+	}
+
+	var client api.LLMClient
+	var err error
 	if provider == "github-copilot" {
 		switch {
 		case api.GitHubCopilotUsesAnthropicMessages(model):
-			return api.NewAnthropicClientForProvider(provider, model, apiKey, baseURL)
+			client, err = api.NewAnthropicClientForProvider(provider, model, apiKey, baseURL)
 		case api.GitHubCopilotUsesOpenAIResponses(model):
-			return api.NewOpenAIResponsesClient(provider, model, apiKey, baseURL)
+			client, err = api.NewOpenAIResponsesClient(provider, model, apiKey, baseURL)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if client != nil {
+			if capabilitiesOverride != nil {
+				client = api.WithCapabilities(client, *capabilitiesOverride)
+			}
+			return client, nil
 		}
 	}
 
 	switch api.Presets[provider].ClientType {
 	case api.AnthropicAPI:
-		return api.NewAnthropicClient(model, apiKey, baseURL)
+		client, err = api.NewAnthropicClient(model, apiKey, baseURL)
 	case api.GeminiAPI:
-		return api.NewGeminiClient(model, apiKey, baseURL)
+		client, err = api.NewGeminiClient(model, apiKey, baseURL)
 	case api.OpenAICompatAPI:
-		return api.NewOpenAICompatClient(provider, model, apiKey, baseURL)
+		client, err = api.NewOpenAICompatClient(provider, model, apiKey, baseURL)
 	case api.OllamaAPI:
-		return api.NewOllamaClient(model, apiKey, baseURL)
+		client, err = api.NewOllamaClient(model, apiKey, baseURL)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+	if err != nil {
+		return nil, err
+	}
+	if capabilitiesOverride != nil {
+		client = api.WithCapabilities(client, *capabilitiesOverride)
+	}
+	return client, nil
 }
 
 func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
@@ -629,6 +654,23 @@ func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func resolveGitHubCopilotCapabilities(cfg config.Config, model string) (api.ModelCapabilities, bool) {
+	accessToken := strings.TrimSpace(cfg.GitHubCopilot.AccessToken)
+	if accessToken == "" {
+		return api.ModelCapabilities{}, false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	capabilities, ok, err := api.ResolveGitHubCopilotModelCapabilities(ctx, accessToken, cfg.GitHubCopilot.EnterpriseDomain, model)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q: %v\n", model, err)
+		return api.ModelCapabilities{}, false
+	}
+	return capabilities, ok
 }
 
 const clientWarmupTimeout = 3 * time.Second

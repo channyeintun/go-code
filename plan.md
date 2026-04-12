@@ -61,3 +61,34 @@ Enable `gocode` to use GitHub Copilot models through a simple slash-command logi
 - Run `gofmt -w` on changed Go files.
 - Rebuild the local TUI/engine bundle used by `gocode`.
 - Do not add tests.
+
+## Reference-Alignment Follow-Up
+
+Align the existing GitHub Copilot implementation more closely with the proven
+`opencode` and `pi-mono` behavior so Copilot support is treated as a deliberate
+provider integration instead of a sequence of isolated compatibility fixes.
+
+### [MODIFY] `gocode/internal/api/github_copilot.go`
+
+- Improve device-flow polling to match reference behavior more closely:
+  - apply interval multipliers during polling
+  - handle repeated `slow_down` responses more defensibly
+  - surface a clearer timeout message when clock drift is likely
+- Add post-login model policy enablement helpers for Copilot models that require
+  explicit acceptance before use.
+- Add runtime `/models` discovery with short request timeouts and caching so
+  Copilot model capabilities can be derived from the provider response instead
+  of only hardcoded presets.
+
+### [MODIFY] `gocode/cmd/gocode/slash_commands.go`
+
+- After a successful GitHub Copilot login, best-effort enable the connected
+  Copilot models so default GPT-5.4 and Claude Haiku 4.5 usage works more like
+  the reference implementations.
+
+### [MODIFY] `gocode/cmd/gocode/engine.go`
+
+- Resolve GitHub Copilot model capabilities dynamically during client creation
+  and apply them consistently to the active client so tool use, vision,
+  reasoning, and token-budget behavior reflect the provider's current model
+  metadata.

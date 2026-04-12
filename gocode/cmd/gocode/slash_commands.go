@@ -126,6 +126,21 @@ func handleSlashCommand(
 				copilotAuth.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
 			}
 
+			policySummary := ""
+			if strings.TrimSpace(copilotAuth.AccessToken) != "" {
+				appendSlashResponse(bridge, "Enabling GitHub Copilot model policies...\n\n")
+				policyCtx, policyCancel := context.WithTimeout(ctx, 20*time.Second)
+				modelIDs := gitHubCopilotPolicyModels(persisted)
+				if discovered, discoverErr := api.ListGitHubCopilotModelIDs(policyCtx, copilotAuth.AccessToken, copilotAuth.EnterpriseDomain); discoverErr == nil {
+					modelIDs = mergeGitHubCopilotModelIDs(modelIDs, discovered)
+				}
+				failures := api.EnableGitHubCopilotModels(policyCtx, copilotAuth.AccessToken, copilotAuth.EnterpriseDomain, modelIDs)
+				policyCancel()
+				if total := len(modelIDs); total > 0 {
+					policySummary = fmt.Sprintf(" Enabled policy for %d/%d Copilot models.", total-len(failures), total)
+				}
+			}
+
 			persisted.GitHubCopilot = copilotAuth
 			persisted.Model = modelRef("github-copilot", api.Presets["github-copilot"].DefaultModel)
 			persisted.SubagentModel = modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
@@ -170,7 +185,7 @@ func handleSlashCommand(
 			if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
-			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set main model to %s, subagent model to github-copilot/%s, and reasoning effort to %s.", activeModelID, api.GitHubCopilotDefaultSubagentModel, persisted.ReasoningEffort)); err != nil {
+			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set main model to %s, subagent model to github-copilot/%s, and reasoning effort to %s.%s", activeModelID, api.GitHubCopilotDefaultSubagentModel, persisted.ReasoningEffort, policySummary)); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
 			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
@@ -546,6 +561,37 @@ func appendSlashResponse(bridge *ipc.Bridge, text string) {
 		return
 	}
 	_ = bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: text})
+}
+
+func gitHubCopilotPolicyModels(cfg config.Config) []string {
+	models := []string{
+		api.GitHubCopilotDefaultMainModel,
+		api.GitHubCopilotDefaultSubagentModel,
+	}
+	if provider, model := config.ParseModel(strings.TrimSpace(cfg.Model)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
+		models = append(models, model)
+	}
+	if provider, model := config.ParseModel(strings.TrimSpace(cfg.SubagentModel)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
+		models = append(models, model)
+	}
+	return mergeGitHubCopilotModelIDs(nil, models)
+}
+
+func mergeGitHubCopilotModelIDs(existing []string, extra []string) []string {
+	merged := make([]string, 0, len(existing)+len(extra))
+	seen := make(map[string]struct{}, len(existing)+len(extra))
+	for _, model := range append(append([]string(nil), existing...), extra...) {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		merged = append(merged, model)
+	}
+	return merged
 }
 
 func parseConnectArgs(args string) (string, string, error) {
