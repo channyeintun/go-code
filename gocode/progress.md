@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Planning only. No implementation has been started.
+Phase 1 complete. Preparing Phase 2.
 
 ## Completed
 
@@ -10,15 +10,10 @@ Planning only. No implementation has been started.
 - [x] Inspected `gocode` hotspots where classic patterns could help without changing behavior.
 - [x] Selected recommended pattern opportunities and explicitly rejected several low-value applications.
 - [x] Wrote `plan.md` with implementation guidance and guardrails.
+- [x] Implemented Phase 1: slash command dispatch now uses a handler registry plus a structured slash-command state object instead of the 8-value return tuple.
 
 ## Pending
 
-- [ ] Phase 1: Refactor slash command dispatch with a small command-style handler registry.
-  - [ ] Define a `SlashCommandHandler` interface and a structured state object replacing the 8-value return tuple.
-  - [ ] Create a command registry mapping command names to handlers.
-  - [ ] Extract each slash command branch into its own handler function or type.
-  - [ ] Wire the registry into `handleSlashCommand` as a lookup + dispatch.
-  - [ ] Verify all command names, outputs, and error semantics are preserved.
 - [ ] Phase 2: Consolidate provider client creation behind a factory-style layer.
   - [ ] Extend `Presets` / `ClientType` in `internal/api/provider_config.go` with a constructor-map or factory function per client type.
   - [ ] Move provider branching out of `newLLMClient` in `engine.go` into the factory layer.
@@ -42,6 +37,23 @@ Outcome:
 
 - Two patterns are worth applying: Command for slash command handling, and Factory Method for client creation.
 - Three others were evaluated and rejected: Chain of Responsibility for permissions (40-line method is already clear), Strategy for compaction (35-line cascade is already clear), and Decorator for tool execution (cross-cutting is already handled via function injection).
+
+### Task 2: Phase 1 Implementation
+
+Status: Completed
+
+Steps completed:
+
+1. Replaced the large `handleSlashCommand` switch with a registry-based dispatcher.
+2. Introduced a structured slash-command state object carrying session, model, mode, cwd, and messages.
+3. Moved each slash command branch into a focused handler function.
+4. Updated the engine call site to consume the structured state instead of an 8-value return tuple.
+5. Verified the CLI still builds with `go build ./cmd/gocode`.
+
+Outcome:
+
+- Slash command behavior remains centralized but no longer depends on a single 500+ line switch.
+- Session/model state updates are now passed through a single explicit state object, which makes later maintenance safer.
 
 ## Working Rules
 

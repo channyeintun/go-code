@@ -530,8 +530,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				return fmt.Errorf("decode slash command: %w", err)
 			}
 
-			var handled bool
-			handled, sessionID, startedAt, mode, activeModelID, cwd, messages, err = handleSlashCommand(
+			slashState, err := handleSlashCommand(
 				ctx,
 				bridge,
 				sessionStore,
@@ -551,11 +550,14 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			if err != nil {
 				return err
 			}
+			sessionID = slashState.SessionID
+			startedAt = slashState.StartedAt
+			mode = slashState.Mode
+			activeModelID = slashState.ActiveModelID
+			cwd = slashState.CWD
+			messages = slashState.Messages
 			modelState.Set(client, activeModelID)
-			if handled {
-				toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
-				continue
-			}
+			toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 			continue
 		case ipc.MsgModeToggle:
 			if mode == agent.ModePlan {
