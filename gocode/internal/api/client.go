@@ -75,9 +75,10 @@ type Message struct {
 
 // ToolCall represents a model-requested tool invocation.
 type ToolCall struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Input string `json:"input"` // JSON string
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Input            string `json:"input"` // JSON string
+	ThoughtSignature string `json:"thought_signature,omitempty"`
 }
 
 // ToolResult is the outcome of a tool execution.

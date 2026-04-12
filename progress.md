@@ -173,3 +173,11 @@ Tracking fixes per plan.md.
 - Rebuilt the current release with `cd gocode/tui && make release-local`.
 - Installed updated `gocode` and `gocode-engine` into `~/.local/bin` using `install -m 755`.
 - Verified `gocode` resolves from `~/.local/bin/gocode` and `gocode --help` runs successfully.
+
+### Task 22 — Preserve Gemini Thought Signatures on Tool Calls ✅
+
+- **Files:** `gocode/internal/api/client.go`, `gocode/internal/api/gemini.go`
+- Extended the shared `api.ToolCall` struct with `thought_signature` storage so Gemini tool-call metadata survives transcript persistence and replay.
+- The Gemini stream adapter now captures `thoughtSignature` from function-call parts, and `convertGeminiMessage(...)` reattaches that exact signature to the same function-call part when sending the next request.
+- This fixes Gemini validation failures like missing `thought_signature` on `functionCall` parts during tool loops.
+- Verified with `gofmt -w internal/api/client.go internal/api/gemini.go && go build ./...`.

@@ -201,9 +201,10 @@ func (c *GeminiClient) handleEvent(
 				if !yield(ModelEvent{
 					Type: ModelEventToolCall,
 					ToolCall: &ToolCall{
-						ID:    firstNonEmpty(part.FunctionCall.ID, part.FunctionCall.Name),
-						Name:  part.FunctionCall.Name,
-						Input: string(input),
+						ID:               firstNonEmpty(part.FunctionCall.ID, part.FunctionCall.Name),
+						Name:             part.FunctionCall.Name,
+						Input:            string(input),
+						ThoughtSignature: part.ThoughtSignature,
 					},
 				}, nil) {
 					return errStopStream
@@ -329,6 +330,7 @@ func convertGeminiMessage(msg Message, toolNames map[string]string) ([]geminiCon
 				return nil, err
 			}
 			parts = append(parts, geminiPart{
+				ThoughtSignature: toolCall.ThoughtSignature,
 				FunctionCall: &geminiFunctionCall{
 					ID:   toolCall.ID,
 					Name: toolCall.Name,
@@ -778,6 +780,7 @@ type geminiContent struct {
 type geminiPart struct {
 	Text             string                  `json:"text,omitempty"`
 	Thought          bool                    `json:"thought,omitempty"`
+	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
 	InlineData       *geminiInlineData       `json:"inlineData,omitempty"`
 	FunctionCall     *geminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *geminiFunctionResponse `json:"functionResponse,omitempty"`
