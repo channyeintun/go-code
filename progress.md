@@ -74,3 +74,14 @@ it when set. Delays exceeding `geminiMaxRetryAfter` (60 s) cause immediate failu
 rather than a long wait.
 
 ---
+
+## Task 32 — Retry on empty SSE stream
+
+**File**: `gocode/internal/api/gemini.go`
+
+`Stream` now retries up to `geminiMaxEmptyRetries = 2` times when Gemini returns
+a 200 OK with an empty SSE body (zero events). Backoff starts at 500 ms and
+doubles per attempt. If all retries are exhausted with an empty body, an
+`ErrOverloaded` error is propagated instead of silently yielding nothing.
+
+---

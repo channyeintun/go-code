@@ -71,6 +71,11 @@ func (c *GeminiClient) Warmup(ctx context.Context) error {
 	})
 }
 
+// geminiMaxEmptyRetries is the number of extra attempts when Gemini returns a
+// 200 OK but an empty SSE body (no events). Each retry doubles the backoff
+// starting at 500 ms.
+const geminiMaxEmptyRetries = 2
+
 // Stream opens a Gemini streamGenerateContent request and yields model events.
 func (c *GeminiClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
 	payload, err := c.buildRequest(req)
@@ -78,20 +83,45 @@ func (c *GeminiClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[
 		return nil, err
 	}
 
-	resp, err := c.openStream(ctx, payload)
-	if err != nil {
-		return nil, err
-	}
-
 	return func(yield func(ModelEvent, error) bool) {
-		defer resp.Body.Close()
+		for attempt := 0; attempt <= geminiMaxEmptyRetries; attempt++ {
+			if attempt > 0 {
+				delay := time.Duration(500<<uint(attempt-1)) * time.Millisecond
+				select {
+				case <-ctx.Done():
+					yield(ModelEvent{}, ctx.Err())
+					return
+				case <-time.After(delay):
+				}
+			}
 
-		state := geminiStreamState{}
-		err := readSSE(ctx, resp.Body, func(_ string, data string) error {
-			return c.handleEvent(data, &state, yield)
-		})
-		if err != nil && !errors.Is(err, errStopStream) {
-			yield(ModelEvent{}, err)
+			resp, err := c.openStream(ctx, payload)
+			if err != nil {
+				yield(ModelEvent{}, err)
+				return
+			}
+
+			state := geminiStreamState{}
+			eventCount := 0
+			sseErr := readSSE(ctx, resp.Body, func(_ string, data string) error {
+				eventCount++
+				return c.handleEvent(data, &state, yield)
+			})
+			resp.Body.Close()
+
+			if sseErr != nil && !errors.Is(sseErr, errStopStream) {
+				yield(ModelEvent{}, sseErr)
+				return
+			}
+
+			// Empty stream — retry if attempts remain.
+			if eventCount == 0 && attempt < geminiMaxEmptyRetries {
+				continue
+			}
+			if eventCount == 0 {
+				yield(ModelEvent{}, &APIError{Type: ErrOverloaded, Message: "Gemini returned an empty response stream"})
+			}
+			return
 		}
 	}, nil
 }
