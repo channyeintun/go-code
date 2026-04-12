@@ -828,6 +828,14 @@ Use the file-edit ladder deliberately:
 - file_write: full overwrite of one existing file only.
 - create_file: create a brand-new file only.
 
+For complex, multi-step tasks, follow a structured workflow:
+1. Research: Use read tools (file_read, glob, grep, bash with read-only commands) to understand the codebase and gather context before making changes.
+2. Plan: For non-trivial implementation work, save an implementation plan with save_implementation_plan. The user can review, request revisions, or approve it before you proceed.
+3. Track: Use upsert_task_list to break work into concrete checklist items. Mark items in-progress when starting and completed when done — keep the list current as a living document.
+4. Implement: Work through the task list deliberately. If unexpected complexity arises, pause and revise the plan before continuing.
+5. Verify: After implementation, run builds and tests. Save a walkthrough with save_walkthrough summarizing what changed and how it was validated.
+For simple tasks (single-file edits, quick questions, small fixes), skip straight to implementation — do not create unnecessary artifacts.
+
 Artifacts are first-class outputs in this runtime — durable, reviewable work products, not just overflow containers for long text. Use them intentionally:
 - save_implementation_plan: real implementation plans that the user will review before execution begins.
 - upsert_task_list: live multi-step progress tracking for ongoing work; update it as tasks complete.
