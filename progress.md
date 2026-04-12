@@ -96,3 +96,22 @@ Ran `make release-local` in `gocode/tui`, then installed both binaries:
 `gocode --help` confirms the updated binary resolves correctly.
 
 ---
+
+## Task 34 — Actionable error messages for plan-mode write blocks
+
+**File**: `gocode/internal/agent/planner.go`
+
+Improved the two error messages returned by `Planner.ValidateTool` when a write
+tool is blocked in plan mode:
+
+- **No plan yet**: now explicitly says _"call save_implementation_plan with a
+  complete implementation plan before modifying any files"_ instead of the vague
+  "finish the implementation plan before modifying files".
+- **Plan saved but awaiting review**: now says _"awaiting user review — do not
+  call write tools until the user approves the plan and the mode switches to
+  fast"_ so the model knows not to retry.
+
+These messages are returned as `isError: true` tool results that the model reads
+directly, so making them prescriptive prevents the model from looping.
+
+---

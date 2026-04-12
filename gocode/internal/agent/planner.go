@@ -71,10 +71,10 @@ func (p *Planner) ValidateTool(ctx context.Context, toolName string, permission 
 	}
 
 	if status == planStatusFinal {
-		return fmt.Errorf("write tool %q blocked in plan mode: implementation plan %q is ready; switch to /fast before modifying files", toolName, title)
+		return fmt.Errorf("write tool %q blocked in plan mode: implementation plan %q is ready and awaiting user review — do not call write tools until the user approves the plan and the mode switches to fast", toolName, title)
 	}
 
-	return fmt.Errorf("write tool %q blocked in plan mode: finish the implementation plan before modifying files", toolName)
+	return fmt.Errorf("write tool %q blocked in plan mode: you must call save_implementation_plan with a complete implementation plan before modifying any files — write the plan, save it, and wait for the user to review and approve it", toolName)
 }
 
 // PlanModePromptHint returns the instruction that keeps plan mode read-only.
