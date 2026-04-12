@@ -152,3 +152,17 @@ Tracking fixes per plan.md.
 - The sanitizer strips unsupported metadata keys, filters `required` to declared properties, removes object-only keywords from non-object nodes, and flattens the alias-style `anyOf` / `allOf` required groups used by `gocode` tools into Gemini-safe top-level `required` fields.
 - Preferred canonical required fields are selected with a stable heuristic (`path`/`input`/snake_case before camel/PascalCase), so Gemini sees a smaller compatible parameter surface while runtime compatibility aliases remain accepted by the tool executor.
 - Verified with `gofmt -w internal/api/gemini.go && go build ./...`.
+
+### Task 19 — Install Latest Local Build After Gemini Fix ✅
+
+- **Method:** Re-ran the documented local-clone install flow from `gocode/README.md`.
+- Rebuilt the current release with `cd gocode/tui && make release-local`.
+- Installed updated `gocode` and `gocode-engine` into `~/.local/bin` using `install -m 755`.
+- Verified `gocode` resolves from `~/.local/bin/gocode` and `gocode --help` runs successfully.
+
+### Task 20 — Execute Gemini Tool Calls Independent of Stop Reason ✅
+
+- **File:** `gocode/internal/agent/loop.go`
+- Changed the main agent loop to execute a tool batch whenever the model emitted tool calls, instead of requiring `stopReason == "tool_use"`.
+- This fixes Gemini turns where the model returns `functionCall` parts together with `finishReason: STOP`, which previously surfaced as a completed turn with no assistant text and no file operation.
+- Verified with `gofmt -w internal/agent/loop.go && go build ./...`.

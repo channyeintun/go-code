@@ -112,7 +112,7 @@ func runIteration(
 		return nil
 	}
 
-	if turn.stopReason == "tool_use" && len(turn.toolCalls) > 0 {
+	if len(turn.toolCalls) > 0 {
 		results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
 		if err != nil {
 			return err
