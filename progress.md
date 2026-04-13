@@ -17,3 +17,4 @@
 - Documented the new debug workflow and JSONL piping examples in `chan/README.md`.
 - Updated `web/docs.html` with the new `/debug` and `chan debug-view` workflow details.
 - Restored the animated gradient NDJSON connector in the architecture section styling for `web/index.html` via `web/styles.css`.
+- Adjusted the architecture visual layout so the NDJSON connector line now physically touches and bridges both boxes.
