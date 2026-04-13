@@ -15,3 +15,5 @@
 - Updated the Bun launcher so installed `chan debug-view ...` forwards to the Go engine instead of opening the TUI.
 - Rebound debug session output on `/clear` and `/resume` so logging follows the active session.
 - Documented the new debug workflow and JSONL piping examples in `chan/README.md`.
+- Updated `web/docs.html` with the new `/debug` and `chan debug-view` workflow details.
+- Restored the animated gradient NDJSON connector in the architecture section styling for `web/index.html` via `web/styles.css`.

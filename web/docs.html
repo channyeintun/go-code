@@ -195,6 +195,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
                                 <tr><td class="p-4 border-t border-[#1a1a1a]"><code>/status</code></td><td class="p-4 border-t border-[#1a1a1a]">Show current session status</td></tr>
                                 <tr><td class="p-4 border-t border-[#1a1a1a]"><code>/sessions</code></td><td class="p-4 border-t border-[#1a1a1a]">List recent sessions</td></tr>
                                 <tr><td class="p-4 border-t border-[#1a1a1a]"><code>/diff [args]</code></td><td class="p-4 border-t border-[#1a1a1a]">Show git diff (e.g. <code>--staged</code>)</td></tr>
+                                <tr><td class="p-4 border-t border-[#1a1a1a]"><code>/debug [status|path|off]</code></td><td class="p-4 border-t border-[#1a1a1a]">Enable live debug capture, open the monitor, or inspect the current session log</td></tr>
                                 <tr><td class="p-4 border-t border-[#1a1a1a]"><code>/help</code></td><td class="p-4 border-t border-[#1a1a1a]">Show command help</td></tr>
                             </tbody>
                         </table>
@@ -287,12 +288,31 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
                 <section id="debug" class="mb-24">
                     <h2 class="subsection-title text-3xl font-bold mb-6">Diagnostics</h2>
                     <p class="text-gray-400 mb-6 leading-relaxed">
-                        To capture low-level runtime diagnostics for provider streams, tool traffic, and IPC, launch with the debug flag:
+                        Chan now supports both startup debug capture and live session capture. The canonical log format is structured JSONL so you can tail it directly or pipe it into external monitoring tools.
                     </p>
-                    <pre class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 mb-6"><code>CHAN_DEBUG=1 chan</code></pre>
-                    <p class="text-xs text-gray-600">
-                        This writes a structured <code>debug.log</code> to <code>~/.config/chan/sessions/&lt;id&gt;/debug.log</code>.
-                    </p>
+                    <div class="space-y-6">
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">From Launch</p>
+                            <pre class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"><code>CHAN_DEBUG=1 chan</code></pre>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Inside The TUI</p>
+                            <pre class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"><code>/debug
+/debug status
+/debug path
+/debug off</code></pre>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Manual Monitor</p>
+                            <pre class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"><code>chan debug-view --file ~/.config/chan/sessions/&lt;session-id&gt;/debug.log
+tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
+                        </div>
+                    </div>
+                    <ul class="mt-8 space-y-3 text-sm text-gray-400 leading-relaxed">
+                        <li>&bull; On macOS, <code>/debug</code> opens a new Terminal window with the live monitor attached to the current session log.</li>
+                        <li>&bull; Each line in <code>debug.log</code> is a structured event envelope with fields like <code>schema_version</code>, <code>ts</code>, <code>session_id</code>, <code>component</code>, <code>event</code>, <code>level</code>, <code>metrics</code>, <code>data</code>, and <code>error</code>.</li>
+                        <li>&bull; Sensitive raw payloads are redacted and truncated before they are written to the log.</li>
+                    </ul>
                 </section>
 
                 <!-- Arch / Build -->

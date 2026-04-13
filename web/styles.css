@@ -285,6 +285,101 @@ td {
     position: relative;
 }
 
+.node-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.tech-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 999px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8a8a8a;
+}
+
+.stream-connector {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stream-connector::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(255, 64, 0, 0.1) 0%, rgba(255, 64, 0, 0.95) 50%, rgba(255, 64, 0, 0.1) 100%);
+    background-size: 100% 220%;
+    animation: ndjson-stream-flow 2.8s linear infinite;
+    box-shadow: 0 0 24px rgba(255, 64, 0, 0.35);
+}
+
+.stream-pulse {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 64, 0, 0.55);
+    background: radial-gradient(circle, rgba(255, 64, 0, 0.85) 0%, rgba(255, 64, 0, 0.18) 50%, rgba(255, 64, 0, 0) 100%);
+    box-shadow: 0 0 24px rgba(255, 64, 0, 0.4);
+    animation: ndjson-stream-pulse 1.8s ease-in-out infinite;
+}
+
+.stream-label {
+    position: relative;
+    z-index: 1;
+    padding: 0.45rem 0.8rem;
+    border: 1px solid rgba(255, 64, 0, 0.18);
+    background: rgba(5, 5, 5, 0.94);
+    border-radius: 999px;
+    color: #ff8d68;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 12px 30px -18px rgba(255, 64, 0, 0.7);
+}
+
+@keyframes ndjson-stream-flow {
+    0% {
+        background-position: 0 0%;
+    }
+    100% {
+        background-position: 0 220%;
+    }
+}
+
+@keyframes ndjson-stream-pulse {
+    0%,
+    100% {
+        opacity: 0.65;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.12);
+    }
+}
+
 /* Mobile Nav Drawer */
 #mobile-drawer {
     position: fixed;
