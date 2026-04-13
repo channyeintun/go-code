@@ -10,17 +10,31 @@ interface StreamingAssistantMessageProps {
   blocks: UIAssistantBlock[];
   statusLabel: string;
   model?: string;
+  showThinking?: boolean;
+  thinkingShortcutLabel?: string;
 }
 
 const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
   blocks,
   statusLabel,
   model,
+  showThinking = false,
+  thinkingShortcutLabel = "Opt+T",
 }) => {
+  const visibleBlocks = showThinking
+    ? blocks
+    : blocks.filter((block) => block.kind !== "thinking");
   const activeThinkingIndex =
-    statusLabel === "Thinking" ? findLastBlockIndex(blocks, "thinking") : -1;
+    statusLabel === "Thinking" && showThinking
+      ? findLastBlockIndex(visibleBlocks, "thinking")
+      : -1;
   const showStatusRow = !(
     statusLabel === "Thinking" && activeThinkingIndex >= 0
+  );
+  const statusText = formatStatusLabel(
+    statusLabel,
+    showThinking,
+    thinkingShortcutLabel,
   );
 
   return (
@@ -37,10 +51,10 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
       <Box flexDirection="column">
         {showStatusRow ? (
           <Text color="gray">
-            <Spinner type="dots" /> {statusLabel}
+            <Spinner type="dots" /> {statusText}
           </Text>
         ) : null}
-        {blocks.map((block, index) => (
+        {visibleBlocks.map((block, index) => (
           <Box
             key={`${block.kind}-${index}`}
             marginTop={showStatusRow || index > 0 ? 1 : 0}
@@ -49,11 +63,12 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
               <AssistantThinkingMessage
                 text={block.text}
                 streaming={index === activeThinkingIndex}
+                toggleHint={`${thinkingShortcutLabel} to hide`}
               />
             ) : (
               <MarkdownText
                 text={block.text}
-                streaming={index === blocks.length - 1}
+                streaming={index === visibleBlocks.length - 1}
               />
             )}
           </Box>
@@ -75,4 +90,18 @@ function findLastBlockIndex(
     }
   }
   return -1;
+}
+
+function formatStatusLabel(
+  statusLabel: string,
+  showThinking: boolean,
+  thinkingShortcutLabel: string,
+): string {
+  if (statusLabel !== "Thinking") {
+    return statusLabel;
+  }
+
+  return showThinking
+    ? `Thinking (${thinkingShortcutLabel} to hide)`
+    : `Thinking (${thinkingShortcutLabel} to show)`;
 }

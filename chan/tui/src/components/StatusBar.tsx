@@ -8,6 +8,7 @@ import {
 import type {
   UIArtifact,
   UIArtifactReview,
+  UIBackgroundAgent,
   UIBackgroundCommand,
   UIRateLimits,
 } from "../hooks/useEvents.js";
@@ -33,6 +34,7 @@ interface StatusBarProps {
   artifacts: UIArtifact[];
   focusedArtifactId?: string | null;
   pendingArtifactReview?: UIArtifactReview | null;
+  backgroundAgents: UIBackgroundAgent[];
   backgroundCommands: UIBackgroundCommand[];
   rateLimits: UIRateLimits;
   queuedPromptCount?: number;
@@ -59,6 +61,7 @@ const StatusBar: FC<StatusBarProps> = ({
   artifacts,
   focusedArtifactId,
   pendingArtifactReview,
+  backgroundAgents,
   backgroundCommands,
   rateLimits,
   queuedPromptCount = 0,
@@ -99,6 +102,7 @@ const StatusBar: FC<StatusBarProps> = ({
     focusedArtifactId,
     pendingArtifactReview,
   );
+  const backgroundAgentSummary = summarizeBackgroundAgents(backgroundAgents);
   const backgroundCommandSummary =
     summarizeBackgroundCommands(backgroundCommands);
 
@@ -168,6 +172,13 @@ const StatusBar: FC<StatusBarProps> = ({
               {" "}
               {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}
             </Text>
+          </>
+        ) : null}
+        {backgroundAgentSummary ? (
+          <>
+            <Text color="gray"> · </Text>
+            <Text color="cyan">bg</Text>
+            <Text color="gray"> {backgroundAgentSummary}</Text>
           </>
         ) : null}
         {backgroundCommandSummary ? (
@@ -241,6 +252,37 @@ function rateLimitColor(usedPercentage: number): "gray" | "yellow" | "red" {
     return "yellow";
   }
   return "gray";
+}
+
+function summarizeBackgroundAgents(
+  backgroundAgents: UIBackgroundAgent[],
+): string | null {
+  if (!Array.isArray(backgroundAgents) || backgroundAgents.length === 0) {
+    return null;
+  }
+
+  const activeCount = backgroundAgents.filter(
+    (agent) => agent.status === "running" || agent.status === "cancelling",
+  ).length;
+  const failedCount = backgroundAgents.filter(
+    (agent) => agent.status === "failed",
+  ).length;
+  const completedCount = backgroundAgents.filter(
+    (agent) => agent.status === "completed",
+  ).length;
+
+  const parts: string[] = [];
+  if (activeCount > 0) {
+    parts.push(`${activeCount} active`);
+  }
+  if (failedCount > 0) {
+    parts.push(`${failedCount} failed`);
+  }
+  if (completedCount > 0) {
+    parts.push(`${completedCount} done`);
+  }
+
+  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 function summarizeBackgroundCommands(

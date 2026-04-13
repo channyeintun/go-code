@@ -5,6 +5,7 @@ import Spinner from "ink-spinner";
 interface AssistantThinkingMessageProps {
   text: string;
   streaming?: boolean;
+  toggleHint?: string;
 }
 
 function truncateThinking(text: string, maxLines: number): string {
@@ -15,6 +16,7 @@ function truncateThinking(text: string, maxLines: number): string {
 const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
   text,
   streaming = false,
+  toggleHint,
 }) => {
   const content = useMemo(
     () => (streaming ? truncateThinking(text, 4) : text.trimEnd()),
@@ -29,6 +31,7 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
       <Text color="gray" italic>
         {streaming ? <Spinner type="dots" /> : null}
         {streaming ? " Thinking" : "Thinking"}
+        {toggleHint ? ` (${toggleHint})` : ""}
       </Text>
       <Text color="gray">{content}</Text>
     </Box>

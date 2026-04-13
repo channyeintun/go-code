@@ -4,8 +4,6 @@ import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
-import BackgroundAgentsPanel from "./components/BackgroundAgentsPanel.js";
-import BackgroundCommandsPanel from "./components/BackgroundCommandsPanel.js";
 import Input from "./components/Input.js";
 import PlanPanel from "./components/PlanPanel.js";
 import PromptFooter from "./components/PromptFooter.js";
@@ -22,6 +20,8 @@ import type {
   PermissionResponseDecision,
   UserInputImagePayload,
 } from "./protocol/types.js";
+
+const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
 
 interface AppProps {
   enginePath: string;
@@ -61,6 +61,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     useState(0);
   const [transcriptSearchMatchCount, setTranscriptSearchMatchCount] =
     useState(0);
+  const [showThinking, setShowThinking] = useState(false);
   const {
     uiState,
     handleEvent,
@@ -294,6 +295,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     [],
   );
 
+  const handleThinkingVisibilityToggle = useCallback(() => {
+    setShowThinking((current) => !current);
+  }, []);
+
   return (
     <Box flexDirection="column" height="100%">
       <StatusBar
@@ -317,6 +322,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         artifacts={uiState.artifacts}
         focusedArtifactId={uiState.focusedArtifactId}
         pendingArtifactReview={uiState.pendingArtifactReview}
+        backgroundAgents={uiState.backgroundAgents}
         backgroundCommands={uiState.backgroundCommands}
         rateLimits={uiState.rateLimits}
         queuedPromptCount={queuedPrompts.length}
@@ -361,18 +367,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           isStreaming={uiState.isStreaming}
           activeTurnStatus={uiState.activeTurnStatus}
           model={uiState.model}
+          showThinking={showThinking}
+          thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
           transcriptSearchQuery={transcriptSearchQuery}
           transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
           onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
         />
-
-        {uiState.backgroundAgents.length > 0 && (
-          <BackgroundAgentsPanel agents={uiState.backgroundAgents} />
-        )}
-
-        {uiState.backgroundCommands.length > 0 && (
-          <BackgroundCommandsPanel commands={uiState.backgroundCommands} />
-        )}
 
         {uiState.error && (
           <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
@@ -457,6 +457,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onImagePaste={handleImagePaste}
               onPasteWarning={handlePasteWarning}
               onModeToggle={engine.sendModeToggle}
+              onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
               onCancel={handleCancel}
               disabled={isPromptDisabled}
             />
@@ -483,6 +484,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             cursorOffset={prompt.cursorOffset}
             blockedReason={promptBlockedReason}
             queuedPromptCount={queuedPrompts.length}
+            thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
           />
         </Box>
       )}

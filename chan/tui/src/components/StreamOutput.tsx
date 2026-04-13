@@ -25,6 +25,8 @@ interface StreamOutputProps {
   isStreaming: boolean;
   activeTurnStatus: UIActiveTurnStatus;
   model: string;
+  showThinking?: boolean;
+  thinkingShortcutLabel?: string;
   transcriptSearchQuery?: string;
   transcriptSearchSelectedIndex?: number;
   onTranscriptSearchStatsChange?: (
@@ -63,6 +65,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
   isStreaming,
   activeTurnStatus,
   model,
+  showThinking = false,
+  thinkingShortcutLabel = "Opt+T",
   transcriptSearchQuery = "",
   transcriptSearchSelectedIndex = 0,
   onTranscriptSearchStatsChange,
@@ -135,7 +139,10 @@ const StreamOutput: FC<StreamOutputProps> = ({
       ? -1
       : Math.max(
           0,
-          Math.min(transcriptSearchSelectedIndex, searchMatchIndices.length - 1),
+          Math.min(
+            transcriptSearchSelectedIndex,
+            searchMatchIndices.length - 1,
+          ),
         );
 
   useEffect(() => {
@@ -331,6 +338,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
         <StreamingAssistantMessage
           blocks={liveBlocks}
           model={model}
+          showThinking={showThinking}
+          thinkingShortcutLabel={thinkingShortcutLabel}
           statusLabel={activeTurnStatusLabel(liveBlocks, activeTurnStatus)}
         />
       ) : null}
@@ -536,7 +545,10 @@ function blockSearchText(block: TranscriptBlock): string {
 function messageSearchText(message: UIMessage): string {
   switch (message.role) {
     case "assistant":
-      return message.blocks.map((block) => block.text).join("\n").toLowerCase();
+      return message.blocks
+        .map((block) => block.text)
+        .join("\n")
+        .toLowerCase();
     case "system":
     case "user":
       return message.text.toLowerCase();
@@ -553,7 +565,9 @@ function toolCallSearchText(toolCall: UIToolCall): string {
     toolCall.error,
     toolCall.preview,
   ]
-    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .filter(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    )
     .join("\n")
     .toLowerCase();
 }

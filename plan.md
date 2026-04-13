@@ -1,0 +1,19 @@
+# Plan
+
+## Goal
+
+Reduce TUI distraction by aligning the default interaction flow more closely with the ClaudeCode reference in `sourcecode/`.
+
+## Reference Notes
+
+- `sourcecode/hooks/useCancelRequest.ts`: background work is surfaced through lightweight notifications instead of a persistent panel.
+- `sourcecode/hooks/useTypeahead.tsx`: thinking is not pushed into the transcript by default; the UI points to a keyboard shortcut instead.
+- `sourcecode/components/Spinner.tsx`: active work stays compact, centered around a narrow status line rather than expanded panels.
+- `sourcecode/components/FileEditToolUpdatedMessage.tsx`: file edits can be condensed to a short summary instead of always expanding the diff inline.
+
+## Tasks
+
+1. Remove persistent background agent and background command panels from the main TUI surface while preserving status visibility.
+2. Hide streaming thinking content by default and add an explicit keyboard shortcut affordance to reveal or hide it.
+3. Collapse inline file diff previews in the transcript to concise mutation summaries.
+4. Regenerate the TUI build output, update progress tracking, and commit the completed task.

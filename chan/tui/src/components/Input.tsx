@@ -16,6 +16,7 @@ interface InputProps {
   onImagePaste: (images: PastedImageData[]) => void;
   onPasteWarning: (warnings: string[]) => void;
   onModeToggle: () => void;
+  onThinkingVisibilityToggle: () => void;
   onCancel: () => void;
   disabled?: boolean;
 }
@@ -110,6 +111,7 @@ const Input: FC<InputProps> = ({
   onImagePaste,
   onPasteWarning,
   onModeToggle,
+  onThinkingVisibilityToggle,
   onCancel,
   disabled,
 }) => {
@@ -150,6 +152,12 @@ const Input: FC<InputProps> = ({
       onCancel();
       return;
     }
+
+    if ((key.meta && input.toLowerCase() === "t") || input === "†") {
+      onThinkingVisibilityToggle();
+      return;
+    }
+
     if (disabled) return;
 
     if (key.tab) {
@@ -330,9 +338,7 @@ const Input: FC<InputProps> = ({
               <Text color="cyan" bold>
                 {promptMarker}
               </Text>
-              <Text color="gray">
-                Ask chan to inspect, plan, or edit code
-              </Text>
+              <Text color="gray">Ask chan to inspect, plan, or edit code</Text>
               <Text color="gray">{"█"}</Text>
             </Box>
           ) : (

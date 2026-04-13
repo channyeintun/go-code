@@ -1,0 +1,13 @@
+# Progress
+
+## Active Task
+
+- Completed: reduced transcript and panel distraction in the TUI by adopting ClaudeCode-style status-first affordances.
+
+## Notes
+
+- Planning and reference review completed.
+- Removed persistent background agent and background command panels from the main surface.
+- Kept background work visible through the status bar summaries and existing status notices.
+- Hid streaming thinking content by default and added an explicit `Opt+T` reveal/hide shortcut.
+- Collapsed inline file diff previews to concise mutation summaries so edits no longer dominate the transcript.

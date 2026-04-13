@@ -31,12 +31,8 @@ interface PromptFooterProps {
   cursorOffset?: number;
   blockedReason?: string | null;
   queuedPromptCount?: number;
+  thinkingShortcutLabel?: string;
 }
-
-const INPUT_HINT =
-  "Enter send | Ctrl+O newline | Ctrl+G transcript search | PgUp/PgDn transcript | Home/End jump | Tab mode | Esc cancel";
-const DISABLED_HINT =
-  "Engine busy | PgUp/PgDn transcript | Home/End jump | Esc cancel";
 
 const PromptFooter: FC<PromptFooterProps> = ({
   mode,
@@ -55,6 +51,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   cursorOffset = 0,
   blockedReason,
   queuedPromptCount = 0,
+  thinkingShortcutLabel = "Opt+T",
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -103,7 +100,10 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => buildActivityDetails(blockedReason, queuedPromptCount),
     [blockedReason, queuedPromptCount],
   );
-  const hint = disabled ? DISABLED_HINT : INPUT_HINT;
+  const hint = useMemo(
+    () => buildInputHint(disabled, thinkingShortcutLabel),
+    [disabled, thinkingShortcutLabel],
+  );
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
     [totalCostUsd],
@@ -262,6 +262,14 @@ function buildActivityDetails(
   return parts.length > 0 ? parts.join("  ") : null;
 }
 
+function buildInputHint(disabled: boolean | undefined, shortcutLabel: string) {
+  const shared = `PgUp/PgDn transcript | Home/End jump | ${shortcutLabel} thinking | Esc cancel`;
+  if (disabled) {
+    return `Engine busy | ${shared}`;
+  }
+  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | Tab mode | ${shared}`;
+}
+
 function buildMemoryRecallText(
   memoryRecall: PromptFooterProps["memoryRecall"],
 ): string | null {
@@ -309,9 +317,7 @@ function formatLatencyMs(value: number): string {
   const totalMinutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   if (totalMinutes < 60) {
-    return seconds === 0
-      ? `${totalMinutes}m`
-      : `${totalMinutes}m ${seconds}s`;
+    return seconds === 0 ? `${totalMinutes}m` : `${totalMinutes}m ${seconds}s`;
   }
 
   const hours = Math.floor(totalMinutes / 60);
