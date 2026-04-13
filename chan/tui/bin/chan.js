@@ -3,6 +3,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +23,17 @@ process.env["CHAN_ENGINE_PATH"] ??= enginePath;
 
 // Forward CLI args as env overrides
 const args = process.argv.slice(2);
+if (args[0] === "debug-view") {
+  const result = spawnSync(enginePath, args, {
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  process.exit(result.status ?? 0);
+}
+
 for (let i = 0; i < args.length; i++) {
   if ((args[i] === "--model" || args[i] === "-m") && args[i + 1]) {
     process.env["CHAN_MODEL"] = args[++i];

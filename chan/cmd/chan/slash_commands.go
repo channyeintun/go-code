@@ -88,6 +88,12 @@ var slashCommandCatalog = []slashCommandDescriptor{
 		TakesArguments: true,
 	},
 	{
+		Name:           "debug",
+		Description:    "Enable live debug logging and open the monitor popup",
+		Usage:          "/debug [status|path|off]",
+		TakesArguments: true,
+	},
+	{
 		Name:        "help",
 		Description: "Show the slash-command help text",
 		Usage:       "/help",

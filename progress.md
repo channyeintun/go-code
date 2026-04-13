@@ -2,14 +2,16 @@
 
 ## Active Task
 
-- In progress: planning structured debug logs and a live monitor flow for `/debug`.
+- Completed: implemented structured debug logging and a live monitor flow for `/debug`.
 
 ## Notes
 
-- Reviewed the current debug logging path in `chan/internal/debuglog`.
-- Confirmed the existing logger already writes one JSON object per line to the session debug log.
-- Confirmed slash commands are handled in `chan/cmd/chan/slash_command_handlers.go` and cataloged in `chan/cmd/chan/slash_commands.go`.
-- Confirmed the TUI sends slash commands through `chan/tui/src/hooks/useEngine.ts`.
-- Confirmed macOS process launch via `osascript` already exists in the TUI utilities and can be reused for a terminal popup design.
-- Decided the canonical live format should remain JSONL, with CSV or YAML only as downstream transforms if needed.
-- No implementation has started yet.
+- Reworked `chan/internal/debuglog` into a runtime-configurable JSONL logger with a versioned event envelope.
+- Added centralized secret redaction and truncation for raw IPC and SSE payload logging.
+- Switched IPC, SSE, and client debug wrappers to stay active so `/debug` can start capturing mid-session.
+- Added `/debug`, `/debug status`, `/debug path`, and `/debug off` to the Go slash command layer.
+- Added `chan debug-view --file <path>` as a standalone live monitor command.
+- Added macOS Terminal popup launching for `/debug` using AppleScript.
+- Updated the Bun launcher so installed `chan debug-view ...` forwards to the Go engine instead of opening the TUI.
+- Rebound debug session output on `/clear` and `/resume` so logging follows the active session.
+- Documented the new debug workflow and JSONL piping examples in `chan/README.md`.

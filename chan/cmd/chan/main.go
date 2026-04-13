@@ -48,6 +48,7 @@ func main() {
 		},
 	}
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(newDebugViewCommand())
 
 	// Make "run" the default command
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {

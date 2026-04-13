@@ -18,6 +18,16 @@ func newDebugClientProxy(inner api.LLMClient) *debugClientProxy {
 	return &debugClientProxy{inner: inner}
 }
 
+func wrapClientWithDebug(inner api.LLMClient) api.LLMClient {
+	if inner == nil {
+		return nil
+	}
+	if _, ok := inner.(*debugClientProxy); ok {
+		return inner
+	}
+	return newDebugClientProxy(inner)
+}
+
 func (p *debugClientProxy) Stream(ctx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
 	debuglog.Log("client", "stream_request", map[string]any{
 		"model":            p.inner.ModelID(),

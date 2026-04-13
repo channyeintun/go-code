@@ -19,11 +19,7 @@ func (r *SSEReaderProxy) Read(p []byte) (int, error) {
 	n, err := r.inner.Read(p)
 	if n > 0 {
 		raw := string(p[:n])
-		// Truncate large payloads in log to avoid bloat.
-		logRaw := raw
-		if len(logRaw) > 2048 {
-			logRaw = logRaw[:2048] + "...(truncated)"
-		}
+		logRaw := Truncate(RedactSecrets(raw), 2048)
 		Log("sse", "read", map[string]any{
 			"provider": r.provider,
 			"bytes":    n,

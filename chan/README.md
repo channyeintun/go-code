@@ -166,6 +166,7 @@ chan --help                        # Show help
 | `/status`            | Show the current session status                |
 | `/sessions`          | List recent sessions                           |
 | `/diff [args]`       | Show git diff (for example `/diff --staged`)   |
+| `/debug [subcommand]`| Enable live debug logging or inspect its path  |
 | `/help`              | Show the slash-command help text               |
 
 ### Permission System
@@ -280,13 +281,35 @@ If you use GitHub Copilot, the config file will also persist Copilot credentials
 
 ### Debug Logging
 
-To capture low-level runtime diagnostics for provider streams, tool traffic, IPC, and model-event sequencing, launch `chan` with:
+To capture low-level runtime diagnostics for provider streams, tool traffic, IPC, and model-event sequencing from launch, start `chan` with:
 
 ```bash
 CHAN_DEBUG=1 chan
 ```
 
-This writes a structured `debug.log` into the current session directory under `~/.config/chan/sessions/<session-id>/debug.log`.
+You can also enable debug capture for the active session from inside the TUI:
+
+```bash
+/debug
+```
+
+On macOS, `/debug` enables structured JSONL logging for the current session and opens a new Terminal window running the live monitor.
+
+Debug logs are written to `~/.config/chan/sessions/<session-id>/debug.log` as one JSON object per line with a stable envelope including fields such as `schema_version`, `ts`, `session_id`, `source`, `component`, `category`, `event`, `level`, `seq`, `metrics`, `data`, and `error`.
+
+You can inspect the stream manually at any time:
+
+```bash
+chan debug-view --file ~/.config/chan/sessions/<session-id>/debug.log
+tail -F ~/.config/chan/sessions/<session-id>/debug.log | jq .
+```
+
+Useful slash command variants:
+
+- `/debug` enables debug capture for the active session and opens the monitor popup.
+- `/debug status` shows whether debug capture is active for the current session.
+- `/debug path` prints the current session log path.
+- `/debug off` disables debug capture.
 
 ## Architecture
 

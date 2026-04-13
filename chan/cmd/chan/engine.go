@@ -36,12 +36,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		debuglog.Enabled = true
 	}
 
-	var stdinR io.Reader = os.Stdin
-	var stdoutW io.Writer = os.Stdout
-	if debuglog.Enabled {
-		stdinR = debuglog.NewIPCReader(os.Stdin)
-		stdoutW = debuglog.NewIPCWriter(os.Stdout)
-	}
+	var stdinR io.Reader = debuglog.NewIPCReader(os.Stdin)
+	var stdoutW io.Writer = debuglog.NewIPCWriter(os.Stdout)
 
 	bridge := ipc.NewBridge(stdinR, stdoutW)
 	registry := toolpkg.NewRegistry()
@@ -59,9 +55,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	} else {
 		activeModelID = modelRef(provider, client.ModelID())
 	}
-	if debuglog.Enabled && client != nil {
-		client = newDebugClientProxy(client)
-	}
+	client = wrapClientWithDebug(client)
 	modelState := newActiveModelState(client, activeModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
@@ -76,17 +70,23 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	timingLogger := timing.NewSessionLogger(sessionStore.SessionDir(sessionID))
+	sessionDir := sessionStore.SessionDir(sessionID)
+	if err := debuglog.ConfigureSession(sessionID, sessionDir); err != nil && debuglog.Enabled {
+		fmt.Fprintf(os.Stderr, "debuglog: configure session %s: %v\n", sessionID, err)
+	}
+	timingLogger := timing.NewSessionLogger(sessionDir)
 
 	// Init debug logging now that we have a session directory.
 	if debuglog.Enabled {
-		debuglog.Init(sessionStore.SessionDir(sessionID))
+		if _, err := debuglog.Enable(); err != nil {
+			fmt.Fprintf(os.Stderr, "debuglog: enable: %v\n", err)
+		}
 		defer debuglog.Close()
 		debuglog.LogGoroutineCount()
 	}
 
 	startupMetrics := timing.NewCheckpointRecorder(engineStartedAt)
-	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
+	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionDir))
 	toolpkg.SetGlobalFileHistory(fileHistory)
 	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 	if client != nil {
@@ -217,10 +217,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				continue
 			}
 			if resolvedClient != client {
-				client = resolvedClient
-				if debuglog.Enabled {
-					client = newDebugClientProxy(client)
-				}
+				client = wrapClientWithDebug(resolvedClient)
 			}
 			activeModelID = nextModelID
 			modelState.Set(client, activeModelID)
