@@ -7,6 +7,7 @@
 - Completed: removed dimming inheritance and replaced bright footer mode badge backgrounds.
 - Completed: replaced colored footer mode badges with a neutral tag treatment.
 - Completed: removed remaining mode color styling from the top status bar.
+- Completed: added a cleaner text-only mode palette without returning to the original blue/green styling.
 
 ## Notes
 
@@ -19,3 +20,4 @@
 - The footer badge no longer inherits `dimColor`, and `PLAN`/`FAST` now use darker blue/green backgrounds for better readability.
 - The footer mode marker now uses a simple bold `[MODE]` tag with no background color.
 - The top status bar mode label now uses the same neutral bold `[MODE]` treatment with no mode-specific color.
+- The mode markers now use a text-only palette: cyan for `PLAN`, yellow for `FAST`, and no background fill.

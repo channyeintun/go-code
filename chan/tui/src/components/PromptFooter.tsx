@@ -166,7 +166,22 @@ function formatModeLabel(mode: string): string {
 }
 
 function renderModeBadge(mode: string) {
-  return <Text bold>{`[${formatModeLabel(mode)}]`}</Text>;
+  return (
+    <Text
+      color={modeLabelColor(mode)}
+      bold
+    >{`[${formatModeLabel(mode)}]`}</Text>
+  );
+}
+
+function modeLabelColor(mode: string): "cyan" | "yellow" | "white" {
+  if (mode === "plan") {
+    return "cyan";
+  }
+  if (mode === "fast") {
+    return "yellow";
+  }
+  return "white";
 }
 
 function getPromptTextColumns(terminalColumns: number): number {

@@ -24,3 +24,4 @@ Reduce TUI distraction by aligning the default interaction flow more closely wit
 2. Remove inherited dim styling from the footer mode badge and switch to darker backgrounds.
 3. Replace colored footer mode badges with a neutral no-background tag treatment.
 4. Remove mode-specific color styling from the top status bar.
+5. Reintroduce a cleaner text-only mode palette that avoids the original blue/green treatment.

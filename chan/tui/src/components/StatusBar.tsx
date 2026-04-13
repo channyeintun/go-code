@@ -118,7 +118,9 @@ const StatusBar: FC<StatusBarProps> = ({
           </>
         ) : null}
         <Text color="gray"> · </Text>
-        <Text bold>{formatModeLabel(mode)}</Text>
+        <Text color={modeLabelColor(mode)} bold>
+          {formatModeLabel(mode)}
+        </Text>
         <Text color="gray"> · </Text>
         <Text color="yellow">{modelLabel}</Text>
         <Text color="gray"> · </Text>
@@ -216,6 +218,16 @@ export default StatusBar;
 
 function formatModeLabel(mode: string): string {
   return `[${mode.toUpperCase()}]`;
+}
+
+function modeLabelColor(mode: string): "cyan" | "yellow" | "white" {
+  if (mode === "plan") {
+    return "cyan";
+  }
+  if (mode === "fast") {
+    return "yellow";
+  }
+  return "white";
 }
 
 function formatModelLabel(model: string): string {
