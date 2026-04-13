@@ -2,10 +2,13 @@
 
 ## Active Task
 
-- Completed: implemented structured debug logging and a live monitor flow for `/debug`.
+- In progress: design a lean retrieval architecture for agent harness memory using working context, a live retrieval graph, and a small preference store.
+- Pending: review and approve the new design in `plan.md` before any implementation starts.
 
 ## Notes
 
+- Drafted a new `plan.md` for live repo retrieval, preference recall, and a session-scoped attempt log.
+- No implementation has started for the retrieval design yet.
 - Updated chan's runtime prompt in `chan/cmd/chan/engine.go` and `chan/internal/agent/planner.go` so the agent prefers subagent choreography for bounded exploration and execution, avoids polling non-background child agents, and treats implementation plans as durable artifacts that should be created or revised in place for substantial work.
 - Fixed plan-mode enforcement so write tools are now actually blocked until an implementation plan is saved and approved, matching the intended read-only-until-approved behavior.
 - Expanded session-level safe auto-approve so `Allow Safe This Session` now auto-approves normal non-destructive, non-sensitive tool calls across the session instead of only read-only requests and safe bash commands.
