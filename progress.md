@@ -2,22 +2,14 @@
 
 ## Active Task
 
-- Completed: reduced transcript and panel distraction in the TUI by adopting ClaudeCode-style status-first affordances.
-- Completed: improved footer mode badge contrast for accessibility.
-- Completed: removed dimming inheritance and replaced bright footer mode badge backgrounds.
-- Completed: replaced colored footer mode badges with a neutral tag treatment.
-- Completed: removed remaining mode color styling from the top status bar.
-- Completed: added a cleaner text-only mode palette without returning to the original blue/green styling.
+- In progress: planning structured debug logs and a live monitor flow for `/debug`.
 
 ## Notes
 
-- Planning and reference review completed.
-- Removed persistent background agent and background command panels from the main surface.
-- Kept background work visible through the status bar summaries and existing status notices.
-- Hid streaming thinking content by default and added an explicit `Opt+T` reveal/hide shortcut.
-- Collapsed inline file diff previews to concise mutation summaries so edits no longer dominate the transcript.
-- Replaced low-contrast footer mode text with high-contrast badges so `FAST` and `PLAN` remain readable across terminal themes.
-- The footer badge no longer inherits `dimColor`, and `PLAN`/`FAST` now use darker blue/green backgrounds for better readability.
-- The footer mode marker now uses a simple bold `[MODE]` tag with no background color.
-- The top status bar mode label now uses the same neutral bold `[MODE]` treatment with no mode-specific color.
-- The mode markers now use a text-only palette: cyan for `PLAN`, yellow for `FAST`, and no background fill.
+- Reviewed the current debug logging path in `chan/internal/debuglog`.
+- Confirmed the existing logger already writes one JSON object per line to the session debug log.
+- Confirmed slash commands are handled in `chan/cmd/chan/slash_command_handlers.go` and cataloged in `chan/cmd/chan/slash_commands.go`.
+- Confirmed the TUI sends slash commands through `chan/tui/src/hooks/useEngine.ts`.
+- Confirmed macOS process launch via `osascript` already exists in the TUI utilities and can be reused for a terminal popup design.
+- Decided the canonical live format should remain JSONL, with CSV or YAML only as downstream transforms if needed.
+- No implementation has started yet.
