@@ -83,7 +83,68 @@ nav {
     color: var(--text-primary);
 }
 
-/* Premium Terminal Window */
+/* Documentation Layout */
+.docs-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 4rem;
+}
+
+@media (max-width: 1024px) {
+    .docs-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+main {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    position: sticky;
+    top: 6rem;
+    height: calc(100vh - 8rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+}
+
+.sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+.sidebar-title {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    font-weight: 800;
+}
+
+.sidebar-link {
+    display: block;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 0.4rem 0;
+    transition: all 0.2s;
+}
+
+.sidebar-link:hover {
+    color: var(--text-primary);
+    transform: translateX(4px);
+}
+
+.sidebar-link.active {
+    color: var(--brand);
+    font-weight: 700;
+}
+
+/* Code Blocks */
 .code-block {
     background-color: var(--bg-subtle);
     border: 1px solid var(--border);
@@ -101,6 +162,16 @@ nav {
     box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.9), 0 0 40px -15px rgba(255, 64, 0, 0.15);
     max-width: 800px;
     margin: 4rem auto 0;
+}
+
+code {
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+pre code {
+    white-space: pre;
+    word-break: normal;
 }
 
 .code-block::before {
@@ -150,20 +221,37 @@ nav {
     font-weight: 800;
 }
 
-.term-output {
-    color: #666;
-    margin-top: 0.5rem;
-    display: block;
+/* Tables */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 2rem 0;
+    background: var(--bg-subtle);
+    -webkit-overflow-scrolling: touch;
 }
 
-.term-success {
-    color: #27c93f;
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 500px;
 }
 
-.code-prompt {
-    color: var(--brand);
-    margin-right: 0.75rem;
-    user-select: none;
+th {
+    text-align: left;
+    background: #0d0d0d;
+    padding: 1rem;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+}
+
+td {
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.8125rem;
 }
 
 /* Feature Cards */
@@ -174,16 +262,7 @@ nav {
     transition: border-color 0.3s;
 }
 
-.feature-card:hover {
-    border-color: var(--brand);
-}
-
-.feature-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    color: var(--brand);
-    margin-bottom: 1.5rem;
-}
+.feature-card:hover { border-color: var(--brand); }
 
 /* Premium Architecture Visualizer */
 .arch-visual {
@@ -206,111 +285,44 @@ nav {
     position: relative;
 }
 
-.arch-node:hover {
-    border-color: var(--brand);
+/* Mobile Nav Drawer */
+#mobile-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0,0,0,0.95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    padding: 6rem 2rem 2rem;
+    transform: translateX(100%);
+    transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
-.tech-badge {
-    font-size: 0.625rem;
-    padding: 0.1rem 0.4rem;
-    background: var(--border);
-    border-radius: 2px;
-    color: var(--brand);
-    font-weight: 700;
+#mobile-drawer.open {
+    transform: translateX(0);
 }
 
-/* Animated Stream */
-.stream-connector {
-    height: 60px;
-    width: 2px;
-    background: var(--border);
-    position: relative;
-}
-
-.stream-pulse {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 30%;
-    background: linear-gradient(to bottom, transparent, var(--brand), transparent);
-    animation: flowPulse 2s linear infinite;
-}
-
-@keyframes flowPulse {
-    0% { top: -30%; opacity: 0; }
-    50% { opacity: 1; }
-    100% { top: 100%; opacity: 0; }
-}
-
-.stream-label {
-    position: absolute;
-    left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.625rem;
-    color: var(--brand);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-}
-
-/* Utility */
-.mb-2 { margin-bottom: 0.5rem; }
-.mb-4 { margin-bottom: 1rem; }
-.mb-8 { margin-bottom: 2rem; }
-.mb-16 { margin-bottom: 4rem; }
-.mt-8 { margin-top: 2rem; }
-.text-center { text-align: center; }
-.mx-auto { margin-left: auto; margin-right: auto; }
-
-/* Documentation Layout */
-.docs-grid {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    gap: 4rem;
-}
-
-@media (max-width: 1024px) {
-    .docs-grid {
-        grid-template-columns: 1fr;
+/* Responsive Overrides */
+@media (max-width: 768px) {
+    .section-title { font-size: 2.5rem; margin-bottom: 2rem; }
+    .subsection-title { font-size: 1.75rem; }
+    
+    p { padding: 0 0.5rem; }
+    
+    pre, code, .code-block, .table-wrapper {
+        max-width: 100%;
+        overflow-x: auto;
     }
+    
+    .container-max { padding: 0 1rem; overflow-x: hidden; }
+    
+    .mb-24 { margin-bottom: 4rem; }
+    .py-32 { padding-top: 5rem; padding-bottom: 5rem; }
+    
+    .code-block { padding: 2.5rem 1rem 1rem; margin: 1rem 0; }
+    .table-wrapper { margin: 1.5rem 0; }
 }
 
-/* Sidebar */
-.sidebar {
-    position: sticky;
-    top: 6rem;
-    height: calc(100vh - 8rem);
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-
-.sidebar-title {
-    font-size: 0.625rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--text-secondary);
-    margin-bottom: 1rem;
-    font-weight: 800;
-}
-
-.sidebar-link {
-    display: block;
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 0.85rem;
-    padding: 0.4rem 0;
-    transition: all 0.2s;
-}
-
-.sidebar-link:hover {
-    color: var(--text-primary);
-    transform: translateX(4px);
-}
-
-.sidebar-link.active {
-    color: var(--brand);
-    font-weight: 700;
-}
+.text-brand { color: var(--brand); }
+.text-muted { color: var(--text-secondary); }

@@ -29,9 +29,13 @@
                 <div class="bg-brand text-white md:w-8 md:h-8 w-6 h-6 flex items-center justify-center font-bold text-sm rounded-sm">C</div>
                 <span class="text-xl font-bold tracking-tight font-['Outfit'] uppercase">Chan</span>
             </a>
-            <div class="flex gap-8 text-sm font-medium">
-                <a href="index.html" class="text-gray-400 hover:text-white transition">Home</a>
-                <a href="https://github.com/channyeintun/chan" class="text-gray-400 hover:text-white transition">Source</a>
+            <div class="flex gap-8 text-sm font-medium items-center">
+                <a href="index.html" class="hidden md:block text-gray-400 hover:text-white transition">Home</a>
+                <a href="https://github.com/channyeintun/chan" class="hidden md:block text-gray-400 hover:text-white transition">Source</a>
+                <button id="menu-toggle" class="md:hidden flex items-center gap-2 bg-brand/10 text-brand px-3 py-1 rounded-sm border border-brand/20 text-xs font-bold uppercase tracking-wider">
+                    <i data-lucide="menu" class="w-4 h-4"></i>
+                    Menu
+                </button>
             </div>
         </div>
     </nav>
@@ -322,14 +326,73 @@ make install        # Install to /usr/local/bin</code></pre>
         </div>
     </div>
 
+    <!-- Mobile Drawer -->
+    <div id="mobile-drawer">
+        <div class="flex justify-between items-center mb-12">
+            <span class="text-xs font-black uppercase tracking-[0.2em] text-gray-600">Navigation</span>
+            <button id="close-menu" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <div class="space-y-8 overflow-y-auto">
+            <div>
+                <h5 class="sidebar-title">Getting Started</h5>
+                <a href="#prerequisites" class="sidebar-link mobile-link">Prerequisites</a>
+                <a href="#install" class="sidebar-link mobile-link">Installation</a>
+                <a href="#manual-install" class="sidebar-link mobile-link">Manual Install</a>
+                <a href="#setup" class="sidebar-link mobile-link">Setup</a>
+                <a href="#copilot" class="sidebar-link mobile-link">GitHub Copilot</a>
+            </div>
+            <div>
+                <h5 class="sidebar-title">Workflow</h5>
+                <a href="#usage" class="sidebar-link mobile-link">First-Class Outputs</a>
+                <a href="#options" class="sidebar-link mobile-link">CLI Options</a>
+                <a href="#slash-commands" class="sidebar-link mobile-link">Slash Commands</a>
+                <a href="#permissions" class="sidebar-link mobile-link">Permissions</a>
+            </div>
+            <div>
+                <h5 class="sidebar-title">The Toolset</h5>
+                <a href="#tools" class="sidebar-link mobile-link">Tools Reference</a>
+            </div>
+            <div>
+                <h5 class="sidebar-title">Advanced</h5>
+                <a href="#modes" class="sidebar-link mobile-link">Child Agent Modes</a>
+                <a href="#edit-logic" class="sidebar-link mobile-link">Edit Tool Selection</a>
+                <a href="#config" class="sidebar-link mobile-link">Configuration Reference</a>
+                <a href="#debug" class="sidebar-link mobile-link">Diagnostics</a>
+                <a href="#arch" class="sidebar-link mobile-link">Architecture</a>
+                <a href="#build" class="sidebar-link mobile-link">Building from Source</a>
+            </div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
-        const links = document.querySelectorAll('.scroll-link');
+        
+        const menuToggle = document.getElementById('menu-toggle');
+        const closeMenu = document.getElementById('close-menu');
+        const mobileDrawer = document.getElementById('mobile-drawer');
+        const mobileLinks = document.querySelectorAll('.mobile-link');
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
         const sections = document.querySelectorAll('section');
+
+        // Drawer Logic
+        const toggleDrawer = () => mobileDrawer.classList.toggle('open');
+        menuToggle.addEventListener('click', toggleDrawer);
+        closeMenu.addEventListener('click', toggleDrawer);
+        
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', () => mobileDrawer.classList.remove('open'));
+        });
+
+        // Scrollspy
         window.addEventListener('scroll', () => {
             let current = '';
-            sections.forEach(s => { if (pageYOffset >= s.offsetTop - 200) current = s.getAttribute('id'); });
-            links.forEach(l => {
+            sections.forEach(s => { 
+                if (pageYOffset >= s.offsetTop - 200) current = s.getAttribute('id'); 
+            });
+            
+            [...sidebarLinks, ...mobileLinks].forEach(l => {
                 l.classList.remove('active');
                 if (l.getAttribute('href') === `#${current}`) l.classList.add('active');
             });
