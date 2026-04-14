@@ -70,6 +70,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     clearPermission,
     appendUserMessage,
     beginAssistantTurn,
+    submitArtifactReview,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
   // Prefer the focused artifact for the plan panel; fall back to any impl-plan.
@@ -212,6 +213,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     feedback?: string,
   ) => {
     if (uiState.pendingArtifactReview) {
+      submitArtifactReview(uiState.pendingArtifactReview.requestId, decision);
       engine.sendArtifactReviewResponse(
         uiState.pendingArtifactReview.requestId,
         decision,

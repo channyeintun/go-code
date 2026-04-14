@@ -51,6 +51,8 @@ export interface UIArtifactReview {
   version: number;
 }
 
+export type UIArtifactReviewDecision = "approve" | "revise" | "cancel";
+
 export interface UIArtifact {
   id: string;
   kind: string;
@@ -237,6 +239,7 @@ export interface EngineUIState {
   artifacts: UIArtifact[];
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
+  submittingArtifactReviewRequestId: string | null;
   toolCalls: UIToolCall[];
   backgroundAgents: UIBackgroundAgent[];
   backgroundCommands: UIBackgroundCommand[];
@@ -295,6 +298,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   artifacts: [],
   focusedArtifactId: null,
   pendingArtifactReview: null,
+  submittingArtifactReviewRequestId: null,
   toolCalls: [],
   backgroundAgents: [],
   backgroundCommands: [],
@@ -428,6 +432,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               liveAssistantBlocks: [],
               activeTurnStatus: "idle",
               pendingPermission: null,
+              submittingArtifactReviewRequestId: null,
               isStreaming: false,
               compact: null,
               statusLine: buildTurnCompleteStatusLine(
@@ -454,6 +459,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             }),
             liveAssistantBlocks: [],
             activeTurnStatus: "idle",
+            submittingArtifactReviewRequestId: null,
             isStreaming: false,
             compact: null,
             statusLine: buildTurnCompleteStatusLine(
@@ -912,6 +918,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             title: p.title,
             version: p.version ?? 1,
           },
+          submittingArtifactReviewRequestId: null,
         }));
         break;
       }
@@ -919,7 +926,11 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ArtifactReviewResolvedPayload;
         setUIState((s) => {
           if (s.pendingArtifactReview?.requestId !== p.request_id) return s;
-          return { ...s, pendingArtifactReview: null };
+          return {
+            ...s,
+            pendingArtifactReview: null,
+            submittingArtifactReviewRequestId: null,
+          };
         });
         break;
       }
@@ -1002,6 +1013,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           artifacts: [],
           focusedArtifactId: null,
           pendingArtifactReview: null,
+          submittingArtifactReviewRequestId: null,
           pendingPermission: null,
           isStreaming: false,
           error: null,
@@ -1035,6 +1047,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           ...s,
           activeTurnStatus: p.recoverable ? "working" : "idle",
           error: p.recoverable ? null : p.message,
+          submittingArtifactReviewRequestId: null,
           isStreaming: p.recoverable ? s.isStreaming : false,
           compact: null,
           statusLine: p.message,
@@ -1051,6 +1064,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       activeTurnStatus: "idle",
       isStreaming: false,
       compact: null,
+      submittingArtifactReviewRequestId: null,
       turnTiming: {
         firstTokenMs: null,
         firstToolResultMs: null,
@@ -1149,6 +1163,32 @@ export function useEvents(initialModel: string, initialMode: string) {
     }));
   }, []);
 
+  const submitArtifactReview = useCallback(
+    (requestId: string, decision: UIArtifactReviewDecision) => {
+      setUIState((s) => {
+        if (s.pendingArtifactReview?.requestId !== requestId) {
+          return s;
+        }
+
+        return {
+          ...s,
+          // Clear the review prompt immediately on approve so the
+          // spinner/input area becomes visible without waiting for
+          // the backend artifact_review_resolved event.
+          pendingArtifactReview:
+            decision === "approve" ? null : s.pendingArtifactReview,
+          submittingArtifactReviewRequestId: requestId,
+          activeTurnStatus:
+            decision === "approve" ? "working" : s.activeTurnStatus,
+          isStreaming: decision === "approve" ? true : s.isStreaming,
+          statusLine: decision === "approve" ? null : s.statusLine,
+          error: null,
+        };
+      });
+    },
+    [],
+  );
+
   return {
     uiState,
     handleEvent,
@@ -1157,6 +1197,7 @@ export function useEvents(initialModel: string, initialMode: string) {
     clearPermission,
     appendUserMessage,
     beginAssistantTurn,
+    submitArtifactReview,
   };
 }
 

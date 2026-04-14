@@ -7,6 +7,8 @@
 - Completed: structural edge expansion, test-covers edges, and attempt-log surfaced telemetry.
 - Completed: architecture docs sync for structural retrieval edges and surfaced telemetry.
 - Completed: session-scoped retrieval graph with multi-language support, 2-hop expansion, and retry-match telemetry.
+- Completed: fix immediate spinner display after artifact approval.
+- Completed: inject corrective nudge on repeated edit failures to prevent stale-content retry loops.
 
 ## Notes
 

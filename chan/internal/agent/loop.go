@@ -158,6 +158,14 @@ func runIteration(
 		repeated := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
 		if repeated > 0 {
 			_ = emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated)
+			// Inject a corrective nudge so the model re-reads files
+			// instead of blindly retrying with stale content.
+			if nudge := buildEditRetryNudge(turn.toolCalls, results); nudge != "" {
+				state.Messages = append(state.Messages, api.Message{
+					Role:    api.RoleUser,
+					Content: nudge,
+				})
+			}
 		}
 		return nil
 	}
@@ -726,6 +734,59 @@ func emitAttemptRepeatedTelemetry(emit func(ipc.StreamEvent) error, repeatedCoun
 	return emit(newEvent(ipc.EventAttemptRepeated, ipc.AttemptRepeatedPayload{
 		RepeatedCount: repeatedCount,
 	}))
+}
+
+// buildEditRetryNudge constructs a corrective user-role message when repeated
+// edit failures are detected. It tells the model to re-read the target file(s)
+// before retrying so it doesn't loop with stale content.
+func buildEditRetryNudge(calls []api.ToolCall, results []api.ToolResult) string {
+	callByID := make(map[string]api.ToolCall, len(calls))
+	for _, call := range calls {
+		callByID[call.ID] = call
+	}
+
+	seen := make(map[string]struct{})
+	var files []string
+	for _, result := range results {
+		if !result.IsError {
+			continue
+		}
+		// Collect file paths from the result or from the tool call input.
+		path := result.FilePath
+		if path == "" {
+			call := callByID[result.ToolCallID]
+			path = extractFilePathFromInput(call.Input)
+		}
+		if path != "" {
+			if _, ok := seen[path]; !ok {
+				seen[path] = struct{}{}
+				files = append(files, path)
+			}
+		}
+	}
+	if len(files) == 0 {
+		return "[system] Your previous file edit failed with the same error again. You are using stale file contents. Re-read the target file before retrying the edit."
+	}
+	return fmt.Sprintf("[system] Your previous file edit failed with the same error again. You are using stale file contents. Re-read the following file(s) before retrying: %s", strings.Join(files, ", "))
+}
+
+// extractFilePathFromInput tries to pull a file path from a tool call's JSON input.
+func extractFilePathFromInput(input string) string {
+	if input == "" {
+		return ""
+	}
+	var params map[string]any
+	if err := json.Unmarshal([]byte(input), &params); err != nil {
+		return ""
+	}
+	for _, key := range []string{"file_path", "FilePath", "target_file", "TargetFile", "path"} {
+		if v, ok := params[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 // collectTouchedFiles appends file paths referenced by tool calls and tool
