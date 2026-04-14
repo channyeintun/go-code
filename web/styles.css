@@ -684,4 +684,181 @@ td {
     .engine-map-grid {
         grid-template-columns: 1fr;
     }
+
+    .retrieval-stages {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .retrieval-stage-arrow {
+        transform: rotate(90deg);
+    }
+
+    .retrieval-legend {
+        flex-direction: column;
+    }
+
+    .retrieval-legend-section {
+        min-width: unset;
+    }
+}
+
+/* ── Retrieval Pipeline Visual ─── */
+
+.retrieval-pipeline {
+    background: linear-gradient(135deg, #0d0d0d 0%, #111 60%, #1a0a00 100%);
+    border: 1px solid #1a1a1a;
+    border-radius: 12px;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.retrieval-pipeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ff4000 30%, #ff6a00 50%, #ff4000 70%, transparent);
+}
+
+.retrieval-pipeline-header {
+    margin-bottom: 1.5rem;
+}
+
+.retrieval-pipeline-eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #ff4000;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.retrieval-pipeline-title {
+    font-size: 0.9rem;
+    color: #999;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.retrieval-stages {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.retrieval-stage {
+    flex: 1;
+    background: rgba(255, 64, 0, 0.04);
+    border: 1px solid rgba(255, 64, 0, 0.12);
+    border-radius: 8px;
+    padding: 1.25rem 1rem;
+    position: relative;
+}
+
+.retrieval-stage-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 64, 0, 0.15);
+    color: #ff4000;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 0.6rem;
+}
+
+.retrieval-stage-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin-bottom: 0.4rem;
+}
+
+.retrieval-stage-detail {
+    font-size: 0.75rem;
+    color: #777;
+    line-height: 1.5;
+}
+
+.retrieval-stage-arrow {
+    display: flex;
+    align-items: center;
+    color: #ff4000;
+    font-size: 1.2rem;
+    font-weight: 300;
+    opacity: 0.5;
+    padding: 0 0.25rem;
+}
+
+/* ── Retrieval Legend ─── */
+
+.retrieval-legend {
+    display: flex;
+    gap: 2rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #1a1a1a;
+    border-radius: 10px;
+    background: #0a0a0a;
+}
+
+.retrieval-legend-section {
+    min-width: 140px;
+}
+
+.retrieval-legend-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #555;
+    font-weight: 700;
+    margin-bottom: 0.6rem;
+}
+
+.retrieval-legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.legend-chip {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.legend-chip-file   { background: rgba(96, 165, 250, 0.12); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.2); }
+.legend-chip-symbol { background: rgba(167, 139, 250, 0.12); color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.2); }
+.legend-chip-test   { background: rgba(52, 211, 153, 0.12); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+.legend-chip-error  { background: rgba(251, 113, 133, 0.12); color: #fb7185; border: 1px solid rgba(251, 113, 133, 0.2); }
+.legend-chip-tool   { background: rgba(251, 191, 36, 0.12); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
+.legend-chip-pref   { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.2); }
+
+.legend-edge {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #888;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.legend-lang {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(255, 64, 0, 0.06);
+    color: #cc5500;
+    border: 1px solid rgba(255, 64, 0, 0.12);
+    font-weight: 600;
 }
