@@ -479,6 +479,23 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleClearSlashCommand(cmd *slashCommandContext) error {
+	// Archive the current session before clearing
+	if len(cmd.state.Messages) > 0 {
+		if err := persistSessionState(cmd.store, sessionStateParams{
+			SessionID: cmd.state.SessionID,
+			CreatedAt: cmd.state.StartedAt,
+			Mode:      cmd.state.Mode,
+			Model:     cmd.state.ActiveModelID,
+			CWD:       cmd.state.CWD,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   cmd.tracker,
+			Messages:  cmd.state.Messages,
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Start a new session
 	cmd.state.Messages = cmd.state.Messages[:0]
 	cmd.tracker.Reset()
 	newID, err := newSessionID()

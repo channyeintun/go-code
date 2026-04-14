@@ -187,7 +187,7 @@ export interface PromptController {
   setValue: (value: string) => void;
   setCursorOffset: (offset: number) => void;
   insertImageReference: (id: number) => void;
-  submit: () => string;
+  submit: (overrideText?: string) => string;
   navigateUp: () => void;
   navigateDown: () => void;
   insertText: (text: string) => void;
@@ -269,11 +269,11 @@ export function usePromptHistory(): PromptController {
     }));
   }, []);
 
-  const submit = useCallback((): string => {
+  const submit = useCallback((overrideText?: string): string => {
     let submitted = "";
 
     setState((current) => {
-      const nextValue = current.value.trim();
+      const nextValue = (overrideText ?? current.value).trim();
       if (!nextValue) {
         return current;
       }

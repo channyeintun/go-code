@@ -14,7 +14,7 @@ interface InputProps {
   slashCommands: UISlashCommand[];
   isLoading: boolean;
   statusLabel?: string | null;
-  onSubmit: () => void;
+  onSubmit: (overrideText?: string) => void;
   onOpenTranscriptSearch: () => void;
   onImagePaste: (images: PastedImageData[]) => void;
   onPasteWarning: (warnings: string[]) => void;
@@ -204,7 +204,7 @@ const Input: FC<InputProps> = ({
           prompt.setValue(nextValue);
         }
         if (!slashPreview.selectedCommand.takesArguments) {
-          onSubmit();
+          onSubmit(nextValue ?? undefined);
         }
         return;
       }

@@ -153,8 +153,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     setPasteWarning(warnings.length > 0 ? warnings.join(" | ") : null);
   };
 
-  const handleSubmit = () => {
-    const text = prompt.submit();
+  const handleSubmit = (overrideText?: string) => {
+    const text = prompt.submit(overrideText);
     if (!text) {
       return;
     }
