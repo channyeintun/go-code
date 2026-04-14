@@ -8,17 +8,18 @@ import (
 
 // CompactableTools lists tools whose old results can be safely truncated.
 var CompactableTools = map[string]bool{
-	"apply_patch":            true,
-	"create_file":            true,
-	"read_file":              true,
-	"read_project_structure": true,
-	"bash":                   true,
-	"grep_search":            true,
-	"file_search":            true,
-	"web_search":             true,
-	"web_fetch":              true,
-	"replace_string_in_file": true,
-	"file_write":             true,
+	"apply_patch":                  true,
+	"create_file":                  true,
+	"read_file":                    true,
+	"read_project_structure":       true,
+	"bash":                         true,
+	"grep_search":                  true,
+	"file_search":                  true,
+	"web_search":                   true,
+	"web_fetch":                    true,
+	"replace_string_in_file":       true,
+	"multi_replace_string_in_file": true,
+	"file_write":                   true,
 }
 
 const truncatedMarker = "[Old tool result content cleared]"
@@ -96,6 +97,8 @@ func canonicalCompactableToolName(name string) string {
 		return "web_fetch"
 	case "fileedit", "file_edit", "replacestringinfile", "replace_string_in_file":
 		return "replace_string_in_file"
+	case "multireplacestringinfile", "multi_replace_string_in_file":
+		return "multi_replace_string_in_file"
 	case "filewrite", "file_write":
 		return "file_write"
 	default:

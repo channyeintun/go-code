@@ -27,19 +27,56 @@ function summarizeInput(name: string, raw: string): string {
     if (
       (name === "create_file" ||
         name === "file_read" ||
+        name === "read_file" ||
         name === "file_write" ||
-        name === "file_edit") &&
-      obj.file_path
+        name === "file_edit" ||
+        name === "replace_string_in_file") &&
+      (obj.filePath || obj.file_path || obj.path)
     )
-      return obj.file_path;
-    if (name === "multi_replace_file_content" && obj.target_file) {
-      return obj.target_file;
+      return obj.filePath || obj.file_path || obj.path;
+    if (
+      name === "multi_replace_string_in_file" &&
+      Array.isArray(obj.replacements)
+    ) {
+      const files: string[] = [];
+      for (const replacement of obj.replacements as Array<{
+        filePath?: string;
+        file_path?: string;
+      }>) {
+        const filePath = replacement?.filePath || replacement?.file_path;
+        if (
+          typeof filePath === "string" &&
+          filePath.length > 0 &&
+          !files.includes(filePath)
+        ) {
+          files.push(filePath);
+        }
+      }
+      if (files.length === 1) {
+        return files[0];
+      }
+      if (obj.replacements.length > 0) {
+        return `${obj.replacements.length} replacements`;
+      }
     }
-    if (name === "apply_patch" && typeof obj.patch === "string") {
-      return summarizePatchTarget(obj.patch);
+    if (name === "apply_patch") {
+      const patch =
+        typeof obj.patch === "string"
+          ? obj.patch
+          : typeof obj.input === "string"
+            ? obj.input
+            : undefined;
+      if (patch) {
+        return summarizePatchTarget(patch);
+      }
     }
-    if (name === "glob" && obj.pattern) return obj.pattern;
-    if (name === "grep" && obj.pattern) return obj.pattern;
+    if (name === "glob" || name === "file_search") {
+      if (obj.pattern || obj.query) return obj.pattern || obj.query;
+    }
+    if (name === "grep" || name === "grep_search") {
+      if (obj.pattern || obj.query) return obj.pattern || obj.query;
+    }
+    if (name === "read_project_structure" && obj.path) return obj.path;
     if (name === "git" && obj.subcommand) return obj.subcommand;
     if (name === "web_search" && obj.query) return obj.query;
     if (name === "web_fetch" && obj.url) return obj.url;
@@ -114,6 +151,7 @@ function describeTool(toolCall: UIToolCall): ToolDescriptor {
         summary: summarizeInput(toolCall.name, toolCall.input),
       };
     case "file_read":
+    case "read_file":
       return {
         title: "Read File",
         summary: basenameOrFallback(
@@ -135,8 +173,16 @@ function describeTool(toolCall: UIToolCall): ToolDescriptor {
         ),
       };
     case "file_edit":
+    case "replace_string_in_file":
       return {
         title: "Edit File",
+        summary: basenameOrFallback(
+          summarizeInput(toolCall.name, toolCall.input),
+        ),
+      };
+    case "multi_replace_string_in_file":
+      return {
+        title: "Multi Replace",
         summary: basenameOrFallback(
           summarizeInput(toolCall.name, toolCall.input),
         ),
@@ -148,22 +194,24 @@ function describeTool(toolCall: UIToolCall): ToolDescriptor {
           summarizeInput(toolCall.name, toolCall.input),
         ),
       };
-    case "multi_replace_file_content":
-      return {
-        title: "Multi Replace",
-        summary: basenameOrFallback(
-          summarizeInput(toolCall.name, toolCall.input),
-        ),
-      };
     case "grep":
+    case "grep_search":
       return {
         title: "Search Files",
         summary: summarizeInput(toolCall.name, toolCall.input),
       };
     case "glob":
+    case "file_search":
       return {
         title: "Find Files",
         summary: summarizeInput(toolCall.name, toolCall.input),
+      };
+    case "read_project_structure":
+      return {
+        title: "Project Tree",
+        summary: basenameOrFallback(
+          summarizeInput(toolCall.name, toolCall.input),
+        ),
       };
     case "git":
       return { title: "Git", summary: summarizeGitInput(toolCall.input) };
@@ -209,11 +257,12 @@ function permissionLabel(toolCall: UIToolCall): string {
     case "file_write":
       return "Waiting for permission to overwrite file…";
     case "file_edit":
+    case "replace_string_in_file":
       return "Waiting for permission to modify file…";
     case "apply_patch":
       return "Waiting for permission to apply patch…";
-    case "multi_replace_file_content":
-      return "Waiting for permission to modify file ranges…";
+    case "multi_replace_string_in_file":
+      return "Waiting for permission to apply grouped replacements…";
     case "web_fetch":
       return "Waiting for permission to fetch URL…";
     default:
@@ -231,21 +280,27 @@ function runningLabel(toolCall: UIToolCall): string {
     case "bash":
       return `Running command…${progressSuffix}`;
     case "file_read":
+    case "read_file":
       return `Reading file…${progressSuffix}`;
     case "create_file":
       return `Creating file…${progressSuffix}`;
     case "file_write":
       return `Overwriting file…${progressSuffix}`;
     case "file_edit":
+    case "replace_string_in_file":
       return `Editing file…${progressSuffix}`;
     case "apply_patch":
       return `Applying patch…${progressSuffix}`;
-    case "multi_replace_file_content":
-      return `Replacing file ranges…${progressSuffix}`;
+    case "multi_replace_string_in_file":
+      return `Applying grouped replacements…${progressSuffix}`;
     case "grep":
+    case "grep_search":
       return `Searching files…${progressSuffix}`;
     case "glob":
+    case "file_search":
       return `Finding files…${progressSuffix}`;
+    case "read_project_structure":
+      return `Reading project tree…${progressSuffix}`;
     case "git":
       return `Running git command…${progressSuffix}`;
     case "agent":
@@ -268,8 +323,9 @@ function renderError(toolCall: UIToolCall) {
     toolCall.name === "create_file" ||
     toolCall.name === "file_write" ||
     toolCall.name === "file_edit" ||
+    toolCall.name === "replace_string_in_file" ||
     toolCall.name === "apply_patch" ||
-    toolCall.name === "multi_replace_file_content"
+    toolCall.name === "multi_replace_string_in_file"
   ) {
     return renderFileMutationError(toolCall);
   }
@@ -292,12 +348,19 @@ function renderSuccess(toolCall: UIToolCall) {
     case "file_write":
     case "create_file":
     case "file_edit":
+    case "replace_string_in_file":
     case "apply_patch":
-    case "multi_replace_file_content":
+    case "multi_replace_string_in_file":
       return renderFileMutation(toolCall);
     case "file_read":
-      return <Text dimColor>{summarizeFileRead(toolCall.output, toolCall.truncated)}</Text>;
+    case "read_file":
+      return (
+        <Text dimColor>
+          {summarizeFileRead(toolCall.output, toolCall.truncated)}
+        </Text>
+      );
     case "grep":
+    case "grep_search":
       return (
         <MarkdownText
           text={summarizeSearchMatches(
@@ -308,6 +371,7 @@ function renderSuccess(toolCall: UIToolCall) {
         />
       );
     case "glob":
+    case "file_search":
       return (
         <MarkdownText
           text={summarizeSearchMatches(

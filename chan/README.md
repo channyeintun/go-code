@@ -154,21 +154,21 @@ chan --help                        # Show help
 
 ### Slash Commands
 
-| Command              | Description                                    |
-| -------------------- | ---------------------------------------------- |
-| `/connect`           | Connect GitHub Copilot with device login       |
-| `/plan`              | Switch to plan mode (read-only until approved) |
-| `/fast`              | Switch to fast mode (direct execution)         |
-| `/model [name]`      | Show or switch the active model                |
-| `/reasoning [level]` | Show or set GPT-5 reasoning effort             |
-| `/compact`           | Compact the conversation to save context       |
-| `/resume [id]`       | Resume a previous session                      |
-| `/clear`             | Clear the conversation and start a new session |
-| `/status`            | Show the current session status                |
-| `/sessions`          | List recent sessions                           |
-| `/diff [args]`       | Show git diff (for example `/diff --staged`)   |
-| `/debug [subcommand]`| Enable live debug logging or inspect its path  |
-| `/help`              | Show the slash-command help text               |
+| Command               | Description                                    |
+| --------------------- | ---------------------------------------------- |
+| `/connect`            | Connect GitHub Copilot with device login       |
+| `/plan`               | Switch to plan mode (read-only until approved) |
+| `/fast`               | Switch to fast mode (direct execution)         |
+| `/model [name]`       | Show or switch the active model                |
+| `/reasoning [level]`  | Show or set GPT-5 reasoning effort             |
+| `/compact`            | Compact the conversation to save context       |
+| `/resume [id]`        | Resume a previous session                      |
+| `/clear`              | Clear the conversation and start a new session |
+| `/status`             | Show the current session status                |
+| `/sessions`           | List recent sessions                           |
+| `/diff [args]`        | Show git diff (for example `/diff --staged`)   |
+| `/debug [subcommand]` | Enable live debug logging or inspect its path  |
+| `/help`               | Show the slash-command help text               |
 
 ### Permission System
 
@@ -184,12 +184,12 @@ When the agent wants to run a command or write a file, you'll see a permission p
 ╰─────────────────────────────────────────────╯
 ```
 
-| Key | Action                                                                              |
-| --- | ----------------------------------------------------------------------------------- |
-| `y` | Allow this one command                                                              |
-| `n` | Deny this command                                                                   |
-| `a` | Always allow this exact command                                                     |
-| `s` | Allow future non-destructive, non-sensitive requests for this session               |
+| Key | Action                                                                |
+| --- | --------------------------------------------------------------------- |
+| `y` | Allow this one command                                                |
+| `n` | Deny this command                                                     |
+| `a` | Always allow this exact command                                       |
+| `s` | Allow future non-destructive, non-sensitive requests for this session |
 
 Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) and sensitive edits such as `.env`, lockfiles, `.git`, or workspace settings still require explicit approval, even with `[s]`.
 
@@ -197,38 +197,39 @@ Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) and sens
 
 The agent has access to:
 
-| Tool                           | Description                                                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| **agent**                      | Spawn bounded child agents with stable invocation lineage and hook-aware child lifecycle handling               |
-| **agent_status**               | Check a background child agent and retrieve structured child status, including stop-block metadata when present |
-| **agent_stop**                 | Request a background child agent to stop and return its latest structured lifecycle status                      |
-| **bash**                       | Execute shell commands                                                                                          |
-| **think**                      | Record scratchpad reasoning with no side effects                                                                |
-| **list_dir**                   | List directory contents as structured JSON                                                                      |
-| **create_file**                | Create a new file and fail if it already exists                                                                 |
-| **file_read**                  | Read text files with range support and safer partial-read guidance                                              |
-| **file_write**                 | Overwrite the full contents of an existing file                                                                 |
-| **file_edit**                  | Exact find-and-replace edits in existing files                                                                  |
-| **apply_patch**                | Apply structured multi-hunk or multi-file text patches                                                          |
-| **multi_replace_file_content** | Apply multiple validated block replacements in one existing file write                                          |
-| **file_diff_preview**          | Preview a compact diff against another file or inline content                                                   |
-| **glob**                       | Find files by pattern                                                                                           |
-| **grep**                       | Search file contents (ripgrep)                                                                                  |
-| **go_definition**              | Resolve Go symbol definitions with parser-backed locations                                                      |
-| **go_references**              | Find Go identifier references with parser-backed context                                                        |
-| **project_overview**           | Summarize repository structure, manifests, and languages                                                        |
-| **dependency_overview**        | Summarize dependencies from common project manifests                                                            |
-| **symbol_search**              | Find likely symbol definitions across source files                                                              |
-| **web_search**                 | Search the web                                                                                                  |
-| **web_fetch**                  | Fetch and read a URL                                                                                            |
-| **list_commands**              | List background commands with recent activity and unread output previews                                        |
-| **command_status**             | Check command metadata, timing, unread output, and state                                                        |
-| **send_command_input**         | Send stdin and get the updated background command status                                                        |
-| **stop_command**               | Stop a running background command and return final status                                                       |
-| **forget_command**             | Remove a retained background command and return final metadata                                                  |
-| **file_history**               | Inspect tracked file history, create snapshots, and diff them                                                   |
-| **file_history_rewind**        | Restore tracked files to a previous file-history snapshot                                                       |
-| **git**                        | Read-only git operations (status, diff, log, blame)                                                             |
+| Tool                             | Description                                                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **agent**                        | Spawn bounded child agents with stable invocation lineage and hook-aware child lifecycle handling               |
+| **agent_status**                 | Check a background child agent and retrieve structured child status, including stop-block metadata when present |
+| **agent_stop**                   | Request a background child agent to stop and return its latest structured lifecycle status                      |
+| **bash**                         | Execute shell commands                                                                                          |
+| **think**                        | Record scratchpad reasoning with no side effects                                                                |
+| **list_dir**                     | List directory contents as structured JSON                                                                      |
+| **create_file**                  | Create a new file and fail if it already exists                                                                 |
+| **read_file**                    | Read text files with range support and safer partial-read guidance                                              |
+| **file_write**                   | Overwrite the full contents of an existing file                                                                 |
+| **replace_string_in_file**       | Exact find-and-replace edits in existing files                                                                  |
+| **multi_replace_string_in_file** | Apply several exact replacements in one call across one file or a small set of files                            |
+| **apply_patch**                  | Apply structured multi-hunk or multi-file text patches                                                          |
+| **file_diff_preview**            | Preview a compact diff against another file or inline content                                                   |
+| **file_search**                  | Find files by pattern                                                                                           |
+| **grep_search**                  | Search file contents (ripgrep)                                                                                  |
+| **go_definition**                | Resolve Go symbol definitions with parser-backed locations                                                      |
+| **go_references**                | Find Go identifier references with parser-backed context                                                        |
+| **read_project_structure**       | Read a bounded project tree for directories and files                                                           |
+| **project_overview**             | Summarize repository structure, manifests, and languages                                                        |
+| **dependency_overview**          | Summarize dependencies from common project manifests                                                            |
+| **symbol_search**                | Find likely symbol definitions across source files                                                              |
+| **web_search**                   | Search the web                                                                                                  |
+| **web_fetch**                    | Fetch and read a URL                                                                                            |
+| **list_commands**                | List background commands with recent activity and unread output previews                                        |
+| **command_status**               | Check command metadata, timing, unread output, and state                                                        |
+| **send_command_input**           | Send stdin and get the updated background command status                                                        |
+| **stop_command**                 | Stop a running background command and return final status                                                       |
+| **forget_command**               | Remove a retained background command and return final metadata                                                  |
+| **file_history**                 | Inspect tracked file history, create snapshots, and diff them                                                   |
+| **file_history_rewind**          | Restore tracked files to a previous file-history snapshot                                                       |
+| **git**                          | Read-only git operations (status, diff, log, blame)                                                             |
 
 ### Child Agent Modes
 
@@ -251,8 +252,8 @@ Background child agents continue to surface through `agent_status` and `agent_st
 
 ### Edit Tool Selection
 
-- `file_edit`: one exact snippet replacement in one existing file.
-- `multi_replace_file_content`: several exact, non-overlapping replacements in one existing file when current line ranges and target text are known.
+- `replace_string_in_file`: one exact snippet replacement in one existing file.
+- `multi_replace_string_in_file`: several exact replacements in one call when you already know the target strings.
 - `apply_patch`: multi-file, multi-hunk, create/delete, or broader structural edits.
 - `file_write`: overwrite the full contents of one existing file.
 - `create_file`: create one brand-new file.
@@ -270,8 +271,8 @@ Config file: `~/.config/chan/config.json`
 
 Environment variables override the config file:
 
-| Variable                 | Description                                      |
-| ------------------------ | ------------------------------------------------ |
+| Variable               | Description                                      |
+| ---------------------- | ------------------------------------------------ |
 | `CHAN_MODEL`           | Model to use                                     |
 | `CHAN_API_KEY`         | API key (overrides provider-specific keys)       |
 | `CHAN_BASE_URL`        | Custom API base URL                              |

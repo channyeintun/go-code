@@ -85,6 +85,7 @@ var generalPurposeSubagentTools = []string{
 	"create_file",
 	"file_write",
 	"replace_string_in_file",
+	"multi_replace_string_in_file",
 	"apply_patch",
 	"file_search",
 	"grep_search",
@@ -617,6 +618,8 @@ func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string
 	toolList := strings.Join(names, ", ")
 	common := fmt.Sprintf(`You are Go CLI %s, a bounded subagent running in a fresh context.
 Be extremely concise. Sacrifice grammar for the sake of concision.
+Work quickly and quietly: use tools promptly instead of narrating a long plan.
+Keep reasoning and status text minimal. Report only the key evidence, result, and next step when needed.
 
 IMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below.
 Use only the tools exposed to you in this session. The exact runtime tool names available are: %s.`, subagentDisplayName(subagentType), toolList)
