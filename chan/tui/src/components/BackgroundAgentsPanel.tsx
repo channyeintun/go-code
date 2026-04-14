@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import type { UIBackgroundAgent } from "../hooks/useEvents.js";
 import { formatTokenCount } from "../utils/modelContext.js";
 import { formatSubagentType } from "../utils/subagentLabels.js";

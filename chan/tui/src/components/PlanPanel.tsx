@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import MarkdownText from "./MarkdownText.js";
 
 interface PlanPanelProps {
@@ -36,8 +36,9 @@ const PlanPanel: FC<PlanPanelProps> = ({
       borderColor="blue"
       paddingX={1}
       marginBottom={1}
+      minWidth={0}
     >
-      <Box flexDirection="row" gap={2}>
+      <Box flexDirection="column" minWidth={0}>
         <Text bold color="blue">
           {title}
         </Text>
@@ -47,7 +48,7 @@ const PlanPanel: FC<PlanPanelProps> = ({
           <Text color="gray">{"Implementation Plan"}</Text>
         )}
       </Box>
-      <Box marginTop={1}>
+      <Box marginTop={1} minWidth={0}>
         <MarkdownText text={body} />
       </Box>
     </Box>

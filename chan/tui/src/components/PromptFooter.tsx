@@ -1,5 +1,5 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import {
   calculateTokenWarningState,
   formatTokenCount,
@@ -75,7 +75,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
     };
   }, []);
 
-  const footerLayout = terminalColumns < 96 ? "column" : "row";
+  const footerLayout = terminalColumns < 120 ? "column" : "row";
   const promptTextColumns = useMemo(
     () => getPromptTextColumns(terminalColumns),
     [terminalColumns],
@@ -106,8 +106,8 @@ const PromptFooter: FC<PromptFooterProps> = ({
     [blockedReason, queuedPromptCount],
   );
   const hint = useMemo(
-    () => buildInputHint(disabled, thinkingShortcutLabel),
-    [disabled, thinkingShortcutLabel],
+    () => buildInputHint(disabled, thinkingShortcutLabel, terminalColumns),
+    [disabled, terminalColumns, thinkingShortcutLabel],
   );
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
@@ -162,8 +162,9 @@ const PromptFooter: FC<PromptFooterProps> = ({
         }
         flexDirection={footerLayout}
         justifyContent="space-between"
+        minWidth={0}
       >
-        <Box flexDirection="row">
+        <Box flexDirection="row" minWidth={0} flexGrow={1}>
           {renderModeBadge(mode)}
           <Text dimColor>
             {"  "}
@@ -174,7 +175,12 @@ const PromptFooter: FC<PromptFooterProps> = ({
             {promptMetrics ? `  ${promptMetrics}` : ""}
           </Text>
         </Box>
-        <Text dimColor>{hint}</Text>
+        <Text
+          dimColor
+          wrap={footerLayout === "row" ? "truncate-end" : undefined}
+        >
+          {hint}
+        </Text>
       </Box>
     </Box>
   );
@@ -290,7 +296,21 @@ function buildActivityDetails(
   return parts.length > 0 ? parts.join("  ") : null;
 }
 
-function buildInputHint(disabled: boolean | undefined, shortcutLabel: string) {
+function buildInputHint(
+  disabled: boolean | undefined,
+  shortcutLabel: string,
+  terminalColumns: number,
+) {
+  if (terminalColumns < 72) {
+    const shared = `${shortcutLabel} think | Esc cancel`;
+    return disabled ? `Busy | ${shared}` : `Enter send | ${shared}`;
+  }
+
+  if (terminalColumns < 96) {
+    const shared = `PgUp/PgDn scroll | ${shortcutLabel} think | Esc cancel`;
+    return disabled ? `Busy | ${shared}` : `Enter send | Ctrl+G search | ${shared}`;
+  }
+
   const shared = `PgUp/PgDn transcript | Home/End jump | ${shortcutLabel} thinking | Esc cancel`;
   if (disabled) {
     return `Engine busy | ${shared}`;

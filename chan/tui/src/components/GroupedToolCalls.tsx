@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import type { UIToolCall } from "../hooks/useEvents.js";
 import { describeTool } from "./ToolProgress.js";
 import MessageRow from "./MessageRow.js";

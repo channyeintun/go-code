@@ -15,8 +15,7 @@
   },
   "dependencies": {
     "cli-highlight": "^2.1.11",
-    "ink": "^7.0.0",
-    "ink-spinner": "^5.0.0",
+    "silvery": "file:vendor/silvery-local",
     "marked": "^15.0.12",
     "react": "^19.2.5",
     "react-devtools-core": "^7.0.1"

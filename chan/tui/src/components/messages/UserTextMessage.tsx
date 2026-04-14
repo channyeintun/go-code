@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Text } from "ink";
+import { Text } from "silvery";
 import type { UIUserMessage } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
 

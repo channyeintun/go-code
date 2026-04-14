@@ -1,5 +1,5 @@
 import React, { type FC, useMemo } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useBoxRect } from "silvery";
 import type { Tokens } from "marked";
 import { displayWidth, formatToken, padAligned } from "../utils/markdown.js";
 
@@ -15,12 +15,13 @@ function renderCell(tokens: Tokens.TableCell["tokens"]): string {
 }
 
 const MarkdownTable: FC<MarkdownTableProps> = ({ token }) => {
+  const { width: boxWidth } = useBoxRect();
   const rendered = useMemo(() => {
     const headers = token.header.map((cell) => renderCell(cell.tokens));
     const rows = token.rows.map((row) =>
       row.map((cell) => renderCell(cell.tokens)),
     );
-    const terminalWidth = process.stdout.columns ?? 80;
+    const availableWidth = Math.max(20, boxWidth || process.stdout.columns || 80);
 
     const columnWidths = headers.map((header, index) => {
       const rowWidths = rows.map((row) => displayWidth(row[index] ?? ""));
@@ -32,7 +33,7 @@ const MarkdownTable: FC<MarkdownTableProps> = ({ token }) => {
       columnWidths.length * 3 +
       1;
 
-    if (totalWidth > terminalWidth - 4) {
+    if (totalWidth > availableWidth) {
       return rows
         .map((row, rowIndex) => {
           const lines = row.map((cell, cellIndex) => {
@@ -44,7 +45,7 @@ const MarkdownTable: FC<MarkdownTableProps> = ({ token }) => {
             return lines.join("\n");
           }
 
-          return ["─".repeat(Math.max(20, terminalWidth - 6)), ...lines].join(
+          return ["─".repeat(Math.max(10, availableWidth - 2)), ...lines].join(
             "\n",
           );
         })
@@ -82,10 +83,10 @@ const MarkdownTable: FC<MarkdownTableProps> = ({ token }) => {
       ...rows.map((row) => renderRow(row, false)),
       border("└", "─", "┴", "┘"),
     ].join("\n");
-  }, [token]);
+  }, [boxWidth, token]);
 
   return (
-    <Box>
+    <Box minWidth={0}>
       <Text>{rendered}</Text>
     </Box>
   );

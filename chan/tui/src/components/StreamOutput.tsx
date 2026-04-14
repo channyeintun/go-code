@@ -1,8 +1,9 @@
-import React, { type FC, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import React, { type FC, useCallback, useEffect, useMemo, useState } from "react";
+import { Box, ListView, Text, useBoxRect } from "silvery";
 import type {
   UIActiveTurnStatus,
   UIAssistantBlock,
+  UIArtifact,
   UIAssistantMessage,
   UIMessage,
   UISystemMessage,
@@ -10,7 +11,9 @@ import type {
   UIToolCall,
   UITranscriptEntry,
 } from "../hooks/useEvents.js";
+import ArtifactView from "./ArtifactView.js";
 import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
+import PlanPanel from "./PlanPanel.js";
 import ToolProgress from "./ToolProgress.js";
 import AssistantTextMessage from "./messages/AssistantTextMessage.js";
 import StreamingAssistantMessage from "./messages/StreamingAssistantMessage.js";
@@ -21,6 +24,8 @@ interface StreamOutputProps {
   messages: UIMessage[];
   toolCalls: UIToolCall[];
   transcript: UITranscriptEntry[];
+  artifacts: UIArtifact[];
+  focusedArtifactId?: string | null;
   liveBlocks: UIAssistantBlock[];
   isStreaming: boolean;
   activeTurnStatus: UIActiveTurnStatus;
@@ -35,18 +40,6 @@ interface StreamOutputProps {
   ) => void;
 }
 
-// Keep a few screens of recent transcript mounted without letting long sessions
-// bog down Ink diffing or grow memory usage indefinitely.
-const MAX_TRANSCRIPT_BLOCKS = 200;
-// Reveal hidden history in noticeable chunks without making each page jump so
-// large that the user loses their place in the conversation.
-const TRANSCRIPT_CAP_STEP = 50;
-
-type TranscriptSliceAnchor = {
-  key: string;
-  idx: number;
-} | null;
-
 type TranscriptBlock =
   | {
       kind: "message";
@@ -57,10 +50,28 @@ type TranscriptBlock =
   | { kind: "tool_call"; key: string; toolCall: UIToolCall }
   | { kind: "tool_group"; key: string; group: ToolCallGroup };
 
+type DisplayBlock =
+  | {
+      kind: "transcript";
+      key: string;
+      block: TranscriptBlock;
+    }
+  | {
+      kind: "artifact";
+      key: string;
+      artifact: UIArtifact;
+    }
+  | {
+      kind: "streaming";
+      key: string;
+    };
+
 const StreamOutput: FC<StreamOutputProps> = ({
   messages,
   toolCalls,
   transcript,
+  artifacts,
+  focusedArtifactId = null,
   liveBlocks,
   isStreaming,
   activeTurnStatus,
@@ -71,9 +82,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
   transcriptSearchSelectedIndex = 0,
   onTranscriptSearchStatsChange,
 }) => {
-  const [sliceStartOverride, setSliceStartOverride] = useState<number | null>(
-    null,
-  );
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const [userScrolled, setUserScrolled] = useState(false);
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
     [messages],
@@ -86,40 +96,29 @@ const StreamOutput: FC<StreamOutputProps> = ({
     () => buildTranscriptBlocks(transcript, messageById, toolCallById),
     [messageById, toolCallById, transcript],
   );
-  const sliceAnchorRef = useRef<TranscriptSliceAnchor>(null);
-  const latestSliceStart = useMemo(
-    () =>
-      computeTranscriptSliceStart(
-        transcriptBlocks,
-        sliceAnchorRef,
-        MAX_TRANSCRIPT_BLOCKS,
-        TRANSCRIPT_CAP_STEP,
-      ),
-    [transcriptBlocks],
-  );
-  const maxSliceStart = Math.max(
-    0,
-    transcriptBlocks.length - MAX_TRANSCRIPT_BLOCKS,
-  );
-  const visibleSliceStart =
-    sliceStartOverride === null
-      ? latestSliceStart
-      : clampSliceStart(sliceStartOverride, maxSliceStart);
-  const visibleTranscriptBlocks = useMemo(
-    () =>
-      transcriptBlocks.slice(
-        visibleSliceStart,
-        visibleSliceStart + MAX_TRANSCRIPT_BLOCKS,
-      ),
-    [transcriptBlocks, visibleSliceStart],
-  );
-  const hiddenBeforeCount = visibleSliceStart;
-  const hiddenAfterCount = Math.max(
-    0,
-    transcriptBlocks.length -
-      visibleSliceStart -
-      visibleTranscriptBlocks.length,
-  );
+  const displayBlocks = useMemo(() => {
+    const items: DisplayBlock[] = transcriptBlocks.map((block) => ({
+      kind: "transcript",
+      key: block.key,
+      block,
+    }));
+
+    items.push(
+      ...artifacts.map((artifact) => ({
+        kind: "artifact" as const,
+        key: `artifact-${artifact.id}`,
+        artifact,
+      })),
+    );
+
+    if (isStreaming) {
+      items.push({ kind: "streaming", key: "live-stream" });
+    }
+
+    return items;
+  }, [artifacts, isStreaming, transcriptBlocks]);
+  const { height: rectHeight } = useBoxRect();
+  const viewportHeight = Math.max(1, rectHeight);
   const searchQuery = transcriptSearchQuery.trim().toLowerCase();
   const searchMatchIndices = useMemo(() => {
     if (!searchQuery) {
@@ -127,13 +126,13 @@ const StreamOutput: FC<StreamOutputProps> = ({
     }
 
     const matches: number[] = [];
-    transcriptBlocks.forEach((block, index) => {
-      if (blockSearchText(block).includes(searchQuery)) {
+    displayBlocks.forEach((block, index) => {
+      if (displayBlockSearchText(block).includes(searchQuery)) {
         matches.push(index);
       }
     });
     return matches;
-  }, [searchQuery, transcriptBlocks]);
+  }, [displayBlocks, searchQuery]);
   const normalizedSearchSelectedIndex =
     searchMatchIndices.length === 0
       ? -1
@@ -145,23 +144,45 @@ const StreamOutput: FC<StreamOutputProps> = ({
           ),
         );
 
+  // Auto-tail: when user hasn't scrolled away, follow new content
   useEffect(() => {
-    if (transcriptBlocks.length <= MAX_TRANSCRIPT_BLOCKS) {
-      if (sliceStartOverride !== null) {
-        setSliceStartOverride(null);
+    if (!userScrolled && displayBlocks.length > 0) {
+      setCursorIndex(displayBlocks.length - 1);
+    }
+  }, [displayBlocks.length, userScrolled]);
+
+  // Jump cursor to search match
+  useEffect(() => {
+    if (searchQuery && normalizedSearchSelectedIndex >= 0) {
+      const target = searchMatchIndices[normalizedSearchSelectedIndex];
+      if (typeof target === "number") {
+        setCursorIndex(target);
       }
-      return;
     }
+  }, [searchQuery, normalizedSearchSelectedIndex, searchMatchIndices]);
 
-    if (sliceStartOverride === null) {
-      return;
+  // Reset userScrolled when search activates
+  useEffect(() => {
+    if (searchQuery) {
+      setUserScrolled(false);
     }
+  }, [searchQuery]);
 
-    const clamped = clampSliceStart(sliceStartOverride, maxSliceStart);
-    if (clamped !== sliceStartOverride) {
-      setSliceStartOverride(clamped);
+  // Clamp cursor when items shrink
+  useEffect(() => {
+    if (displayBlocks.length > 0 && cursorIndex >= displayBlocks.length) {
+      setCursorIndex(displayBlocks.length - 1);
     }
-  }, [maxSliceStart, sliceStartOverride, transcriptBlocks.length]);
+  }, [displayBlocks.length, cursorIndex]);
+
+  const handleCursorChange = useCallback(
+    (next: number) => {
+      setCursorIndex(next);
+      // If user scrolled to the tail, re-enable auto-tail
+      setUserScrolled(next < displayBlocks.length - 1);
+    },
+    [displayBlocks.length],
+  );
 
   useEffect(() => {
     onTranscriptSearchStatsChange?.(
@@ -174,180 +195,207 @@ const StreamOutput: FC<StreamOutputProps> = ({
     searchMatchIndices.length,
   ]);
 
-  useEffect(() => {
-    if (!searchQuery || normalizedSearchSelectedIndex < 0) {
-      return;
-    }
-
-    const targetIndex = searchMatchIndices[normalizedSearchSelectedIndex];
-    if (typeof targetIndex !== "number") {
-      return;
-    }
-
-    const desiredStart = clampSliceStart(
-      targetIndex - Math.floor(MAX_TRANSCRIPT_BLOCKS / 3),
-      maxSliceStart,
-    );
-    setSliceStartOverride(desiredStart >= maxSliceStart ? null : desiredStart);
-  }, [
-    maxSliceStart,
-    normalizedSearchSelectedIndex,
-    searchMatchIndices,
-    searchQuery,
-  ]);
-
-  useInput(
-    (_input, key) => {
-      if (!key.pageUp && !key.pageDown && !key.home && !key.end) {
-        return;
-      }
-
-      if (key.home) {
-        setSliceStartOverride(0);
-        return;
-      }
-
-      if (key.end) {
-        setSliceStartOverride(null);
-        return;
-      }
-
-      if (key.pageUp) {
-        setSliceStartOverride((current) => {
-          const base = current === null ? latestSliceStart : current;
-          return clampSliceStart(base - TRANSCRIPT_CAP_STEP, maxSliceStart);
-        });
-        return;
-      }
-
-      setSliceStartOverride((current) => {
-        const base = current === null ? latestSliceStart : current;
-        const next = clampSliceStart(base + TRANSCRIPT_CAP_STEP, maxSliceStart);
-        return next >= maxSliceStart ? null : next;
-      });
-    },
-    { isActive: transcriptBlocks.length > MAX_TRANSCRIPT_BLOCKS },
-  );
-
-  if (transcript.length === 0 && liveBlocks.length === 0 && !isStreaming) {
+  if (
+    transcript.length === 0 &&
+    artifacts.length === 0 &&
+    liveBlocks.length === 0 &&
+    !isStreaming
+  ) {
     return null;
   }
 
   return (
-    <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-      {hiddenBeforeCount > 0 || hiddenAfterCount > 0 ? (
-        <Box marginBottom={1}>
-          <Text dimColor>
-            Showing transcript rows {hiddenBeforeCount + 1}-
-            {hiddenBeforeCount + visibleTranscriptBlocks.length} of{" "}
-            {transcriptBlocks.length} to keep long sessions responsive. PageUp
-            shows older rows. PageDown returns to newer rows. Home jumps to the
-            oldest visible window. End returns to the live tail.
-          </Text>
-        </Box>
-      ) : null}
-
-      {searchQuery ? (
-        <Box marginBottom={1}>
-          <Text color={searchMatchIndices.length > 0 ? "cyan" : "yellow"}>
-            {searchMatchIndices.length > 0
-              ? `Transcript search: ${searchMatchIndices.length} match${searchMatchIndices.length === 1 ? "" : "es"} · showing ${normalizedSearchSelectedIndex + 1}/${searchMatchIndices.length}`
-              : `Transcript search: no matches for \"${transcriptSearchQuery}\"`}
-          </Text>
-        </Box>
-      ) : null}
-
-      {visibleTranscriptBlocks.map((block) => {
-        const absoluteIndex = transcriptBlocks.indexOf(block);
-        const matchOrdinal = searchMatchIndices.indexOf(absoluteIndex);
-        const isSelectedSearchMatch =
-          matchOrdinal >= 0 && matchOrdinal === normalizedSearchSelectedIndex;
-        const isSearchMatch = matchOrdinal >= 0;
-
-        if (block.kind === "tool_group") {
-          return (
-            <Box key={block.key} flexDirection="column">
-              {isSelectedSearchMatch ? (
-                <Text color="cyan">Search match</Text>
-              ) : isSearchMatch ? (
-                <Text dimColor>match</Text>
-              ) : null}
-              <GroupedToolCalls group={block.group} />
-            </Box>
-          );
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
+      marginTop={1}
+    >
+      <ListView
+        items={displayBlocks}
+        height={viewportHeight}
+        nav
+        cursorKey={cursorIndex}
+        onCursor={handleCursorChange}
+        active={!searchQuery}
+        overflowIndicator
+        estimateHeight={(index) =>
+          estimateDisplayBlockHeight(displayBlocks[index])
         }
-
-        if (block.kind === "tool_call") {
-          return (
-            <Box key={block.key} flexDirection="column">
-              {isSelectedSearchMatch ? (
-                <Text color="cyan">Search match</Text>
-              ) : isSearchMatch ? (
-                <Text dimColor>match</Text>
-              ) : null}
-              <ToolProgress toolCall={block.toolCall} />
-            </Box>
-          );
-        }
-
-        if (block.message.role === "assistant") {
-          return (
-            <Box key={block.key} flexDirection="column">
-              {isSelectedSearchMatch ? (
-                <Text color="cyan">Search match</Text>
-              ) : isSearchMatch ? (
-                <Text dimColor>match</Text>
-              ) : null}
-              <AssistantTextMessage
-                message={block.message}
-                continuation={block.continuation}
+        getKey={(item) => item.key}
+        renderItem={(item, index) => {
+          if (item.kind === "streaming") {
+            return (
+              <StreamingAssistantMessage
+                blocks={liveBlocks}
+                model={model}
+                showThinking={showThinking}
+                thinkingShortcutLabel={thinkingShortcutLabel}
+                statusLabel={activeTurnStatusLabel(
+                  liveBlocks,
+                  activeTurnStatus,
+                )}
               />
-            </Box>
+            );
+          }
+
+          if (item.kind === "artifact") {
+            return (
+              <Box key={item.key} flexDirection="column">
+                {renderArtifactBlock(item.artifact, focusedArtifactId)}
+              </Box>
+            );
+          }
+
+          return renderTranscriptBlock(
+            item.block,
+            index,
+            searchMatchIndices,
+            normalizedSearchSelectedIndex,
           );
-        }
-
-        if (block.message.role === "system") {
-          return (
-            <Box key={block.key} flexDirection="column">
-              {isSelectedSearchMatch ? (
-                <Text color="cyan">Search match</Text>
-              ) : isSearchMatch ? (
-                <Text dimColor>match</Text>
-              ) : null}
-              <SystemTextMessage message={block.message} />
-            </Box>
-          );
-        }
-
-        return (
-          <Box key={block.key} flexDirection="column">
-            {isSelectedSearchMatch ? (
-              <Text color="cyan">Search match</Text>
-            ) : isSearchMatch ? (
-              <Text dimColor>match</Text>
-            ) : null}
-            <UserTextMessage
-              message={block.message}
-              continuation={block.continuation}
-            />
-          </Box>
-        );
-      })}
-
-      {isStreaming ? (
-        <StreamingAssistantMessage
-          blocks={liveBlocks}
-          model={model}
-          showThinking={showThinking}
-          thinkingShortcutLabel={thinkingShortcutLabel}
-          statusLabel={activeTurnStatusLabel(liveBlocks, activeTurnStatus)}
-        />
-      ) : null}
+        }}
+      />
     </Box>
   );
 };
 
 export default StreamOutput;
+
+function renderTranscriptBlock(
+  block: TranscriptBlock,
+  index: number,
+  searchMatchIndices: number[],
+  normalizedSearchSelectedIndex: number,
+) {
+  const matchOrdinal = searchMatchIndices.indexOf(index);
+  const isSelectedSearchMatch =
+    matchOrdinal >= 0 && matchOrdinal === normalizedSearchSelectedIndex;
+  const isSearchMatch = matchOrdinal >= 0;
+
+  if (block.kind === "tool_group") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {isSelectedSearchMatch ? (
+          <Text color="cyan">Search match</Text>
+        ) : isSearchMatch ? (
+          <Text dimColor>match</Text>
+        ) : null}
+        <GroupedToolCalls group={block.group} />
+      </Box>
+    );
+  }
+
+  if (block.kind === "tool_call") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {isSelectedSearchMatch ? (
+          <Text color="cyan">Search match</Text>
+        ) : isSearchMatch ? (
+          <Text dimColor>match</Text>
+        ) : null}
+        <ToolProgress toolCall={block.toolCall} />
+      </Box>
+    );
+  }
+
+  if (block.message.role === "assistant") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {isSelectedSearchMatch ? (
+          <Text color="cyan">Search match</Text>
+        ) : isSearchMatch ? (
+          <Text dimColor>match</Text>
+        ) : null}
+        <AssistantTextMessage
+          message={block.message}
+          continuation={block.continuation}
+        />
+      </Box>
+    );
+  }
+
+  if (block.message.role === "system") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {isSelectedSearchMatch ? (
+          <Text color="cyan">Search match</Text>
+        ) : isSearchMatch ? (
+          <Text dimColor>match</Text>
+        ) : null}
+        <SystemTextMessage message={block.message} />
+      </Box>
+    );
+  }
+
+  return (
+    <Box key={block.key} flexDirection="column">
+      {isSelectedSearchMatch ? (
+        <Text color="cyan">Search match</Text>
+      ) : isSearchMatch ? (
+        <Text dimColor>match</Text>
+      ) : null}
+      <UserTextMessage
+        message={block.message}
+        continuation={block.continuation}
+      />
+    </Box>
+  );
+}
+
+function estimateDisplayBlockHeight(block: DisplayBlock | undefined): number {
+  if (!block) {
+    return 1;
+  }
+
+  if (block.kind === "streaming") {
+    return 8;
+  }
+
+  if (block.kind === "artifact") {
+    return estimateArtifactHeight(block.artifact);
+  }
+
+  switch (block.block.kind) {
+    case "tool_group":
+      return Math.max(4, block.block.group.toolCalls.length * 2);
+    case "tool_call":
+      return 4;
+    case "message":
+      return block.block.message.role === "assistant" ? 6 : 3;
+    default:
+      return 3;
+  }
+}
+
+function renderArtifactBlock(
+  artifact: UIArtifact,
+  focusedArtifactId: string | null,
+) {
+  if (artifact.kind === "implementation-plan") {
+    return (
+      <PlanPanel
+        title={artifact.title}
+        content={artifact.content}
+        version={artifact.version}
+        source={artifact.source}
+        status={artifact.status}
+      />
+    );
+  }
+
+  return (
+    <ArtifactView
+      artifacts={[artifact]}
+      focusedArtifactId={focusedArtifactId}
+    />
+  );
+}
+
+function estimateArtifactHeight(artifact: UIArtifact): number {
+  const contentLines = artifact.content.split("\n").length;
+  return Math.max(6, Math.min(24, contentLines + 4));
+}
 
 function buildTranscriptBlocks(
   transcript: UITranscriptEntry[],
@@ -478,43 +526,6 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
   return blocks;
 }
 
-function computeTranscriptSliceStart(
-  blocks: ReadonlyArray<{ key: string }>,
-  anchorRef: { current: TranscriptSliceAnchor },
-  cap = MAX_TRANSCRIPT_BLOCKS,
-  step = TRANSCRIPT_CAP_STEP,
-): number {
-  const anchor = anchorRef.current;
-  const anchorIndex = anchor
-    ? blocks.findIndex((block) => block.key === anchor.key)
-    : -1;
-  let start =
-    anchorIndex >= 0
-      ? anchorIndex
-      : anchor
-        ? Math.min(anchor.idx, Math.max(0, blocks.length - cap))
-        : 0;
-
-  if (blocks.length - start > cap + step) {
-    start = blocks.length - cap;
-  }
-
-  const blockAtStart = blocks[start];
-  if (blockAtStart) {
-    if (anchor?.key !== blockAtStart.key || anchor.idx !== start) {
-      anchorRef.current = { key: blockAtStart.key, idx: start };
-    }
-  } else if (anchor) {
-    anchorRef.current = null;
-  }
-
-  return start;
-}
-
-function clampSliceStart(value: number, maxSliceStart: number): number {
-  return Math.max(0, Math.min(value, maxSliceStart));
-}
-
 function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
   switch (toolCall.name) {
     case "file_read":
@@ -540,6 +551,29 @@ function blockSearchText(block: TranscriptBlock): string {
     default:
       return "";
   }
+}
+
+function displayBlockSearchText(block: DisplayBlock): string {
+  if (block.kind === "transcript") {
+    return blockSearchText(block.block);
+  }
+
+  if (block.kind === "artifact") {
+    return [
+      block.artifact.title,
+      block.artifact.kind,
+      block.artifact.content,
+      block.artifact.source,
+      block.artifact.status,
+    ]
+      .filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      )
+      .join("\n")
+      .toLowerCase();
+  }
+
+  return "";
 }
 
 function messageSearchText(message: UIMessage): string {

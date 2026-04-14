@@ -1,11 +1,9 @@
 import React, { type FC, useCallback, useEffect, useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Screen, Text } from "silvery";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
-import ArtifactView from "./components/ArtifactView.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import Input from "./components/Input.js";
-import PlanPanel from "./components/PlanPanel.js";
 import PromptFooter from "./components/PromptFooter.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
@@ -73,23 +71,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     submitArtifactReview,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
-  // Prefer the focused artifact for the plan panel; fall back to any impl-plan.
-  const planArtifact =
-    (uiState.focusedArtifactId
-      ? uiState.artifacts.find(
-          (a) =>
-            a.id === uiState.focusedArtifactId &&
-            a.kind === "implementation-plan",
-        )
-      : undefined) ??
-    uiState.artifacts.find(
-      (artifact) => artifact.kind === "implementation-plan",
-    ) ??
-    null;
-  // Secondary artifact list: non-plan, non-log artifacts excluding the focused impl-plan.
-  const recentArtifacts = selectRecentArtifacts(
+  const visibleArtifacts = selectVisibleArtifacts(
     uiState.artifacts,
     uiState.focusedArtifactId,
+    uiState.showPlanPanel,
   );
   const isEngineReady = uiState.ready || engine.ready;
 
@@ -302,124 +287,155 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   }, []);
 
   return (
-    <Box flexDirection="column" height="100%">
-      <StatusBar
-        ready={isEngineReady}
-        mode={uiState.mode}
-        model={uiState.model}
-        sessionId={uiState.sessionId}
-        sessionTitle={uiState.sessionTitle}
-        maxContextWindow={uiState.maxContextWindow}
-        maxOutputTokens={uiState.maxOutputTokens}
-        currentContextUsage={uiState.currentContextUsage}
-        totalCostUsd={uiState.cost.totalUsd}
-        inputTokens={uiState.cost.inputTokens}
-        outputTokens={uiState.cost.outputTokens}
-        memoryRecallUsd={uiState.cost.memoryRecallUsd}
-        memoryRecallInputTokens={uiState.cost.memoryRecallInputTokens}
-        memoryRecallOutputTokens={uiState.cost.memoryRecallOutputTokens}
-        childAgentUsd={uiState.cost.childAgentUsd}
-        childAgentInputTokens={uiState.cost.childAgentInputTokens}
-        childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
-        artifacts={uiState.artifacts}
-        focusedArtifactId={uiState.focusedArtifactId}
-        pendingArtifactReview={uiState.pendingArtifactReview}
-        backgroundAgents={uiState.backgroundAgents}
-        backgroundCommands={uiState.backgroundCommands}
-        rateLimits={uiState.rateLimits}
-        queuedPromptCount={queuedPrompts.length}
-      />
-
-      <Box flexDirection="column" flexGrow={1}>
-        {engine.error && !uiState.error && (
-          <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
-            <Text color="red">{engine.error}</Text>
-          </Box>
-        )}
-
-        {!isEngineReady && !engine.error && (
-          <Box paddingLeft={1} marginTop={1}>
-            <Text color="gray">Starting Go engine...</Text>
-          </Box>
-        )}
-
-        {uiState.statusLine && (
-          <Box paddingLeft={1} marginTop={1}>
-            <Text color={uiState.error ? "red" : "cyan"}>
-              {uiState.statusLine}
-            </Text>
-          </Box>
-        )}
-
-        {uiState.compact && (
-          <Box paddingLeft={1} marginTop={1}>
-            <Text color="yellow">
-              {uiState.compact.active
-                ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
-                : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
-            </Text>
-          </Box>
-        )}
-
-        <StreamOutput
-          messages={uiState.messages}
-          toolCalls={uiState.toolCalls}
-          transcript={uiState.transcript}
-          liveBlocks={uiState.liveAssistantBlocks}
-          isStreaming={uiState.isStreaming}
-          activeTurnStatus={uiState.activeTurnStatus}
+    <Screen>
+      <Box flexShrink={0}>
+        <StatusBar
+          ready={isEngineReady}
+          mode={uiState.mode}
           model={uiState.model}
-          showThinking={showThinking}
-          thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
-          transcriptSearchQuery={transcriptSearchQuery}
-          transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
-          onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
+          sessionId={uiState.sessionId}
+          sessionTitle={uiState.sessionTitle}
+          maxContextWindow={uiState.maxContextWindow}
+          maxOutputTokens={uiState.maxOutputTokens}
+          currentContextUsage={uiState.currentContextUsage}
+          totalCostUsd={uiState.cost.totalUsd}
+          inputTokens={uiState.cost.inputTokens}
+          outputTokens={uiState.cost.outputTokens}
+          memoryRecallUsd={uiState.cost.memoryRecallUsd}
+          memoryRecallInputTokens={uiState.cost.memoryRecallInputTokens}
+          memoryRecallOutputTokens={uiState.cost.memoryRecallOutputTokens}
+          childAgentUsd={uiState.cost.childAgentUsd}
+          childAgentInputTokens={uiState.cost.childAgentInputTokens}
+          childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
+          artifacts={uiState.artifacts}
+          focusedArtifactId={uiState.focusedArtifactId}
+          pendingArtifactReview={uiState.pendingArtifactReview}
+          backgroundAgents={uiState.backgroundAgents}
+          backgroundCommands={uiState.backgroundCommands}
+          rateLimits={uiState.rateLimits}
+          queuedPromptCount={queuedPrompts.length}
         />
+      </Box>
 
-        {uiState.error && (
-          <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
-            <Text color="red">{uiState.error}</Text>
-          </Box>
-        )}
+      <Box
+        flexDirection="row"
+        flexGrow={1}
+        flexShrink={1}
+        minWidth={0}
+        minHeight={0}
+        gap={1}
+      >
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          flexShrink={1}
+          minWidth={0}
+          minHeight={0}
+        >
+          {engine.error && !uiState.error && (
+            <Box
+              borderStyle="round"
+              borderColor="red"
+              paddingX={1}
+              marginTop={1}
+            >
+              <Text color="red">{engine.error}</Text>
+            </Box>
+          )}
 
-        {planArtifact && uiState.showPlanPanel && (
-          <PlanPanel
-            title={planArtifact.title}
-            content={planArtifact.content}
-            version={planArtifact.version}
-            source={planArtifact.source}
-            status={planArtifact.status}
-          />
-        )}
+          {!isEngineReady && !engine.error && (
+            <Box paddingLeft={1} marginTop={1}>
+              <Text color="gray">Starting Go engine...</Text>
+            </Box>
+          )}
 
-        {recentArtifacts.length > 0 && (
-          <ArtifactView
-            artifacts={recentArtifacts}
+          {uiState.statusLine && (
+            <Box paddingLeft={1} marginTop={1}>
+              <Text color={uiState.error ? "red" : "cyan"}>
+                {uiState.statusLine}
+              </Text>
+            </Box>
+          )}
+
+          {uiState.compact && (
+            <Box paddingLeft={1} marginTop={1}>
+              <Text color="yellow">
+                {uiState.compact.active
+                  ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
+                  : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
+              </Text>
+            </Box>
+          )}
+
+          <StreamOutput
+            messages={uiState.messages}
+            toolCalls={uiState.toolCalls}
+            transcript={uiState.transcript}
+            artifacts={visibleArtifacts}
             focusedArtifactId={uiState.focusedArtifactId}
+            liveBlocks={uiState.liveAssistantBlocks}
+            isStreaming={uiState.isStreaming}
+            activeTurnStatus={uiState.activeTurnStatus}
+            model={uiState.model}
+            showThinking={showThinking}
+            thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
+            transcriptSearchQuery={transcriptSearchQuery}
+            transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
+            onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
           />
-        )}
+
+          {uiState.error && (
+            <Box
+              borderStyle="round"
+              borderColor="red"
+              paddingX={1}
+              marginTop={1}
+            >
+              <Text color="red">{uiState.error}</Text>
+            </Box>
+          )}
+        </Box>
       </Box>
 
       {uiState.pendingPermission ? (
-        <PermissionPrompt
-          tool={uiState.pendingPermission.tool}
-          command={uiState.pendingPermission.command}
-          risk={uiState.pendingPermission.risk}
-          riskReason={uiState.pendingPermission.risk_reason}
-          permissionLevel={uiState.pendingPermission.permission_level}
-          targetKind={uiState.pendingPermission.target_kind}
-          targetValue={uiState.pendingPermission.target_value}
-          workingDir={uiState.pendingPermission.working_dir}
-          onRespond={handlePermissionResponse}
-          onCancelTurn={handleCancel}
-        />
+        <Box
+          flexDirection="column"
+          flexShrink={1}
+          minHeight={0}
+          marginTop={1}
+        >
+          <PermissionPrompt
+            tool={uiState.pendingPermission.tool}
+            command={uiState.pendingPermission.command}
+            risk={uiState.pendingPermission.risk}
+            riskReason={uiState.pendingPermission.risk_reason}
+            permissionLevel={uiState.pendingPermission.permission_level}
+            targetKind={uiState.pendingPermission.target_kind}
+            targetValue={uiState.pendingPermission.target_value}
+            workingDir={uiState.pendingPermission.working_dir}
+            onRespond={handlePermissionResponse}
+            onCancelTurn={handleCancel}
+          />
+        </Box>
       ) : uiState.pendingArtifactReview ? (
-        <ArtifactReviewPrompt
-          review={uiState.pendingArtifactReview}
-          onRespond={handleArtifactReviewResponse}
-        />
+        <Box
+          flexDirection="column"
+          flexShrink={1}
+          minHeight={0}
+          marginTop={1}
+        >
+          <ArtifactReviewPrompt
+            review={uiState.pendingArtifactReview}
+            onRespond={handleArtifactReviewResponse}
+          />
+        </Box>
       ) : (
-        <Box flexDirection="column">
+        <Box
+          flexDirection="column"
+          flexShrink={0}
+          maxHeight="45%"
+          overflow="scroll"
+        >
           {queuedPrompts.length > 0 && (
             <Box flexDirection="column" paddingLeft={1} marginBottom={1}>
               <Text color="yellow">
@@ -491,37 +507,42 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           />
         </Box>
       )}
-    </Box>
+    </Screen>
   );
 };
 
 export default App;
 
-function selectRecentArtifacts(
+function selectVisibleArtifacts(
   artifacts: UIArtifact[],
   focusedArtifactId: string | null,
+  showPlanPanel: boolean,
 ) {
-  const nonPlanArtifacts = artifacts.filter(
+  const visibleArtifacts = artifacts.filter(
     (artifact) =>
-      artifact.kind !== "implementation-plan" &&
       artifact.kind !== "tool-log" &&
       artifact.kind !== "diff-preview",
   );
 
+  const filtered = visibleArtifacts.filter(
+    (artifact) =>
+      artifact.kind !== "implementation-plan" ||
+      showPlanPanel ||
+      artifact.id === focusedArtifactId,
+  );
+
   if (!focusedArtifactId) {
-    return nonPlanArtifacts.slice(0, 2);
+    return filtered;
   }
 
-  const focusedArtifact = nonPlanArtifacts.find(
+  const focusedArtifact = filtered.find(
     (artifact) => artifact.id === focusedArtifactId,
   );
-  const remainingArtifacts = nonPlanArtifacts.filter(
+  const remainingArtifacts = filtered.filter(
     (artifact) => artifact.id !== focusedArtifactId,
   );
 
-  return focusedArtifact
-    ? [focusedArtifact, ...remainingArtifacts].slice(0, 2)
-    : nonPlanArtifacts.slice(0, 2);
+  return focusedArtifact ? [focusedArtifact, ...remainingArtifacts] : filtered;
 }
 
 function summarizeQueuedPrompt(queuedPrompt: QueuedPrompt): string {

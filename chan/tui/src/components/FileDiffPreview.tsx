@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Text } from "ink";
+import { Text } from "silvery";
 
 interface FileDiffPreviewProps {
   filePath?: string;

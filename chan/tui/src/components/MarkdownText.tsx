@@ -1,5 +1,5 @@
 import React, { type FC, useMemo, useRef } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import MarkdownTable from "./MarkdownTable.js";
 import { renderMarkdownBlocks, cachedLexer } from "../utils/markdown.js";
 

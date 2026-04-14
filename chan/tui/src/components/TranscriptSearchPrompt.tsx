@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput } from "silvery";
 
 interface TranscriptSearchPromptProps {
   query: string;
@@ -21,6 +21,8 @@ const TranscriptSearchPrompt: FC<TranscriptSearchPromptProps> = ({
   onClose,
 }) => {
   useInput((input, key) => {
+    const text = key.text ?? input;
+
     if (key.escape) {
       onClose();
       return;
@@ -46,8 +48,8 @@ const TranscriptSearchPrompt: FC<TranscriptSearchPromptProps> = ({
       return;
     }
 
-    if (!key.ctrl && !key.meta && input) {
-      onChange(query + input);
+    if (!key.ctrl && !key.meta && text) {
+      onChange(query + text);
     }
   });
 

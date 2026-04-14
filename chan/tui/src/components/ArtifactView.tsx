@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import type { UIArtifact } from "../hooks/useEvents.js";
 import MarkdownText from "./MarkdownText.js";
 
@@ -58,7 +58,7 @@ const ArtifactView: FC<ArtifactViewProps> = ({
   if (artifacts.length === 0) return null;
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" marginTop={1} minWidth={0}>
       {artifacts.map((artifact, index) => (
         <Box
           key={artifact.id}
@@ -67,8 +67,9 @@ const ArtifactView: FC<ArtifactViewProps> = ({
           borderColor={artifact.id === focusedArtifactId ? "cyan" : "gray"}
           paddingX={1}
           marginTop={index === 0 ? 0 : 1}
+          minWidth={0}
         >
-          <Box flexDirection="row" gap={2}>
+          <Box flexDirection="column" minWidth={0}>
             {artifact.id === focusedArtifactId ? (
               <Text color="cyan">FOCUSED</Text>
             ) : null}
@@ -77,7 +78,7 @@ const ArtifactView: FC<ArtifactViewProps> = ({
               {artifactMeta(artifact)}
             </Text>
           </Box>
-          <Box marginTop={1}>
+          <Box marginTop={1} minWidth={0}>
             {artifact.content.trim() ? (
               <MarkdownText text={artifact.content} />
             ) : (

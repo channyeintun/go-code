@@ -1,6 +1,6 @@
 import path from "node:path";
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import {
   formatTokenCount,
   getEffectiveContextWindow,

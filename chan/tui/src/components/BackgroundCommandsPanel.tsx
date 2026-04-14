@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import type { UIBackgroundCommand } from "../hooks/useEvents.js";
 
 interface BackgroundCommandsPanelProps {

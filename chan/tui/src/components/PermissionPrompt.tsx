@@ -1,6 +1,6 @@
 import path from "node:path";
 import React, { type FC, useMemo, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput } from "silvery";
 import type { PermissionResponseDecision } from "../protocol/types.js";
 
 type PermissionDecision = PermissionResponseDecision;
@@ -88,6 +88,8 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   const [isEditingFeedback, setIsEditingFeedback] = useState(false);
 
   useInput((input, key) => {
+    const text = key.text ?? input;
+
     if (key.escape) {
       onCancelTurn();
       return;
@@ -163,16 +165,16 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         return;
       }
 
-      if (input && !key.ctrl && !key.meta) {
+      if (text && !key.ctrl && !key.meta) {
         setFeedback((current) =>
           replaceRange(
             current,
             feedbackCursorOffset,
             feedbackCursorOffset,
-            input,
+            text,
           ),
         );
-        setFeedbackCursorOffset((current) => current + input.length);
+        setFeedbackCursorOffset((current) => current + text.length);
       }
       return;
     }
@@ -197,7 +199,11 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       return;
     }
 
-    const shortcut = input.toLowerCase();
+    const shortcut = input?.toLowerCase();
+    if (!shortcut) {
+      return;
+    }
+
     const matched = OPTIONS.find(
       (option) => option.shortcut.toLowerCase() === shortcut,
     );
@@ -220,8 +226,12 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   return (
     <Box
       flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
       borderStyle="round"
       borderColor={riskColor}
+      overflow="scroll"
       paddingX={1}
     >
       <Text bold color={riskColor}>

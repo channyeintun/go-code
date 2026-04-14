@@ -1,5 +1,5 @@
 import React, { type ComponentProps, type FC, type ReactNode } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 
 interface MessageRowProps {
   children: ReactNode;

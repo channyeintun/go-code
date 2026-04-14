@@ -1,10 +1,13 @@
 import React, { type FC, useState } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput } from "silvery";
 import type { UIArtifactReview } from "../hooks/useEvents.js";
 
 interface ArtifactReviewPromptProps {
   review: UIArtifactReview;
-  onRespond: (decision: "approve" | "revise" | "cancel", feedback?: string) => void;
+  onRespond: (
+    decision: "approve" | "revise" | "cancel",
+    feedback?: string,
+  ) => void;
 }
 
 const ACTIONS = [
@@ -21,6 +24,8 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
   const [reviseFeedbackMode, setReviseFeedbackMode] = useState(false);
 
   useInput((input, key) => {
+    const text = key.text ?? input;
+
     if (reviseFeedbackMode) {
       if (key.return) {
         onRespond("revise", feedback.trim() || undefined);
@@ -35,8 +40,8 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
         setFeedback((f) => f.slice(0, -1));
         return;
       }
-      if (!key.ctrl && !key.meta && input) {
-        setFeedback((f) => f + input);
+      if (!key.ctrl && !key.meta && text) {
+        setFeedback((f) => f + text);
       }
       return;
     }
@@ -55,8 +60,12 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
   return (
     <Box
       flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
       borderStyle="round"
       borderColor="blue"
+      overflow="scroll"
       paddingX={1}
       marginTop={1}
     >
@@ -72,7 +81,9 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
 
       {reviseFeedbackMode ? (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">Revision notes (Enter to submit, Esc to cancel):</Text>
+          <Text color="yellow">
+            Revision notes (Enter to submit, Esc to cancel):
+          </Text>
           <Box marginTop={0}>
             <Text color="yellow">{">"} </Text>
             <Text>{feedback}</Text>

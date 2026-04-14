@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
+import { Box, Text } from "silvery";
 import type { UIToolCall } from "../hooks/useEvents.js";
 import { formatSubagentType } from "../utils/subagentLabels.js";
 import FileDiffPreview from "./FileDiffPreview.js";

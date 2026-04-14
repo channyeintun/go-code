@@ -1,5 +1,6 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput, usePaste } from "ink";
+import { Box, Text, useInput } from "silvery";
+import { usePaste } from "silvery/runtime";
 import type { PromptController } from "../hooks/usePromptHistory.js";
 import type { UISlashCommand } from "../hooks/useEvents.js";
 import { useSlashCommandPreview } from "../hooks/useSlashCommandPreview.js";
@@ -143,6 +144,8 @@ const Input: FC<InputProps> = ({
   });
 
   useInput((input, key) => {
+    const text = key.text ?? input;
+
     if (key.escape) {
       if (slashPreview.visible) {
         prompt.clear();
@@ -153,7 +156,7 @@ const Input: FC<InputProps> = ({
       return;
     }
 
-    if ((key.meta && input.toLowerCase() === "t") || input === "†") {
+    if ((key.meta && input?.toLowerCase() === "t") || text === "†") {
       onThinkingVisibilityToggle();
       return;
     }
@@ -293,8 +296,8 @@ const Input: FC<InputProps> = ({
           break;
       }
     }
-    if (input) {
-      prompt.insertText(input);
+    if (text) {
+      prompt.insertText(text);
       return;
     }
   });

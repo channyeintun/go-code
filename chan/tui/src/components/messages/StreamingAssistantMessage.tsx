@@ -1,6 +1,6 @@
 import React, { type FC } from "react";
-import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
+import { Spinner } from "silvery";
+import { Box, Text } from "silvery";
 import type { UIAssistantBlock } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";

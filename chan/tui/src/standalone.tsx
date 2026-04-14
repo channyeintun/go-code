@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
  * Standalone entry point for bun build --compile.
- * Resolves the Go engine binary next to itself and launches the Ink TUI.
+ * Resolves the Go engine binary next to itself and launches the Silvery TUI.
  */
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { render } from "ink";
+import { render } from "silvery";
 import React from "react";
 import App from "./App.js";
 
@@ -41,6 +41,6 @@ Options:
   }
 }
 
-render(
+await render(
   React.createElement(App, { enginePath, model, mode }),
-);
+).run();

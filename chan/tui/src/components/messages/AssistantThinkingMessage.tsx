@@ -1,6 +1,6 @@
 import React, { type FC, useMemo } from "react";
-import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
+import { Spinner } from "silvery";
+import { Box, Text } from "silvery";
 
 interface AssistantThinkingMessageProps {
   text: string;
