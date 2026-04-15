@@ -141,6 +141,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
     toast({
       title: "Complete",
+      variant: "success",
       duration: 2500,
     });
   }, [
