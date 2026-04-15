@@ -50,6 +50,7 @@ func main() {
 	}
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(newDebugViewCommand())
+	rootCmd.AddCommand(newTimingSummaryCommand())
 
 	// Make "run" the default command
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
