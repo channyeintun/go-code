@@ -2,7 +2,7 @@
 
 ## Current
 
-- Phase 5 subagent model selection is complete; optional protocol cleanup is next.
+- Optional protocol cleanup is next.
 
 ## Completed
 
@@ -18,6 +18,9 @@
 	- Stored the active subagent model as session-scoped state and persisted it in session metadata.
 	- Reset the subagent model on new sessions and restored it on resumed sessions.
 	- Surfaced the current subagent model in status output and /subagent help text.
+- Root binary cleanup completed.
+	- Removed the tracked local build artifact at chan/chan.
+	- Added an ignore rule so future local Go builds do not show up in git status.
 
 ## Next
 
