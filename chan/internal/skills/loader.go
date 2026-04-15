@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 type Skill struct {
 	Name         string
 	Description  string
+	Keywords     []string
 	AllowedTools []string
 	ArgumentHint string
 	Content      string // markdown content after frontmatter
@@ -32,10 +34,16 @@ var ignoredPromptTokens = map[string]struct{}{
 	"to": {}, "use": {}, "with": {}, "write": {},
 }
 
-// LoadAll discovers and loads skills from both user-global and project-local directories.
+// LoadAll discovers built-in, user-global, and project-local skills.
 func LoadAll(projectRoot string) ([]Skill, error) {
 	var skills []Skill
 	var loadErrs []error
+
+	builtinSkills, err := loadBuiltinSkills()
+	if err != nil {
+		loadErrs = append(loadErrs, fmt.Errorf("load built-in skills: %w", err))
+	}
+	skills = mergeSkills(skills, builtinSkills)
 
 	// User-global: ~/.config/chan/agents/*.md
 	home, _ := os.UserHomeDir()
@@ -44,7 +52,7 @@ func LoadAll(projectRoot string) ([]Skill, error) {
 	if err != nil {
 		loadErrs = append(loadErrs, fmt.Errorf("load global skills: %w", err))
 	}
-	skills = append(skills, globalSkills...)
+	skills = mergeSkills(skills, globalSkills)
 
 	// Project-local: .agents/*.md
 	if projectRoot != "" {
@@ -53,7 +61,7 @@ func LoadAll(projectRoot string) ([]Skill, error) {
 		if err != nil {
 			loadErrs = append(loadErrs, fmt.Errorf("load project skills: %w", err))
 		}
-		skills = append(skills, localSkills...)
+		skills = mergeSkills(skills, localSkills)
 	}
 
 	return skills, errors.Join(loadErrs...)
@@ -89,10 +97,13 @@ func loadSkillFile(path string) (Skill, error) {
 	if err != nil {
 		return Skill{}, err
 	}
+	return parseSkillContent(path, string(data)), nil
+}
 
-	content := string(data)
+func parseSkillContent(path string, content string) Skill {
+	baseName := pathpkg.Base(filepath.ToSlash(path))
 	skill := Skill{
-		Name:   strings.TrimSuffix(filepath.Base(path), ".md"),
+		Name:   strings.TrimSuffix(baseName, pathpkg.Ext(baseName)),
 		Source: path,
 	}
 
@@ -106,6 +117,9 @@ func loadSkillFile(path string) (Skill, error) {
 	if v, ok := frontmatter["description"]; ok {
 		skill.Description = v
 	}
+	if v, ok := frontmatter["keywords"]; ok {
+		skill.Keywords = splitCSV(v)
+	}
 	if v, ok := frontmatter["allowed-tools"]; ok {
 		skill.AllowedTools = splitCSV(v)
 	}
@@ -113,7 +127,7 @@ func loadSkillFile(path string) (Skill, error) {
 		skill.ArgumentHint = v
 	}
 
-	return skill, nil
+	return skill
 }
 
 func splitCSV(s string) []string {
@@ -223,6 +237,13 @@ func formatSkillEntry(skill Skill) string {
 
 func scoreSkill(skill Skill, lowerPrompt string, promptTokens map[string]struct{}) int {
 	score := 0
+	if len(skill.Keywords) > 0 {
+		keywordScore := scoreKeywords(skill.Keywords, lowerPrompt)
+		if keywordScore == 0 {
+			return 0
+		}
+		score += keywordScore
+	}
 	lowerName := strings.ToLower(strings.TrimSpace(skill.Name))
 	if lowerName != "" {
 		if strings.Contains(lowerPrompt, "/"+lowerName) || strings.Contains(lowerPrompt, lowerName) {
@@ -243,6 +264,44 @@ func overlapScore(tokens map[string]struct{}, promptTokens map[string]struct{}, 
 		}
 	}
 	return score
+}
+
+func scoreKeywords(keywords []string, lowerPrompt string) int {
+	score := 0
+	for _, keyword := range keywords {
+		keyword = strings.ToLower(strings.TrimSpace(keyword))
+		if keyword == "" {
+			continue
+		}
+		if strings.Contains(lowerPrompt, keyword) {
+			score += 6
+		}
+	}
+	return score
+}
+
+func mergeSkills(existing []Skill, next []Skill) []Skill {
+	if len(next) == 0 {
+		return existing
+	}
+	index := make(map[string]int, len(existing))
+	for i, skill := range existing {
+		index[skillKey(skill.Name)] = i
+	}
+	for _, skill := range next {
+		key := skillKey(skill.Name)
+		if idx, ok := index[key]; ok {
+			existing[idx] = skill
+			continue
+		}
+		index[key] = len(existing)
+		existing = append(existing, skill)
+	}
+	return existing
+}
+
+func skillKey(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
 }
 
 func tokenSet(text string) map[string]struct{} {
