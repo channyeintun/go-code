@@ -4,6 +4,7 @@ import type {
   UIAssistantBlock,
   UIAssistantMessage,
 } from "../../hooks/useEvents.js";
+import { stripProviderPrefix } from "../../utils/formatModel.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";
 
@@ -68,7 +69,7 @@ function renderMetadata(message: UIAssistantMessage) {
   }
 
   if (message.model) {
-    parts.push(message.model);
+    parts.push(stripProviderPrefix(message.model) ?? message.model);
   }
 
   if (parts.length === 0) {

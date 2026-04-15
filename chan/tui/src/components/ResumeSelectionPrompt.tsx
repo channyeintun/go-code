@@ -1,6 +1,7 @@
 import React, { type FC, useMemo, useState } from "react";
 import { Box, Text, useInput } from "silvery";
 import type { UIResumeSelection } from "../hooks/useEvents.js";
+import { stripProviderPrefix } from "../utils/formatModel.js";
 
 interface ResumeSelectionPromptProps {
   selection: UIResumeSelection;
@@ -97,13 +98,20 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
           const timestamp = formatUpdatedAt(session.updatedAt);
 
           return (
-            <Box key={session.sessionId} flexDirection="column" marginBottom={1}>
+            <Box
+              key={session.sessionId}
+              flexDirection="column"
+              marginBottom={1}
+            >
               <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
-                {isSelected ? "›" : " "} {session.sessionId.slice(0, 8)}  {timestamp}
+                {isSelected ? "›" : " "} {session.sessionId.slice(0, 8)}{" "}
+                {timestamp}
               </Text>
               <Text color="gray">
                 {session.title}
-                {session.model ? `  ·  ${session.model}` : ""}
+                {session.model
+                  ? `  ·  ${stripProviderPrefix(session.model) ?? session.model}`
+                  : ""}
                 {`  ·  $${session.totalCostUsd.toFixed(4)}`}
               </Text>
             </Box>

@@ -5,6 +5,7 @@ import {
   formatTokenCount,
   getEffectiveContextWindow,
 } from "../utils/modelContext.js";
+import { stripProviderPrefix } from "../utils/formatModel.js";
 import type {
   UIArtifact,
   UIArtifactReview,
@@ -235,7 +236,7 @@ function modeLabelColor(mode: string): "$primary" | "$accent" | undefined {
 }
 
 function formatModelLabel(model: string): string {
-  const compact = model.trim();
+  const compact = stripProviderPrefix(model) ?? "";
   if (!compact) {
     return "Unknown model";
   }
@@ -257,7 +258,6 @@ function formatModelLabel(model: string): string {
 
   return compact.replace(/-/g, " ");
 }
-
 function formatRateLimitWindow(label: string, usedPercentage: number): string {
   const rounded = Math.max(0, Math.min(999, Math.round(usedPercentage)));
   return `${label} ${rounded}%`;

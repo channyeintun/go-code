@@ -2,6 +2,7 @@ import React, { type FC } from "react";
 import { Spinner } from "silvery";
 import { Box, Text } from "silvery";
 import type { UIAssistantBlock } from "../../hooks/useEvents.js";
+import { stripProviderPrefix } from "../../utils/formatModel.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";
 import AssistantThinkingMessage from "./AssistantThinkingMessage.js";
@@ -28,8 +29,7 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
     statusLabel === "Thinking" && showThinking
       ? findLastBlockIndex(visibleBlocks, "thinking")
       : -1;
-  const showStatusRow =
-    statusLabel === "Thinking" && activeThinkingIndex < 0;
+  const showStatusRow = statusLabel === "Thinking" && activeThinkingIndex < 0;
   const statusText = formatStatusLabel(
     statusLabel,
     showThinking,
@@ -46,14 +46,16 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
       markerColor="$muted"
       markerDim
       label={null}
-      meta={model ? <Text dimColor>{model}</Text> : null}
+      meta={
+        model ? (
+          <Text dimColor>{stripProviderPrefix(model) ?? model}</Text>
+        ) : null
+      }
     >
       <Box flexDirection="column">
         {showStatusRow ? (
           <Text color="$muted">
-            <Spinner type="dots" />
-            {" "}
-            {statusText}
+            <Spinner type="dots" /> {statusText}
           </Text>
         ) : null}
         {visibleBlocks.map((block, index) => (
