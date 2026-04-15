@@ -15,7 +15,7 @@ This plan intentionally does not prioritize semantic or embedding-backed memory 
 
 - Long-running sessions preserve active working state across compaction with materially less continuity loss.
 - The system can compact more aggressively without forcing the model to reconstruct recent intent from raw transcript alone.
-- Compaction behavior becomes more observable, testable, and tunable.
+- Compaction behavior becomes more observable and tunable.
 - The design remains auditable and mostly deterministic.
 
 ## Track 1: Session Memory Extraction
@@ -161,15 +161,6 @@ Add explicit telemetry for:
 - whether microcompaction ran
 - failure reason when compaction aborts or is skipped
 
-### Phase 5: Testing
-
-Add tests for:
-
-- long-running coding sessions
-- tool-heavy sessions with repeated large outputs
-- retry/error-heavy sessions
-- sessions that compact with and without session memory present
-
 ## Acceptance Criteria
 
 - Token reduction improves before full summarization is needed.
@@ -198,7 +189,6 @@ Add tests for:
 - Preserve recent turns verbatim.
 - Emit detailed compaction telemetry.
 - Roll out behind flags first.
-- Add replay-style tests using representative real sessions.
 
 ## What Not To Do Yet
 
