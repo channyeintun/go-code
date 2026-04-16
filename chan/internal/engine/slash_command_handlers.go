@@ -46,6 +46,7 @@ type slashCommandContext struct {
 	tracker         *costpkg.Tracker
 	command         string
 	args            string
+	tools           []api.ToolDefinition
 	state           slashCommandState
 	client          *api.LLMClient
 }
@@ -135,6 +136,7 @@ func newSlashCommandContext(
 	subagentModelID string,
 	cwd string,
 	messages []api.Message,
+	tools []api.ToolDefinition,
 	client *api.LLMClient,
 ) *slashCommandContext {
 	return &slashCommandContext{
@@ -149,6 +151,7 @@ func newSlashCommandContext(
 		tracker:         tracker,
 		command:         strings.ToLower(strings.TrimSpace(payload.Command)),
 		args:            strings.TrimSpace(payload.Args),
+		tools:           append([]api.ToolDefinition(nil), tools...),
 		state: slashCommandState{
 			SessionID:       sessionID,
 			StartedAt:       startedAt,
@@ -655,7 +658,7 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 
-	result, err := compactWithMetrics(cmd.ctx, cmd.bridge, cmd.tracker, *cmd.client, cmd.timingLogger, cmd.state.SessionID, 0, string(agent.CompactManual), sessionMemory, cmd.state.Messages)
+	result, err := compactWithMetrics(cmd.ctx, cmd.bridge, cmd.tracker, *cmd.client, cmd.timingLogger, cmd.state.SessionID, 0, string(agent.CompactManual), sessionMemory, systemPromptForMode(cmd.state.Mode), cmd.tools, cmd.state.Messages)
 	if err != nil {
 		return cmd.bridge.EmitError(fmt.Sprintf("compact conversation: %v", err), true)
 	}

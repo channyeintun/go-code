@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 
@@ -174,18 +175,23 @@ type sessionStateParams struct {
 }
 
 type compactionSummarizer struct {
-	bridge  *ipc.Bridge
-	tracker *costpkg.Tracker
-	client  api.LLMClient
-	router  *localmodel.Router
+	bridge          *ipc.Bridge
+	tracker         *costpkg.Tracker
+	client          api.LLMClient
+	router          *localmodel.Router
+	systemPrompt    string
+	tools           []api.ToolDefinition
+	lastSummaryMode compact.SummaryMode
 }
 
-func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client api.LLMClient) *compact.Pipeline {
-	return compact.NewPipeline(client.Capabilities().MaxContextWindow, compactionSummarizer{
-		bridge:  bridge,
-		tracker: tracker,
-		client:  client,
-		router:  localmodel.NewRouter(client),
+func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client api.LLMClient, systemPrompt string, tools []api.ToolDefinition) *compact.Pipeline {
+	return compact.NewPipeline(client.Capabilities().MaxContextWindow, &compactionSummarizer{
+		bridge:       bridge,
+		tracker:      tracker,
+		client:       client,
+		router:       localmodel.NewRouter(client),
+		systemPrompt: strings.TrimSpace(systemPrompt),
+		tools:        append([]api.ToolDefinition(nil), tools...),
 	}, config.Load().EnableMicrocompact)
 }
 
@@ -199,10 +205,12 @@ func compactWithMetrics(
 	turnID int,
 	reason string,
 	sessionMemory agent.SessionMemorySnapshot,
+	systemPrompt string,
+	tools []api.ToolDefinition,
 	messages []api.Message,
 ) (compact.CompactResult, error) {
 	metrics := timing.NewCheckpointRecorder(time.Now())
-	pipeline := newCompactionPipeline(bridge, tracker, client)
+	pipeline := newCompactionPipeline(bridge, tracker, client, systemPrompt, tools)
 	hasSessionMemory := sessionMemory.HasContent()
 	hasFreshSessionMemory := sessionMemory.IsFresh(time.Now())
 	if hasSessionMemory {
@@ -217,6 +225,7 @@ func compactWithMetrics(
 			"tokens_before":            compact.EstimateConversationTokens(messages),
 			"has_session_memory":       hasSessionMemory,
 			"has_fresh_session_memory": hasFreshSessionMemory,
+			"summary_mode":             string(compact.SummaryModeNone),
 			"microcompact_enabled":     config.Load().EnableMicrocompact,
 		})
 		return compact.CompactResult{}, err
@@ -227,6 +236,7 @@ func compactWithMetrics(
 		"reason":                    reason,
 		"status":                    "completed",
 		"strategy":                  string(result.Strategy),
+		"summary_mode":              string(result.SummaryMode),
 		"tokens_after":              result.TokensAfter,
 		"tokens_before":             result.TokensBefore,
 		"tokens_saved":              result.TokensBefore - result.TokensAfter,
@@ -300,17 +310,36 @@ func newSessionMemoryRefiner(bridge *ipc.Bridge, tracker *costpkg.Tracker, clien
 	}
 }
 
-func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Message) (string, error) {
+func (s *compactionSummarizer) Summarize(ctx context.Context, messages []api.Message) (string, error) {
 	return s.SummarizeWithPrompt(ctx, messages, compact.CompactionPromptTemplate)
 }
 
-func (s compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages []api.Message, prompt string) (string, error) {
+func (s *compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages []api.Message, prompt string) (string, error) {
 	if summary, usedLocal, err := s.summarizeWithLocal(prompt, messages); usedLocal {
 		if err == nil && strings.TrimSpace(summary) != "" {
+			s.lastSummaryMode = compact.SummaryModeFresh
 			return compact.NormalizeSummary(summary), nil
 		}
 	}
 
+	if summary, err := s.summarizeWithCacheSafeRequest(ctx, messages, prompt); err == nil {
+		if strings.TrimSpace(summary) != "" {
+			s.lastSummaryMode = compact.SummaryModeCacheSafe
+			return compact.NormalizeSummary(summary), nil
+		}
+	} else if err == context.Canceled || err == context.DeadlineExceeded {
+		return "", err
+	}
+
+	s.lastSummaryMode = compact.SummaryModeFresh
+	return s.summarizeFresh(ctx, messages, prompt)
+}
+
+func (s *compactionSummarizer) LastSummaryMode() compact.SummaryMode {
+	return s.lastSummaryMode
+}
+
+func (s *compactionSummarizer) summarizeFresh(ctx context.Context, messages []api.Message, prompt string) (string, error) {
 	stream, err := s.client.Stream(ctx, api.ModelRequest{
 		Messages:     messages,
 		SystemPrompt: prompt,
@@ -320,7 +349,37 @@ func (s compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages 
 		return "", err
 	}
 
-	startedAt := time.Now()
+	return s.collectSummaryStream(stream, time.Now())
+}
+
+func (s *compactionSummarizer) summarizeWithCacheSafeRequest(ctx context.Context, messages []api.Message, prompt string) (string, error) {
+	if s.client == nil || !s.client.Capabilities().SupportsCaching {
+		return "", nil
+	}
+	if strings.TrimSpace(s.systemPrompt) == "" {
+		return "", nil
+	}
+	requestMessage := compact.BuildCompactionRequestMessage(prompt)
+	if requestMessage == "" {
+		return "", nil
+	}
+	requestMessages := append(append([]api.Message(nil), messages...), api.Message{
+		Role:    api.RoleUser,
+		Content: requestMessage,
+	})
+	stream, err := s.client.Stream(ctx, api.ModelRequest{
+		Messages:     requestMessages,
+		SystemPrompt: s.systemPrompt,
+		Tools:        s.tools,
+		MaxTokens:    2048,
+	})
+	if err != nil {
+		return "", err
+	}
+	return s.collectSummaryStream(stream, time.Now())
+}
+
+func (s *compactionSummarizer) collectSummaryStream(stream iter.Seq2[api.ModelEvent, error], startedAt time.Time) (string, error) {
 	var usage api.Usage
 	var builder strings.Builder
 
@@ -331,6 +390,11 @@ func (s compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages 
 		switch event.Type {
 		case api.ModelEventToken:
 			builder.WriteString(event.Text)
+		case api.ModelEventToolCall:
+			if event.ToolCall != nil {
+				return "", fmt.Errorf("compaction unexpectedly requested tool %q", event.ToolCall.Name)
+			}
+			return "", fmt.Errorf("compaction unexpectedly requested a tool")
 		case api.ModelEventUsage:
 			if event.Usage != nil {
 				usage = mergeUsage(usage, *event.Usage)
@@ -354,7 +418,7 @@ func (s compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages 
 	return compact.NormalizeSummary(builder.String()), nil
 }
 
-func (s compactionSummarizer) summarizeWithLocal(prompt string, messages []api.Message) (string, bool, error) {
+func (s *compactionSummarizer) summarizeWithLocal(prompt string, messages []api.Message) (string, bool, error) {
 	if s.router == nil {
 		return "", false, nil
 	}

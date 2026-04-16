@@ -274,7 +274,7 @@ func executeSubagent(
 		},
 		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
 			sessionMemory, _ := loadSessionMemorySnapshot(callCtx, artifactManager, childSessionID)
-			return compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), sessionMemory, current)
+			return compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), sessionMemory, childPrompt, queryTools, current)
 		},
 		RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
 			selector := memorypkg.RecallSelector{}

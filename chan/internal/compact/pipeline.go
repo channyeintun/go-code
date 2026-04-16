@@ -10,17 +10,25 @@ import (
 // Strategy identifies a compaction strategy.
 type Strategy string
 
+// SummaryMode identifies how the summary request itself was issued.
+type SummaryMode string
+
 const (
 	StrategyNone         Strategy = "none"
 	StrategyToolTruncate Strategy = "tool_truncate" // Strategy A: zero API calls
 	StrategySummarize    Strategy = "summarize"     // Strategy B: LLM call
 	StrategyPartial      Strategy = "partial"       // Strategy C: scope to recent
+
+	SummaryModeNone      SummaryMode = "none"
+	SummaryModeFresh     SummaryMode = "fresh"
+	SummaryModeCacheSafe SummaryMode = "cache_safe"
 )
 
 // CompactResult holds the outcome of a compaction run.
 type CompactResult struct {
 	Messages                []api.Message
 	Strategy                Strategy
+	SummaryMode             SummaryMode
 	TokensBefore            int
 	TokensAfter             int
 	MicrocompactApplied     bool
@@ -32,6 +40,7 @@ type Pipeline struct {
 	contextWindow       int
 	summarizer          Summarizer
 	microcompactEnabled bool
+	summaryMode         SummaryMode
 	// SessionMemoryHint is the current session memory content. When set, the
 	// compaction prompt tells the summarizer to skip facts already preserved
 	// in session memory, producing a more complementary summary.
@@ -49,6 +58,11 @@ type PromptSummarizer interface {
 	SummarizeWithPrompt(ctx context.Context, messages []api.Message, prompt string) (string, error)
 }
 
+// SummaryModeReporter exposes how the summarizer issued its last request.
+type SummaryModeReporter interface {
+	LastSummaryMode() SummaryMode
+}
+
 // NewPipeline creates a compaction pipeline.
 func NewPipeline(contextWindow int, summarizer Summarizer, microcompactEnabled bool) *Pipeline {
 	return &Pipeline{
@@ -64,7 +78,8 @@ func NewPipeline(contextWindow int, summarizer Summarizer, microcompactEnabled b
 // 3. Partial compaction (if still over budget)
 func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason string) (CompactResult, error) {
 	result := CompactResult{
-		Messages: messages,
+		Messages:    messages,
+		SummaryMode: SummaryModeNone,
 	}
 	result.TokensBefore = EstimateConversationTokens(messages)
 
@@ -109,6 +124,7 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 
 	result.Messages = BuildSummaryMessages(summary, retained)
 	result.Strategy = StrategySummarize
+	result.SummaryMode = p.summaryMode
 	result.TokensAfter = EstimateConversationTokens(result.Messages)
 
 	return result, nil
@@ -137,6 +153,7 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 	return CompactResult{
 		Messages:                compacted,
 		Strategy:                StrategyPartial,
+		SummaryMode:             p.summaryMode,
 		TokensBefore:            tokensBefore,
 		TokensAfter:             EstimateConversationTokens(compacted),
 		MicrocompactApplied:     truncatedTokens < tokensBefore,
@@ -145,10 +162,19 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 }
 
 func (p *Pipeline) summarize(ctx context.Context, messages []api.Message, prompt string) (string, error) {
+	p.summaryMode = SummaryModeNone
 	if promptSummarizer, ok := p.summarizer.(PromptSummarizer); ok {
-		return promptSummarizer.SummarizeWithPrompt(ctx, messages, prompt)
+		summary, err := promptSummarizer.SummarizeWithPrompt(ctx, messages, prompt)
+		if reporter, ok := p.summarizer.(SummaryModeReporter); ok {
+			p.summaryMode = reporter.LastSummaryMode()
+		}
+		return summary, err
 	}
-	return p.summarizer.Summarize(ctx, messages)
+	summary, err := p.summarizer.Summarize(ctx, messages)
+	if reporter, ok := p.summarizer.(SummaryModeReporter); ok {
+		p.summaryMode = reporter.LastSummaryMode()
+	}
+	return summary, err
 }
 
 func shouldRunSummary(reason string, tokensBefore, tokensAfter, contextWindow int) bool {

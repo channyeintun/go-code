@@ -34,6 +34,7 @@ func handleSlashCommand(
 	subagentModelID string,
 	cwd string,
 	messages []api.Message,
+	tools []api.ToolDefinition,
 	client *api.LLMClient,
 ) (slashCommandState, bool, error) {
 	cmd := newSlashCommandContext(
@@ -54,6 +55,7 @@ func handleSlashCommand(
 		subagentModelID,
 		cwd,
 		messages,
+		tools,
 		client,
 	)
 

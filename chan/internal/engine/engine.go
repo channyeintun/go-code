@@ -243,6 +243,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 				loopState.subagentModelID,
 				loopState.cwd,
 				loopState.messages,
+				registry.Definitions(),
 				&loopState.client,
 			)
 			if err != nil {

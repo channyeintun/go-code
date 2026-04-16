@@ -44,6 +44,23 @@ Structured summary for seamless continuation. Omit raw tool calls and API respon
 
 const summaryMessagePrefix = "Conversation summary for continuation:"
 
+// BuildCompactionRequestMessage turns a compaction prompt into a final user
+// instruction appended to the existing conversation so the upstream cached
+// prefix can be reused during summary generation.
+func BuildCompactionRequestMessage(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ""
+	}
+	return strings.TrimSpace(`Summarize the conversation already in context for continuation.
+Do not call tools.
+Return only the summary markdown.
+
+<compaction_request>
+` + prompt + `
+</compaction_request>`)
+}
+
 // BuildCompactionPrompt augments a base compaction prompt with session memory
 // context so the summarizer can avoid repeating facts already captured.
 func BuildCompactionPrompt(basePrompt string, sessionMemoryContent string) string {
