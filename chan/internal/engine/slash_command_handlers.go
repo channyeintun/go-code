@@ -707,6 +707,9 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 	}); err != nil {
 		return err
 	}
+	if err := emitConversationHydrated(cmd.bridge, cmd.state.Messages, cmd.state.ActiveModelID); err != nil {
+		return err
+	}
 	if err := emitSessionUpdated(cmd.bridge, cmd.state.SessionID, restored.Metadata.Title); err != nil {
 		return err
 	}
