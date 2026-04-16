@@ -50,6 +50,7 @@ func main() {
 	}
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(newDebugViewCommand())
+	rootCmd.AddCommand(newMCPCommand())
 	rootCmd.AddCommand(newTimingSummaryCommand())
 
 	// Make "run" the default command

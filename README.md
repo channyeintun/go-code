@@ -169,6 +169,31 @@ chan --mode fast
 chan --help
 ```
 
+### MCP management
+
+Chan now includes a small MCP management CLI similar to Claude Code's core flow.
+
+```bash
+chan mcp add my-server -- npx my-mcp-server
+chan mcp add --transport http sentry https://mcp.sentry.dev/mcp
+chan mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'
+chan mcp list
+chan mcp get sentry
+chan mcp remove sentry
+```
+
+Supported scopes:
+
+- `project` writes repo-local MCP config to `.chan/mcp.json`
+- `user` writes user MCP config to `~/.config/chan/config.json`
+
+Notes:
+
+- `add` supports `stdio`, `http`, `sse`, and `ws` transports
+- `--env KEY=value` applies to `stdio` servers
+- `--header 'Key: Value'` applies to `http`, `sse`, and `ws` servers
+- `list` and `get` attempt real MCP connections, so listing a repo-scoped `stdio` server will spawn it briefly to inspect health and capabilities
+
 ### Slash commands
 
 | Command               | Description                                    |
