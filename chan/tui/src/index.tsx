@@ -7,7 +7,15 @@ import App from "./App.js";
 const enginePath = process.env["CHAN_ENGINE_PATH"] ?? "chan-engine";
 const model = process.env["CHAN_MODEL"] ?? "anthropic/claude-sonnet-4-20250514";
 const mode = process.env["CHAN_MODE"] ?? "plan";
-const theme = createTheme().preset("sonokai").build();
+const theme = createTheme()
+  .preset("sonokai")
+  .color("background", "#2C2E34")
+  .color("foreground", "#E2E2E3")
+  .color("cursorColor", "#E2E2E3")
+  .color("cursorText", "#2C2E34")
+  .color("selectionBackground", "#4A4C53")
+  .color("selectionForeground", "#E2E2E3")
+  .build();
 const caps = detectTerminalCaps();
 
 const app = createApp(() => () => ({}));

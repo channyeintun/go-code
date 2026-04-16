@@ -233,23 +233,36 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       flexDirection="column"
       flexGrow={1}
       flexShrink={1}
+      minWidth={0}
       minHeight={0}
-      backgroundColor="$surface-bg"
-      borderStyle="round"
-      borderColor="$border"
-      overflow="scroll"
-      paddingX={1}
+      backgroundColor="$popover-bg"
+      borderStyle="double"
+      borderColor="$inputborder"
+      overflow="hidden"
+      paddingX={2}
+      paddingY={1}
     >
-      <Text bold color="$primary">
-        Select Model
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text>Choose the active model for the session.</Text>
-        <Text color="$muted">
-          Current: {formatCurrentModel(selection.currentModel)}
+      <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        <Text bold color="$primary">
+          Select Model
         </Text>
+        <Box marginTop={1} flexDirection="column" minWidth={0}>
+          <Text>Choose the active model for the session.</Text>
+          <Text color="$muted">
+            Current: {formatCurrentModel(selection.currentModel)}
+          </Text>
+        </Box>
       </Box>
-      <Box marginTop={1} flexDirection="column">
+
+      <Box
+        marginTop={1}
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        minWidth={0}
+        overflow="scroll"
+      >
         {visibleOptions.map((option, index) => {
           const actualIndex = startIndex + index;
           const isSelected = actualIndex === selectedIndex;
@@ -258,13 +271,21 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
             <Box
               key={`${option.label}-${actualIndex}`}
               flexDirection="column"
+              backgroundColor={isSelected ? "$selectionbg" : undefined}
+              paddingX={1}
               marginBottom={1}
+              minWidth={0}
             >
-              <Text color={isSelected ? "$primary" : "$fg"} bold={isSelected}>
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} {option.label}
-                {option.active ? <Text color="$success"> current</Text> : null}
+                {option.active ? (
+                  <Text color={isSelected ? "$selection" : "$success"}>
+                    {" "}
+                    current
+                  </Text>
+                ) : null}
               </Text>
-              <Text color="$muted">
+              <Text color={isSelected ? "$selection" : "$muted"}>
                 {formatModelLine(option)}
                 {option.description ? `  ·  ${option.description}` : ""}
               </Text>
@@ -275,9 +296,12 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       <Box
         marginTop={1}
         paddingX={1}
+        paddingY={1}
+        backgroundColor="$surface-bg"
         borderStyle="round"
-        borderColor={customMode ? "$focusborder" : "$border"}
+        borderColor={customMode ? "$focusborder" : "$inputborder"}
         flexDirection="column"
+        flexShrink={0}
       >
         <Text color={customMode ? "$primary" : "$muted"}>Custom model</Text>
         <Text color="$muted">
@@ -289,7 +313,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
           {customMode ? renderEditableValue(customValue, cursorOffset) : " "}
         </Text>
       </Box>
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" flexShrink={0}>
         <Text dimColor>
           {customMode
             ? "Enter apply · Esc return to list"

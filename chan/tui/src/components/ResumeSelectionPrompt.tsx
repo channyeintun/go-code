@@ -75,24 +75,37 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
       flexDirection="column"
       flexGrow={1}
       flexShrink={1}
+      minWidth={0}
       minHeight={0}
-      backgroundColor="$surface-bg"
-      borderStyle="round"
-      borderColor="$border"
-      overflow="scroll"
-      paddingX={1}
+      backgroundColor="$popover-bg"
+      borderStyle="double"
+      borderColor="$inputborder"
+      overflow="hidden"
+      paddingX={2}
+      paddingY={1}
     >
-      <Text bold color="$primary">
-        Resume Session
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text>Choose a session to resume.</Text>
-        <Text color="$muted">
-          {selection.sessions.length} available session
-          {selection.sessions.length === 1 ? "" : "s"}
+      <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        <Text bold color="$primary">
+          Resume Session
         </Text>
+        <Box marginTop={1} flexDirection="column" minWidth={0}>
+          <Text>Choose a session to resume.</Text>
+          <Text color="$muted">
+            {selection.sessions.length} available session
+            {selection.sessions.length === 1 ? "" : "s"}
+          </Text>
+        </Box>
       </Box>
-      <Box marginTop={1} flexDirection="column">
+
+      <Box
+        marginTop={1}
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        minWidth={0}
+        overflow="scroll"
+      >
         {visibleSessions.map((session, index) => {
           const actualIndex = startIndex + index;
           const isSelected = actualIndex === selectedIndex;
@@ -102,13 +115,16 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
             <Box
               key={session.sessionId}
               flexDirection="column"
+              backgroundColor={isSelected ? "$selectionbg" : undefined}
+              paddingX={1}
               marginBottom={1}
+              minWidth={0}
             >
-              <Text color={isSelected ? "$primary" : "$fg"} bold={isSelected}>
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} {session.sessionId.slice(0, 8)}{" "}
                 {timestamp}
               </Text>
-              <Text color="$muted">
+              <Text color={isSelected ? "$selection" : "$muted"}>
                 {session.title}
                 {session.model
                   ? `  ·  ${stripProviderPrefix(session.model) ?? session.model}`
@@ -119,7 +135,7 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
           );
         })}
       </Box>
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" flexShrink={0}>
         <Text dimColor>
           Enter resume · Up/Down change selection · Esc or Q cancel
         </Text>

@@ -76,25 +76,39 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
       flexDirection="column"
       flexGrow={1}
       flexShrink={1}
+      minWidth={0}
       minHeight={0}
-      borderStyle="round"
-      borderColor="$border"
-      overflow="scroll"
-      paddingX={1}
+      backgroundColor="$popover-bg"
+      borderStyle="double"
+      borderColor="$inputborder"
+      overflow="hidden"
+      paddingX={2}
+      paddingY={1}
     >
-      <Text bold color="$warning">
-        Rewind Conversation
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text>
-          Choose the user turn to keep. Later messages will be dropped.
+      <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        <Text bold color="$warning">
+          Rewind Conversation
         </Text>
-        <Text color="$muted">
-          {selection.turns.length} available turn
-          {selection.turns.length === 1 ? "" : "s"}
-        </Text>
+        <Box marginTop={1} flexDirection="column" minWidth={0}>
+          <Text>
+            Choose the user turn to keep. Later messages will be dropped.
+          </Text>
+          <Text color="$muted">
+            {selection.turns.length} available turn
+            {selection.turns.length === 1 ? "" : "s"}
+          </Text>
+        </Box>
       </Box>
-      <Box marginTop={1} flexDirection="column">
+
+      <Box
+        marginTop={1}
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        minWidth={0}
+        overflow="scroll"
+      >
         {visibleTurns.map((turn, index) => {
           const actualIndex = startIndex + index;
           const isSelected = actualIndex === selectedIndex;
@@ -102,17 +116,23 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
           return (
             <Box
               key={`${turn.turnNumber}-${turn.messageIndex}`}
+              flexDirection="column"
+              backgroundColor={isSelected ? "$selectionbg" : undefined}
+              paddingX={1}
               marginBottom={1}
+              minWidth={0}
             >
-              <Text color={isSelected ? "$warning" : "$fg"} bold={isSelected}>
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} Turn {turn.turnNumber}
               </Text>
-              <Text color="$muted">{turn.preview}</Text>
+              <Text color={isSelected ? "$selection" : "$muted"}>
+                {turn.preview}
+              </Text>
             </Box>
           );
         })}
       </Box>
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" flexShrink={0}>
         <Text dimColor>
           Enter rewind · Up/Down change selection · Esc or Q cancel
         </Text>

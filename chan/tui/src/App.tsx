@@ -771,10 +771,12 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
     >
       <Box
         flexDirection="column"
-        width="72%"
-        height="60%"
+        width="100%"
+        maxWidth={96}
+        height="100%"
         maxHeight="85%"
         flexShrink={1}
+        minWidth={0}
         minHeight={0}
         userSelect="contain"
       >

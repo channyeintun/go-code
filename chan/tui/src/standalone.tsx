@@ -25,7 +25,15 @@ const enginePath =
 
 let model = "anthropic/claude-sonnet-4-20250514";
 let mode = "plan";
-const theme = createTheme().preset("sonokai").build();
+const theme = createTheme()
+  .preset("sonokai")
+  .color("background", "#2C2E34")
+  .color("foreground", "#E2E2E3")
+  .color("cursorColor", "#E2E2E3")
+  .color("cursorText", "#2C2E34")
+  .color("selectionBackground", "#4A4C53")
+  .color("selectionForeground", "#E2E2E3")
+  .build();
 const caps = detectTerminalCaps();
 
 const args = process.argv.slice(2);
