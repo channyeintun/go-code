@@ -1,8 +1,9 @@
 import React, { type FC } from "react";
-import { Box, Text } from "silvery";
+import { Box } from "silvery";
 import { DEFAULT_PROMPT_MARKER } from "../../constants/prompt.js";
 import type { UIUserMessage } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
+import PreservedText from "../PreservedText.js";
 
 interface UserTextMessageProps {
   message: UIUserMessage;
@@ -15,12 +16,13 @@ const UserTextMessage: FC<UserTextMessageProps> = ({
 }) => {
   return (
     <MessageRow
-      marker={DEFAULT_PROMPT_MARKER.trimEnd()}
+      marker={continuation ? " " : DEFAULT_PROMPT_MARKER.trimEnd()}
       markerColor="$primary"
       label={null}
+      marginBottom={continuation ? 0 : 1}
     >
       <Box width="100%" minWidth={0}>
-        <Text wrap="wrap">{message.text}</Text>
+        <PreservedText text={message.text} />
       </Box>
     </MessageRow>
   );

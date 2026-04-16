@@ -303,8 +303,8 @@ export function renderMarkdownBlocks(text: string): MarkdownBlock[] {
   let currentText = "";
 
   const flushText = () => {
-    const content = currentText.replace(/\n+$/, "").trim();
-    if (content.length > 0) {
+    const content = currentText.replace(/\n+$/, "");
+    if (content.trim().length > 0) {
       blocks.push({ kind: "text", content });
     }
     currentText = "";

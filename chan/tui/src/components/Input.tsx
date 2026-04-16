@@ -21,6 +21,8 @@ interface InputProps {
   onModeToggle: () => void;
   onThinkingVisibilityToggle: () => void;
   onArtifactVisibilityToggle: () => void;
+  onSendQueuedPromptNow: () => void;
+  onRemoveQueuedPrompt: () => void;
   onCancel: () => void;
   disabled?: boolean;
 }
@@ -125,6 +127,8 @@ const Input: FC<InputProps> = ({
   onModeToggle,
   onThinkingVisibilityToggle,
   onArtifactVisibilityToggle,
+  onSendQueuedPromptNow,
+  onRemoveQueuedPrompt,
   onCancel,
   disabled,
 }) => {
@@ -155,169 +159,182 @@ const Input: FC<InputProps> = ({
     slashCommands,
   });
 
-  useInput((input, key) => {
-    const text = key.text ?? input;
+  useInput(
+    (input, key) => {
+      const text = key.text ?? input;
 
-    if (key.escape) {
-      if (slashPreview.visible) {
-        prompt.clear();
-        return;
-      }
-
-      onCancel();
-      return;
-    }
-
-    if ((key.meta && input?.toLowerCase() === "t") || text === "†") {
-      onThinkingVisibilityToggle();
-      return;
-    }
-
-    if (key.meta && input?.toLowerCase() === "a") {
-      onArtifactVisibilityToggle();
-      return;
-    }
-
-    if (disabled) return;
-
-    if (key.tab) {
-      if (slashPreview.visible) {
-        const nextValue = slashPreview.applySelection();
-        if (nextValue) {
-          prompt.setValue(nextValue);
-        }
-        return;
-      }
-
-      onModeToggle();
-      return;
-    }
-    if (key.return) {
-      if (key.shift || key.meta) {
-        prompt.insertNewline();
-        return;
-      }
-
-      if (slashPreview.visible && slashPreview.selectedCommand) {
-        const nextValue = slashPreview.applySelection();
-        if (nextValue) {
-          prompt.setValue(nextValue);
-        }
-        if (!slashPreview.selectedCommand.takesArguments) {
-          onSubmit(nextValue ?? undefined);
-        }
-        return;
-      }
-
-      onSubmit();
-      return;
-    }
-    if (key.upArrow) {
-      if (slashPreview.visible) {
-        slashPreview.selectPrevious();
-        return;
-      }
-
-      if (!prompt.moveVisualUp(promptTextColumns)) {
-        prompt.navigateUp();
-      }
-
-      return;
-    }
-    if (key.downArrow) {
-      if (slashPreview.visible) {
-        slashPreview.selectNext();
-        return;
-      }
-
-      if (!prompt.moveVisualDown(promptTextColumns)) {
-        prompt.navigateDown();
-      }
-
-      return;
-    }
-    if (key.leftArrow) {
-      if (key.ctrl || key.meta) {
-        prompt.moveWordLeft();
-      } else {
-        prompt.moveLeft();
-      }
-
-      return;
-    }
-    if (key.rightArrow) {
-      if (key.ctrl || key.meta) {
-        prompt.moveWordRight();
-      } else {
-        prompt.moveRight();
-      }
-
-      return;
-    }
-    if (key.home || (key.ctrl && input === "a")) {
-      prompt.moveLineStart();
-      return;
-    }
-    if (key.end || (key.ctrl && input === "e")) {
-      prompt.moveLineEnd();
-      return;
-    }
-    if (key.backspace) {
-      if (key.ctrl || key.meta) {
-        prompt.deleteWordBackward();
-      } else {
-        prompt.backspace();
-      }
-
-      return;
-    }
-    if (key.delete) {
-      if (key.ctrl || key.meta) {
-        prompt.deleteWordForward();
-      } else {
-        prompt.deleteForward();
-      }
-
-      return;
-    }
-    if (key.ctrl) {
-      switch (input) {
-        case "b":
-          prompt.moveLeft();
-          return;
-        case "f":
-          prompt.moveRight();
-          return;
-        case "g":
-          onOpenTranscriptSearch();
-          return;
-        case "h":
-          prompt.backspace();
-          return;
-        case "n":
-          prompt.navigateDown();
-          return;
-        case "o":
-          prompt.insertNewline();
-          return;
-        case "p":
-          prompt.navigateUp();
-          return;
-        case "u":
+      if (key.escape) {
+        if (slashPreview.visible) {
           prompt.clear();
           return;
-        case "w":
-          prompt.deleteWordBackward();
-          return;
-        default:
-          break;
+        }
+
+        onCancel();
+        return;
       }
-    }
-    if (text) {
-      prompt.insertText(text);
-      return;
-    }
-  }, { isActive: !disabled });
+
+      if ((key.meta && input?.toLowerCase() === "t") || text === "†") {
+        onThinkingVisibilityToggle();
+        return;
+      }
+
+      if (key.meta && input?.toLowerCase() === "a") {
+        onArtifactVisibilityToggle();
+        return;
+      }
+
+      if (key.ctrl && input === "y") {
+        onSendQueuedPromptNow();
+        return;
+      }
+
+      if (key.ctrl && input === "k") {
+        onRemoveQueuedPrompt();
+        return;
+      }
+
+      if (disabled) return;
+
+      if (key.tab) {
+        if (slashPreview.visible) {
+          const nextValue = slashPreview.applySelection();
+          if (nextValue) {
+            prompt.setValue(nextValue);
+          }
+          return;
+        }
+
+        onModeToggle();
+        return;
+      }
+      if (key.return) {
+        if (key.shift || key.meta) {
+          prompt.insertNewline();
+          return;
+        }
+
+        if (slashPreview.visible && slashPreview.selectedCommand) {
+          const nextValue = slashPreview.applySelection();
+          if (nextValue) {
+            prompt.setValue(nextValue);
+          }
+          if (!slashPreview.selectedCommand.takesArguments) {
+            onSubmit(nextValue ?? undefined);
+          }
+          return;
+        }
+
+        onSubmit();
+        return;
+      }
+      if (key.upArrow) {
+        if (slashPreview.visible) {
+          slashPreview.selectPrevious();
+          return;
+        }
+
+        if (!prompt.moveVisualUp(promptTextColumns)) {
+          prompt.navigateUp();
+        }
+
+        return;
+      }
+      if (key.downArrow) {
+        if (slashPreview.visible) {
+          slashPreview.selectNext();
+          return;
+        }
+
+        if (!prompt.moveVisualDown(promptTextColumns)) {
+          prompt.navigateDown();
+        }
+
+        return;
+      }
+      if (key.leftArrow) {
+        if (key.ctrl || key.meta) {
+          prompt.moveWordLeft();
+        } else {
+          prompt.moveLeft();
+        }
+
+        return;
+      }
+      if (key.rightArrow) {
+        if (key.ctrl || key.meta) {
+          prompt.moveWordRight();
+        } else {
+          prompt.moveRight();
+        }
+
+        return;
+      }
+      if (key.home || (key.ctrl && input === "a")) {
+        prompt.moveLineStart();
+        return;
+      }
+      if (key.end || (key.ctrl && input === "e")) {
+        prompt.moveLineEnd();
+        return;
+      }
+      if (key.backspace) {
+        if (key.ctrl || key.meta) {
+          prompt.deleteWordBackward();
+        } else {
+          prompt.backspace();
+        }
+
+        return;
+      }
+      if (key.delete) {
+        if (key.ctrl || key.meta) {
+          prompt.deleteWordForward();
+        } else {
+          prompt.deleteForward();
+        }
+
+        return;
+      }
+      if (key.ctrl) {
+        switch (input) {
+          case "b":
+            prompt.moveLeft();
+            return;
+          case "f":
+            prompt.moveRight();
+            return;
+          case "g":
+            onOpenTranscriptSearch();
+            return;
+          case "h":
+            prompt.backspace();
+            return;
+          case "n":
+            prompt.navigateDown();
+            return;
+          case "o":
+            prompt.insertNewline();
+            return;
+          case "p":
+            prompt.navigateUp();
+            return;
+          case "u":
+            prompt.clear();
+            return;
+          case "w":
+            prompt.deleteWordBackward();
+            return;
+          default:
+            break;
+        }
+      }
+      if (text) {
+        prompt.insertText(text);
+        return;
+      }
+    },
+    { isActive: !disabled },
+  );
 
   usePaste((text) => {
     if (disabled) {
@@ -369,7 +386,9 @@ const Input: FC<InputProps> = ({
               <Text color={mode === "bash" ? "$accent" : "$primary"} bold>
                 {promptMarker}
               </Text>
-              <Text color="$muted">Ask chan to inspect, plan, or edit code</Text>
+              <Text color="$muted">
+                Ask chan to inspect, plan, or edit code
+              </Text>
               <Text color="$muted">{"█"}</Text>
             </Box>
           ) : (

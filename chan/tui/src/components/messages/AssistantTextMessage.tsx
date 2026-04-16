@@ -30,9 +30,10 @@ const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
       marker=" "
       markerColor="$muted"
       label={null}
-      meta={renderMetadata(message)}
+      meta={continuation ? null : renderMetadata(message)}
+      marginBottom={continuation ? 0 : 1}
     >
-      <Box flexDirection="column">
+      <Box flexDirection="column" minWidth={0}>
         {visibleBlocks.map((block, index) =>
           renderAssistantBlock(block, index, visibleBlocks.length),
         )}
@@ -49,7 +50,11 @@ function renderAssistantBlock(
   blockCount: number,
 ) {
   return (
-    <Box key={`${block.kind}-${index}`} marginTop={index === 0 ? 0 : 1}>
+    <Box
+      key={`${block.kind}-${index}`}
+      marginTop={index === 0 ? 0 : 1}
+      minWidth={0}
+    >
       <MarkdownText text={block.text} streaming={index === blockCount - 1} />
     </Box>
   );

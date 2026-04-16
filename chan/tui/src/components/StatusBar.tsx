@@ -38,7 +38,6 @@ interface StatusBarProps {
   backgroundAgents: UIBackgroundAgent[];
   backgroundCommands: UIBackgroundCommand[];
   rateLimits: UIRateLimits;
-  queuedPromptCount?: number;
 }
 
 const StatusBar: FC<StatusBarProps> = ({
@@ -65,7 +64,6 @@ const StatusBar: FC<StatusBarProps> = ({
   backgroundAgents,
   backgroundCommands,
   rateLimits,
-  queuedPromptCount = 0,
 }) => {
   const readinessLabel = ready ? "READY" : "BOOTING";
   const readinessColor = ready ? "$success" : "$warning";
@@ -192,17 +190,6 @@ const StatusBar: FC<StatusBarProps> = ({
             <Text color="$muted"> · </Text>
             <Text color="$accent">cmd</Text>
             <Text color="$muted"> {backgroundCommandSummary}</Text>
-          </>
-        ) : null}
-        {queuedPromptCount > 0 ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$warning">queue</Text>
-            <Text color="$muted">
-              {queuedPromptCount === 1
-                ? " 1 prompt"
-                : ` ${queuedPromptCount} prompts`}
-            </Text>
           </>
         ) : null}
         {artifactSummary ? (

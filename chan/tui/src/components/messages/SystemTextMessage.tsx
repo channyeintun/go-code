@@ -2,6 +2,7 @@ import React, { type FC } from "react";
 import { Box, Text } from "silvery";
 import type { UISystemMessage } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
+import PreservedText from "../PreservedText.js";
 
 interface SystemTextMessageProps {
   message: UISystemMessage;
@@ -20,9 +21,7 @@ const SystemTextMessage: FC<SystemTextMessageProps> = ({ message }) => {
       meta={renderMetadata(message.timestamp)}
     >
       <Box width="100%" minWidth={0}>
-        <Text color={toneColor(message.tone)} wrap="wrap">
-          {message.text}
-        </Text>
+        <PreservedText text={message.text} color={toneColor(message.tone)} />
       </Box>
     </MessageRow>
   );

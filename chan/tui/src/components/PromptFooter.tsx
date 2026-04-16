@@ -108,8 +108,14 @@ const PromptFooter: FC<PromptFooterProps> = ({
     [blockedReason, queuedPromptCount, showArtifacts],
   );
   const hint = useMemo(
-    () => buildInputHint(disabled, terminalColumns, artifactsShortcutLabel),
-    [artifactsShortcutLabel, disabled, terminalColumns],
+    () =>
+      buildInputHint(
+        disabled,
+        terminalColumns,
+        artifactsShortcutLabel,
+        queuedPromptCount,
+      ),
+    [artifactsShortcutLabel, disabled, queuedPromptCount, terminalColumns],
   );
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
@@ -291,11 +297,6 @@ function buildActivityDetails(
   if (blockedReason) {
     parts.push(blockedReason);
   }
-  if (queuedPromptCount > 0) {
-    parts.push(
-      queuedPromptCount === 1 ? "1 queued" : `${queuedPromptCount} queued`,
-    );
-  }
   if (!showArtifacts) {
     parts.push("artifacts hidden");
   }
@@ -306,23 +307,27 @@ function buildInputHint(
   disabled: boolean | undefined,
   terminalColumns: number,
   artifactsShortcutLabel: string,
+  queuedPromptCount: number,
 ) {
+  const queueHint =
+    queuedPromptCount > 0 ? " | Ctrl+Y send queued | Ctrl+K drop queued" : "";
+
   if (terminalColumns < 72) {
     return disabled
-      ? `Busy | ${artifactsShortcutLabel} artifacts | Esc cancel`
-      : `Enter send | ${artifactsShortcutLabel} artifacts | Esc cancel`;
+      ? `Busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
+      : `Enter send | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
   }
 
   if (terminalColumns < 96) {
     return disabled
-      ? `Busy | ${artifactsShortcutLabel} artifacts | Esc cancel`
-      : `Enter send | ${artifactsShortcutLabel} artifacts | Ctrl+G search | Esc cancel`;
+      ? `Busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
+      : `Enter send | ${artifactsShortcutLabel} artifacts${queueHint} | Ctrl+G search | Esc cancel`;
   }
 
   if (disabled) {
-    return `Engine busy | ${artifactsShortcutLabel} artifacts | Esc cancel`;
+    return `Engine busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
   }
-  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts | Tab mode | Esc cancel`;
+  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts${queueHint} | Tab mode | Esc cancel`;
 }
 
 function buildMemoryRecallText(

@@ -27,6 +27,7 @@ const MessageRow: FC<MessageRowProps> = ({
       flexDirection="row"
       alignItems="flex-start"
       marginBottom={marginBottom}
+      minWidth={0}
     >
       <Box minWidth={2}>
         {typeof marker === "string" ? (
@@ -37,10 +38,10 @@ const MessageRow: FC<MessageRowProps> = ({
           marker
         )}
       </Box>
-      <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="column" flexGrow={1} minWidth={0}>
         {label || meta ? (
-          <Box flexDirection="row" justifyContent="space-between">
-            <Box flexGrow={1}>{label}</Box>
+          <Box flexDirection="row" justifyContent="space-between" minWidth={0}>
+            <Box flexGrow={1} minWidth={0}>{label}</Box>
             {meta ? <Box marginLeft={1}>{meta}</Box> : null}
           </Box>
         ) : null}

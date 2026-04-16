@@ -196,14 +196,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   }, [prompt.value]);
 
   useEffect(() => {
-    if (
-      !isEngineReady ||
-      uiState.isStreaming ||
-      uiState.pendingPermission ||
-      uiState.pendingArtifactReview ||
-      uiState.pendingModelSelection ||
-      uiState.pendingResumeSelection
-    ) {
+    if (isQueuedPromptDispatchBlocked(uiState, isEngineReady)) {
       return;
     }
 
@@ -226,6 +219,25 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.pendingModelSelection,
     uiState.pendingResumeSelection,
   ]);
+
+  const handleSendNextQueuedPrompt = useCallback(() => {
+    if (isQueuedPromptDispatchBlocked(uiState, isEngineReady)) {
+      return;
+    }
+
+    const queuedPrompt = queuedPrompts[0];
+    if (!queuedPrompt) {
+      return;
+    }
+
+    setQueuedPrompts((current) => current.slice(1));
+    setPasteWarning(null);
+    submitPrompt(queuedPrompt.text, queuedPrompt.images);
+  }, [isEngineReady, queuedPrompts, submitPrompt, uiState]);
+
+  const handleRemoveNextQueuedPrompt = useCallback(() => {
+    setQueuedPrompts((current) => current.slice(1));
+  }, []);
 
   const handleImagePaste = (images: PastedImageData[]) => {
     let startId = nextImageId;
@@ -268,6 +280,21 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.pendingResumeSelection ||
       queuedPrompts.length
     ) {
+      if (queuedPrompts.length > 0) {
+        setQueuedPrompts((current) => {
+          const lastQueuedPrompt = current.at(-1);
+          if (!lastQueuedPrompt) {
+            return current;
+          }
+
+          return [
+            ...current.slice(0, -1),
+            mergeQueuedPrompt(lastQueuedPrompt, text, images),
+          ];
+        });
+        return;
+      }
+
       const queuedPrompt: QueuedPrompt = {
         id: nextQueuedPromptId,
         text,
@@ -454,7 +481,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           backgroundAgents={uiState.backgroundAgents}
           backgroundCommands={uiState.backgroundCommands}
           rateLimits={uiState.rateLimits}
-          queuedPromptCount={queuedPrompts.length}
         />
       </Box>
 
@@ -515,6 +541,11 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             toolCalls={uiState.toolCalls}
             transcript={uiState.transcript}
             artifacts={visibleArtifacts}
+            queuedPrompts={queuedPrompts.map((queuedPrompt) => ({
+              id: queuedPrompt.id,
+              text: queuedPrompt.text,
+              imageCount: queuedPrompt.images.length,
+            }))}
             liveBlocks={uiState.liveAssistantBlocks}
             isStreaming={uiState.isStreaming}
             activeTurnStatus={uiState.activeTurnStatus}
@@ -584,24 +615,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           maxHeight="45%"
           overflow="scroll"
         >
-          {queuedPrompts.length > 0 && (
-            <Box flexDirection="column" paddingLeft={1} marginBottom={1}>
-              <Text color="yellow">
-                Queued prompts ({queuedPrompts.length})
-              </Text>
-              {queuedPrompts.slice(0, 3).map((queuedPrompt) => (
-                <Box key={queuedPrompt.id} flexDirection="row">
-                  <Text dimColor>{"> "}</Text>
-                  <Text dimColor>{summarizeQueuedPrompt(queuedPrompt)}</Text>
-                </Box>
-              ))}
-              {queuedPrompts.length > 3 && (
-                <Text
-                  dimColor
-                >{`+${queuedPrompts.length - 3} more queued`}</Text>
-              )}
-            </Box>
-          )}
           {transcriptSearchActive ? (
             <TranscriptSearchPrompt
               query={transcriptSearchQuery}
@@ -626,6 +639,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onModeToggle={engine.sendModeToggle}
               onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
               onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
+              onSendQueuedPromptNow={handleSendNextQueuedPrompt}
+              onRemoveQueuedPrompt={handleRemoveNextQueuedPrompt}
               onCancel={handleCancel}
               disabled={isPromptDisabled}
             />
@@ -797,21 +812,51 @@ function selectVisibleArtifacts(
   return focusedArtifact ? [focusedArtifact, ...remainingArtifacts] : filtered;
 }
 
-function summarizeQueuedPrompt(queuedPrompt: QueuedPrompt): string {
-  const flattened = queuedPrompt.text.replace(/\s+/g, " ").trim();
-  const summary =
-    flattened.length > 88 ? `${flattened.slice(0, 85)}...` : flattened;
+function isQueuedPromptDispatchBlocked(
+  uiState: ReturnType<typeof useEvents>["uiState"],
+  isEngineReady: boolean,
+): boolean {
+  return (
+    !isEngineReady ||
+    uiState.isStreaming ||
+    uiState.pendingPermission !== null ||
+    uiState.pendingArtifactReview !== null ||
+    uiState.pendingModelSelection !== null ||
+    uiState.pendingResumeSelection !== null
+  );
+}
 
-  if (queuedPrompt.images.length === 0) {
-    return summary;
+function clonePromptImages(
+  images: UserInputImagePayload[],
+): UserInputImagePayload[] {
+  return images.map((image) => ({ ...image }));
+}
+
+function mergeQueuedPrompt(
+  queuedPrompt: QueuedPrompt,
+  nextText: string,
+  nextImages: UserInputImagePayload[],
+): QueuedPrompt {
+  return {
+    ...queuedPrompt,
+    text: mergeQueuedPromptText(queuedPrompt.text, nextText),
+    images: [...queuedPrompt.images, ...clonePromptImages(nextImages)],
+  };
+}
+
+function mergeQueuedPromptText(currentText: string, nextText: string): string {
+  const currentTrimmed = currentText.trim();
+  const nextTrimmed = nextText.trim();
+
+  if (currentTrimmed.length === 0) {
+    return nextTrimmed;
   }
 
-  const suffix =
-    queuedPrompt.images.length === 1
-      ? " [1 image]"
-      : ` [${queuedPrompt.images.length} images]`;
+  if (nextTrimmed.length === 0) {
+    return currentTrimmed;
+  }
 
-  return `${summary}${suffix}`;
+  return `${currentTrimmed}\n\n${nextTrimmed}`;
 }
 
 function getPromptBlockedReason({

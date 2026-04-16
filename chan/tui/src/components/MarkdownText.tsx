@@ -1,6 +1,7 @@
 import React, { type FC, useMemo, useRef } from "react";
-import { Box, Text } from "silvery";
+import { Box } from "silvery";
 import MarkdownTable from "./MarkdownTable.js";
+import PreservedText from "./PreservedText.js";
 import { renderMarkdownBlocks, cachedLexer } from "../utils/markdown.js";
 
 interface MarkdownTextProps {
@@ -17,13 +18,17 @@ const MarkdownTextBody: FC<Pick<MarkdownTextProps, "text">> = ({ text }) => {
     <Box flexDirection="column" width="100%" minWidth={0}>
       {rendered.map((block, index) => {
         if (block.kind === "table") {
-          return <MarkdownTable key={`table-${index}`} token={block.token} />;
+          return (
+            <Box key={`table-${index}`} marginTop={index === 0 ? 0 : 1}>
+              <MarkdownTable token={block.token} />
+            </Box>
+          );
         }
 
         return (
-          <Text key={`text-${index}`} wrap="wrap">
-            {block.content}
-          </Text>
+          <Box key={`text-${index}`} marginTop={index === 0 ? 0 : 1}>
+            <PreservedText text={block.content} />
+          </Box>
         );
       })}
     </Box>

@@ -46,13 +46,14 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
       markerColor="$muted"
       markerDim
       label={null}
+      marginBottom={0}
       meta={
         model ? (
           <Text dimColor>{stripProviderPrefix(model) ?? model}</Text>
         ) : null
       }
     >
-      <Box flexDirection="column">
+      <Box flexDirection="column" minWidth={0}>
         {showStatusRow ? (
           <Text color="$muted">
             <Spinner type="dots" /> {statusText}
@@ -62,6 +63,7 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
           <Box
             key={`${block.kind}-${index}`}
             marginTop={showStatusRow || index > 0 ? 1 : 0}
+            minWidth={0}
           >
             {block.kind === "thinking" ? (
               <AssistantThinkingMessage

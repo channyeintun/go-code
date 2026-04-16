@@ -1,5 +1,12 @@
-import React, { type FC, useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  type FC,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Box, ListView, Text, useBoxRect } from "silvery";
+import { DEFAULT_PROMPT_MARKER } from "../constants/prompt.js";
 import type {
   UIActiveTurnStatus,
   UIAssistantBlock,
@@ -13,7 +20,9 @@ import type {
 } from "../hooks/useEvents.js";
 import ArtifactView from "./ArtifactView.js";
 import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
+import MessageRow from "./MessageRow.js";
 import PlanPanel from "./PlanPanel.js";
+import PreservedText from "./PreservedText.js";
 import ToolProgress from "./ToolProgress.js";
 import { activeTurnStatusLabel } from "../utils/activeTurnStatus.js";
 import AssistantTextMessage from "./messages/AssistantTextMessage.js";
@@ -26,6 +35,7 @@ interface StreamOutputProps {
   toolCalls: UIToolCall[];
   transcript: UITranscriptEntry[];
   artifacts: UIArtifact[];
+  queuedPrompts: QueuedPromptPreview[];
   liveBlocks: UIAssistantBlock[];
   isStreaming: boolean;
   activeTurnStatus: UIActiveTurnStatus;
@@ -40,12 +50,23 @@ interface StreamOutputProps {
   ) => void;
 }
 
+interface QueuedPromptPreview {
+  id: number;
+  text: string;
+  imageCount: number;
+}
+
 type TranscriptBlock =
   | {
       kind: "message";
       key: string;
       message: UIAssistantMessage | UISystemMessage | UIUserMessage;
       continuation: boolean;
+    }
+  | {
+      kind: "queued_prompt";
+      key: string;
+      prompt: QueuedPromptPreview;
     }
   | { kind: "artifact"; key: string; artifact: UIArtifact }
   | { kind: "tool_call"; key: string; toolCall: UIToolCall }
@@ -67,6 +88,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
   toolCalls,
   transcript,
   artifacts,
+  queuedPrompts,
   liveBlocks,
   isStreaming,
   activeTurnStatus,
@@ -93,7 +115,12 @@ const StreamOutput: FC<StreamOutputProps> = ({
   );
   const transcriptBlocks = useMemo(
     () =>
-      buildTranscriptBlocks(transcript, messageById, toolCallById, artifactById),
+      buildTranscriptBlocks(
+        transcript,
+        messageById,
+        toolCallById,
+        artifactById,
+      ),
     [artifactById, messageById, toolCallById, transcript],
   );
   const displayBlocks = useMemo(() => {
@@ -107,8 +134,20 @@ const StreamOutput: FC<StreamOutputProps> = ({
       items.push({ kind: "streaming", key: "live-stream" });
     }
 
+    items.push(
+      ...queuedPrompts.map((prompt) => ({
+        kind: "transcript" as const,
+        key: `queued-${prompt.id}`,
+        block: {
+          kind: "queued_prompt" as const,
+          key: `queued-${prompt.id}`,
+          prompt,
+        },
+      })),
+    );
+
     return items;
-  }, [isStreaming, transcriptBlocks]);
+  }, [isStreaming, queuedPrompts, transcriptBlocks]);
   const { height: rectHeight } = useBoxRect();
   const viewportHeight = Math.max(1, rectHeight);
   const searchQuery = transcriptSearchQuery.trim().toLowerCase();
@@ -190,6 +229,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
   if (
     transcript.length === 0 &&
     artifacts.length === 0 &&
+    queuedPrompts.length === 0 &&
     liveBlocks.length === 0 &&
     !isStreaming
   ) {
@@ -255,16 +295,16 @@ function renderTranscriptBlock(
   const matchOrdinal = searchMatchIndices.indexOf(index);
   const isSelectedSearchMatch =
     matchOrdinal >= 0 && matchOrdinal === normalizedSearchSelectedIndex;
-  const isSearchMatch = matchOrdinal >= 0;
+  const searchLabel = renderSearchLabel(
+    isSelectedSearchMatch,
+    matchOrdinal,
+    searchMatchIndices.length,
+  );
 
   if (block.kind === "artifact") {
     return (
       <Box key={block.key} flexDirection="column">
-        {isSelectedSearchMatch ? (
-          <Text color="$primary">Search match</Text>
-        ) : isSearchMatch ? (
-          <Text dimColor>match</Text>
-        ) : null}
+        {searchLabel}
         {renderArtifactBlock(block.artifact)}
       </Box>
     );
@@ -273,11 +313,7 @@ function renderTranscriptBlock(
   if (block.kind === "tool_group") {
     return (
       <Box key={block.key} flexDirection="column">
-        {isSelectedSearchMatch ? (
-          <Text color="$primary">Search match</Text>
-        ) : isSearchMatch ? (
-          <Text dimColor>match</Text>
-        ) : null}
+        {searchLabel}
         <GroupedToolCalls group={block.group} />
       </Box>
     );
@@ -286,12 +322,17 @@ function renderTranscriptBlock(
   if (block.kind === "tool_call") {
     return (
       <Box key={block.key} flexDirection="column">
-        {isSelectedSearchMatch ? (
-          <Text color="$primary">Search match</Text>
-        ) : isSearchMatch ? (
-          <Text dimColor>match</Text>
-        ) : null}
+        {searchLabel}
         <ToolProgress toolCall={block.toolCall} />
+      </Box>
+    );
+  }
+
+  if (block.kind === "queued_prompt") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {searchLabel}
+        <QueuedPromptMessage prompt={block.prompt} />
       </Box>
     );
   }
@@ -299,11 +340,7 @@ function renderTranscriptBlock(
   if (block.message.role === "assistant") {
     return (
       <Box key={block.key} flexDirection="column">
-        {isSelectedSearchMatch ? (
-          <Text color="$primary">Search match</Text>
-        ) : isSearchMatch ? (
-          <Text dimColor>match</Text>
-        ) : null}
+        {searchLabel}
         <AssistantTextMessage
           message={block.message}
           continuation={block.continuation}
@@ -315,11 +352,7 @@ function renderTranscriptBlock(
   if (block.message.role === "system") {
     return (
       <Box key={block.key} flexDirection="column">
-        {isSelectedSearchMatch ? (
-          <Text color="cyan">Search match</Text>
-        ) : isSearchMatch ? (
-          <Text dimColor>match</Text>
-        ) : null}
+        {searchLabel}
         <SystemTextMessage message={block.message} />
       </Box>
     );
@@ -327,15 +360,31 @@ function renderTranscriptBlock(
 
   return (
     <Box key={block.key} flexDirection="column">
-      {isSelectedSearchMatch ? (
-        <Text color="$primary">Search match</Text>
-      ) : isSearchMatch ? (
-        <Text dimColor>match</Text>
-      ) : null}
+      {searchLabel}
       <UserTextMessage
         message={block.message}
         continuation={block.continuation}
       />
+    </Box>
+  );
+}
+
+function renderSearchLabel(
+  isSelectedSearchMatch: boolean,
+  matchOrdinal: number,
+  totalMatches: number,
+) {
+  if (!isSelectedSearchMatch || matchOrdinal < 0 || totalMatches <= 0) {
+    return null;
+  }
+
+  return (
+    <Box flexDirection="row" paddingLeft={1} marginBottom={1}>
+      <Text
+        color="$primary"
+        bold
+      >{`Match ${matchOrdinal + 1}/${totalMatches}`}</Text>
+      <Text color="$muted">{" in transcript"}</Text>
     </Box>
   );
 }
@@ -356,6 +405,8 @@ function estimateDisplayBlockHeight(block: DisplayBlock | undefined): number {
       return Math.max(4, block.block.group.toolCalls.length * 2);
     case "tool_call":
       return 4;
+    case "queued_prompt":
+      return estimateQueuedPromptHeight(block.block.prompt);
     case "message":
       return block.block.message.role === "assistant" ? 6 : 3;
     default:
@@ -376,9 +427,7 @@ function renderArtifactBlock(artifact: UIArtifact) {
     );
   }
 
-  return (
-    <ArtifactView artifacts={[artifact]} />
-  );
+  return <ArtifactView artifacts={[artifact]} />;
 }
 
 function estimateArtifactHeight(artifact: UIArtifact): number {
@@ -393,7 +442,6 @@ function buildTranscriptBlocks(
   artifactById: Map<string, UIArtifact>,
 ): TranscriptBlock[] {
   const blocks: TranscriptBlock[] = [];
-  let previousMessageRole: UIMessage["role"] | null = null;
 
   for (let index = 0; index < transcript.length; index += 1) {
     const entry = transcript[index];
@@ -412,7 +460,6 @@ function buildTranscriptBlocks(
         key: `artifact-${artifact.id}`,
         artifact,
       });
-      previousMessageRole = null;
       continue;
     }
 
@@ -426,9 +473,8 @@ function buildTranscriptBlocks(
         kind: "message",
         key: `message-${message.id}`,
         message,
-        continuation: previousMessageRole === message.role,
+        continuation: false,
       });
-      previousMessageRole = message.role;
       continue;
     }
 
@@ -446,11 +492,115 @@ function buildTranscriptBlocks(
     }
 
     blocks.push(...buildToolBlocks(run));
-    previousMessageRole = null;
     index = cursor - 1;
   }
 
-  return blocks;
+  return withMessageContinuations(reorderTurnBlocks(blocks));
+}
+
+function reorderTurnBlocks(blocks: TranscriptBlock[]): TranscriptBlock[] {
+  const reordered: TranscriptBlock[] = [];
+  let index = 0;
+
+  while (index < blocks.length) {
+    const current = blocks[index];
+    if (!current) {
+      index += 1;
+      continue;
+    }
+
+    reordered.push(current);
+    index += 1;
+
+    if (current.kind !== "message" || current.message.role !== "user") {
+      continue;
+    }
+
+    const turnBlocks: TranscriptBlock[] = [];
+    while (index < blocks.length) {
+      const nextBlock = blocks[index];
+      if (nextBlock?.kind === "message" && nextBlock.message.role === "user") {
+        break;
+      }
+      if (nextBlock) {
+        turnBlocks.push(nextBlock);
+      }
+      index += 1;
+    }
+
+    reordered.push(...promoteLeadAssistantRun(turnBlocks));
+  }
+
+  return reordered;
+}
+
+function promoteLeadAssistantRun(blocks: TranscriptBlock[]): TranscriptBlock[] {
+  const firstAssistantIndex = blocks.findIndex(
+    (block) => block.kind === "message" && block.message.role === "assistant",
+  );
+
+  if (firstAssistantIndex <= 0) {
+    return blocks;
+  }
+
+  let assistantRunEnd = firstAssistantIndex;
+  while (assistantRunEnd < blocks.length) {
+    const block = blocks[assistantRunEnd];
+    if (!(block?.kind === "message" && block.message.role === "assistant")) {
+      break;
+    }
+
+    assistantRunEnd += 1;
+  }
+
+  return [
+    ...blocks.slice(firstAssistantIndex, assistantRunEnd),
+    ...blocks.slice(0, firstAssistantIndex),
+    ...blocks.slice(assistantRunEnd),
+  ];
+}
+
+function withMessageContinuations(
+  blocks: TranscriptBlock[],
+): TranscriptBlock[] {
+  let previousMessage: UIMessage | null = null;
+
+  return blocks.map((block) => {
+    if (block.kind !== "message") {
+      previousMessage = null;
+      return block;
+    }
+
+    const nextBlock = {
+      ...block,
+      continuation: isMessageContinuation(previousMessage, block.message),
+    };
+    previousMessage = block.message;
+    return nextBlock;
+  });
+}
+
+function isMessageContinuation(
+  previousMessage: UIMessage | null,
+  currentMessage: UIMessage,
+): boolean {
+  if (!previousMessage || previousMessage.role !== currentMessage.role) {
+    return false;
+  }
+
+  if (currentMessage.role === "assistant") {
+    return previousMessage.role === "assistant"
+      ? previousMessage.model === currentMessage.model
+      : false;
+  }
+
+  if (currentMessage.role === "system") {
+    return previousMessage.role === "system"
+      ? previousMessage.tone === currentMessage.tone
+      : false;
+  }
+
+  return true;
 }
 
 function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
@@ -539,6 +689,8 @@ function blockSearchText(block: TranscriptBlock): string {
       return toolCallSearchText(block.toolCall);
     case "tool_group":
       return block.group.toolCalls.map(toolCallSearchText).join("\n");
+    case "queued_prompt":
+      return queuedPromptSearchText(block.prompt);
     default:
       return "";
   }
@@ -578,6 +730,57 @@ function toolCallSearchText(toolCall: UIToolCall): string {
     .filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     )
+    .join("\n")
+    .toLowerCase();
+}
+
+function QueuedPromptMessage({ prompt }: { prompt: QueuedPromptPreview }) {
+  return (
+    <Box marginTop={1}>
+      <MessageRow
+        marker={DEFAULT_PROMPT_MARKER.trimEnd()}
+        markerColor="$primary"
+        label={
+          <Text color="$muted" bold>
+            Queued
+          </Text>
+        }
+        meta={renderQueuedPromptMeta(prompt.imageCount)}
+      >
+        <Box width="100%" minWidth={0}>
+          <PreservedText text={renderQueuedPromptText(prompt)} />
+        </Box>
+      </MessageRow>
+    </Box>
+  );
+}
+
+function renderQueuedPromptMeta(imageCount: number) {
+  const parts = ["pending"];
+  if (imageCount > 0) {
+    parts.push(imageCount === 1 ? "1 image" : `${imageCount} images`);
+  }
+
+  return <Text dimColor>{parts.join("  ")}</Text>;
+}
+
+function renderQueuedPromptText(prompt: QueuedPromptPreview): string {
+  const text = prompt.text.trim();
+  if (text.length > 0) {
+    return text;
+  }
+
+  return prompt.imageCount > 0 ? "(queued image prompt)" : "(queued prompt)";
+}
+
+function estimateQueuedPromptHeight(prompt: QueuedPromptPreview): number {
+  const lines = renderQueuedPromptText(prompt).split("\n").length;
+  return Math.max(3, Math.min(8, lines + 2));
+}
+
+function queuedPromptSearchText(prompt: QueuedPromptPreview): string {
+  return [renderQueuedPromptText(prompt), "queued"]
+    .filter((value) => value.length > 0)
     .join("\n")
     .toLowerCase();
 }
