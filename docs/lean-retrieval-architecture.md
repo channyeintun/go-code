@@ -6,14 +6,15 @@ It replaces the old idea of storing durable code summaries with a repo-first ret
 
 ## Summary
 
-Chan now uses four cooperating context layers:
+Chan now uses five cooperating context layers:
 
 1. **Working context** — current prompt, recent tool output, active session state, git state.
 2. **Live retrieval graph** — a session-scoped, in-memory graph over repository structure.
 3. **Preference memory** — durable user/project guidance for non-derivable conventions only.
-4. **Session attempt log** — short-lived failure history to avoid repeated mistakes in one session.
+4. **Session memory** — structured per-session continuity state extracted from the transcript.
+5. **Compaction and attempt log** — transcript shrinking plus short-lived failure history to avoid repeated mistakes.
 
-The codebase remains the source of truth. Retrieval reads live files from disk and injects excerpts with provenance instead of relying on cached code summaries.
+The codebase remains the source of truth. Retrieval reads live files from disk and injects excerpts with provenance instead of relying on cached code summaries. Session memory and compaction complement retrieval; they do not replace it.
 
 ## Why this architecture
 
@@ -27,6 +28,7 @@ The new design optimizes for:
 - token budget discipline
 - fast invalidation when files change
 - session-local retry prevention
+- continuity preservation when context pressure rises
 
 ## Core design rules
 
@@ -34,7 +36,8 @@ The new design optimizes for:
 2. **No durable code summaries.** Persistent memory is for preferences and conventions, not repo facts.
 3. **Session-scoped graph.** Structural retrieval state lives in memory for the active session only.
 4. **Pressure aware.** Retrieval shrinks or skips when prompt pressure rises.
-5. **Cheap invalidation.** Touched files are re-parsed when their mod time changes.
+5. **Continuity preserved separately.** Session memory and compaction keep working state without turning durable memory into a repo cache.
+6. **Cheap invalidation.** Touched files are re-parsed when their mod time changes.
 
 ## Main components
 
@@ -171,6 +174,33 @@ The prompt text explicitly tells the model to treat these as selective guidance 
 
 That is the key architectural shift: durable memory no longer acts as the main source for code understanding.
 
+## Session memory sits beside retrieval
+
+Session memory is a separate layer from durable preference memory and separate from retrieval.
+
+- `chan/internal/engine/session_memory.go`
+- `chan/internal/agent/session_memory.go`
+
+Purpose:
+
+- preserve current task state across compaction
+- keep active files, workflow, errors, decisions, and worklog in structured form
+- carry forward continuity without treating the transcript itself as the only working memory
+
+Important properties:
+
+- session-scoped, not cross-session
+- derived from the live transcript, not from cached code summaries
+- deduplicated against durable memory and recent transcript content
+- refreshed after significant progress, tool activity, or compaction
+
+The important boundary is:
+
+- **retrieval** answers "what live repo context should be loaded now?"
+- **session memory** answers "what current task state must survive transcript pressure?"
+
+These are related but not interchangeable.
+
 ## Session attempt log
 
 Chan also keeps a short-lived session attempt log.
@@ -200,6 +230,28 @@ When context gets hot:
 
 This keeps retrieval and compaction from competing independently for tokens.
 
+## Compaction is now continuity-aware
+
+Compaction is no longer just a blunt summary fallback.
+
+- `chan/internal/compact/pipeline.go`
+- `chan/internal/compact/summarize.go`
+- `chan/internal/engine/session_helpers.go`
+
+The pipeline now has multiple cooperating steps:
+
+1. tool-result truncation / microcompaction
+2. full summarization when needed
+3. recent-window partial compaction when that preserves more fidelity
+
+Compaction also coordinates with session memory:
+
+- session memory is refreshed around compaction events
+- compaction prompts are told what session memory already preserves
+- summaries can avoid repeating facts already carried in session memory
+
+This changes the role of compaction. It is no longer only a token emergency valve. It is also a continuity-preserving layer that works with session memory under pressure.
+
 ## Invalidation model
 
 The graph is designed to be cheap to refresh.
@@ -225,11 +277,12 @@ No disk persistence. No durable code cache. No cross-session graph state.
 
 ## Telemetry
 
-The retrieval system emits explicit runtime telemetry.
+The context system emits explicit runtime telemetry.
 
 Defined in:
 
 - `chan/internal/ipc/protocol.go`
+- `chan/internal/timing/analysis.go`
 
 Key events:
 
@@ -246,16 +299,23 @@ Key events:
 - `attempt_repeated`
   - emitted when a new tool failure matches a prior logged failure
 
-This telemetry is surfaced to the TUI so retrieval activity is visible, not hidden.
+Key compaction/session-memory signals:
+
+- whether session memory was present
+- whether session memory was fresh at compaction time
+- whether microcompaction fired
+- how many tokens compaction saved
+
+This telemetry is surfaced to the TUI and timing analysis so retrieval and continuity behavior stay visible, not hidden.
 
 ## Relationship to the web docs diagrams
 
-The architecture section in `web/docs.html` already reflects this design.
+The architecture section in `web/docs.html` reflects this design at two levels.
 
 It shows two complementary views:
 
 1. **Core Harness** — TUI, Go engine, retrieval, memory, planner, tools, and LLM infrastructure.
-2. **Per-Turn Retrieval Pipeline** — input signals → anchor extraction → session graph → scoring/budgeting → LLM, with invalidation and pressure gating.
+2. **Per-Turn Retrieval Pipeline** — retrieval-specific flow: input signals → anchor extraction → session graph → scoring/budgeting → LLM, with invalidation and pressure gating.
 
 Related assets:
 
@@ -269,6 +329,8 @@ The important conceptual mapping is:
 - **Scoring** ranks context under a token budget
 - **Invalidation** refreshes graph structure after changes
 - **Pressure Gate** reduces or skips retrieval under context pressure
+- **Session Memory** preserves structured working state outside the retrieval diagram
+- **Compaction** preserves continuity when transcript pressure still exceeds budget
 
 ## What this architecture is not
 
@@ -279,7 +341,7 @@ This system is intentionally **not**:
 - a durable store of code summaries
 - a cross-session episodic task memory system
 
-It is a lightweight, repo-first retrieval layer for selecting the highest-value live context per token.
+It is a lightweight, repo-first retrieval layer inside a broader context system that also includes session memory and compaction.
 
 ## Key source files
 
@@ -289,17 +351,24 @@ It is a lightweight, repo-first retrieval layer for selecting the highest-value 
 - `chan/internal/agent/retrieval_graph.go` — graph structure, parsing, invalidation, scoring expansion
 - `chan/internal/agent/context_pressure.go` — pressure gating and retrieval budget
 - `chan/internal/agent/memory_files.go` — preference-framed durable memory recall
+- `chan/internal/agent/session_memory.go` — prompt-facing session-memory snapshot formatting
+- `chan/internal/engine/session_memory.go` — session-memory extraction and refresh policy
+- `chan/internal/compact/pipeline.go` — microcompaction, summarization, partial compaction
+- `chan/internal/compact/summarize.go` — compaction prompts and session-memory coordination
 - `chan/internal/ipc/protocol.go` — retrieval and attempt-log telemetry events
+- `chan/internal/timing/analysis.go` — timing summary and compaction/session-memory analysis
 
 ## Final takeaway
 
-Chan’s lean retrieval architecture works by combining:
+Chan’s context architecture now works by combining:
 
 - live repo reads
 - exact anchors
 - a session-scoped structural graph
 - preference-only durable memory
+- session-scoped structured session memory
+- continuity-aware compaction
 - session-local retry prevention
 - token-aware prompt assembly
 
-The result is lower-trust durable memory, higher-trust live context, and a retrieval path that stays fast, cheap to invalidate, and aligned with the current repository state.
+The result is lower-trust durable memory, higher-trust live context, explicit continuity state, and a retrieval path that stays fast, cheap to invalidate, and aligned with the current repository state.

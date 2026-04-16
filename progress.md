@@ -16,6 +16,7 @@
 - Added the enhancement planning and reference-comparison markdown documents to the repository so the implementation history, ratings, and rollout plan are tracked alongside the code changes.
 - Closed the two remaining gaps for Claude Code parity: (1) added LLM-mediated session memory refinement so extraction captures reasoning and intent beyond what pure heuristics can collect, gated by a token-delta threshold to control cost; (2) made compaction session-memory-aware by injecting already-preserved session memory content into the compaction prompt so the summarizer produces a complementary summary instead of repeating facts.
 - Tightened all system prompts across the codebase for extreme concision: compaction templates, session memory refinement, main system prompt, plan mode, subagent variants, capability fallback, memory/skill injection preambles, and the compaction session-memory hint. Sacrificed grammar for precision throughout.
+- Updated the architecture docs so the lean retrieval diagram stays retrieval-scoped while the surrounding prose now explains session memory and continuity-aware compaction as separate cooperating context layers.
 
 ## 2026-04-15
 

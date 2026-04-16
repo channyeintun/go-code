@@ -1321,14 +1321,16 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
             <p class="text-sm text-gray-400 leading-relaxed mb-4">
               Chan uses a split-process architecture. A Silvery-powered terminal
               UI communicates with a Go engine over NDJSON. Every turn, the
-              engine selects live context through a session-scoped retrieval
-              graph — no cached code summaries.
+              engine assembles context from four cooperating layers: live
+              retrieval, durable preference memory, session memory, and
+              compaction. Retrieval stays repo-first — no cached code summaries.
             </p>
             <p class="text-sm text-gray-500 leading-relaxed mb-8">
               See the implementation write-up in
               <code>docs/lean-retrieval-architecture.md</code> for the
-              repo-first retrieval model, session graph, invalidation rules, and
-              telemetry details behind this diagram.
+              retrieval layer, session graph, session-memory/compaction
+              interplay, invalidation rules, and telemetry details behind this
+              diagram.
             </p>
 
             <!-- ═══ Diagram 1: The Core Harness (Architecture) ═══ -->
@@ -1527,7 +1529,8 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
             <div class="diagram-wrap mb-14">
               <div class="diagram-eyebrow">Per-Turn Retrieval Pipeline</div>
               <div class="diagram-subtitle">
-                Visualizing system components and their live connections
+                Retrieval stays lean; session memory and compaction preserve
+                continuity around it
               </div>
               <div class="diagram-scroll">
                 <svg
@@ -2131,6 +2134,14 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                 </svg>
               </div>
             </div>
+
+            <p class="text-sm text-gray-500 leading-relaxed mb-8">
+              This diagram is intentionally retrieval-scoped. It shows how Chan
+              selects fresh repo context per turn. Continuity under context
+              pressure is handled by separate layers: session memory preserves
+              structured working state, and compaction trims or summarizes older
+              transcript state without replacing live retrieval.
+            </p>
           </section>
 
           <section id="build" class="mb-24">
