@@ -234,6 +234,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       flexGrow={1}
       flexShrink={1}
       minHeight={0}
+      backgroundColor="$surface-bg"
       borderStyle="round"
       borderColor="cyan"
       overflow="scroll"
