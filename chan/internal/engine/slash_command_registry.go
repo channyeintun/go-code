@@ -110,7 +110,7 @@ func slashCommandSpecs() []slashCommandSpec {
 		{
 			Descriptor: commandspkg.Descriptor{
 				Name:           "reasoning",
-				Description:    "Show or set GPT-5 reasoning effort",
+				Description:    "Show or set reasoning effort [low|medium|high|xhigh|default]",
 				Usage:          "/reasoning [low|medium|high|xhigh|default]",
 				TakesArguments: true,
 			},

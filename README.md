@@ -202,7 +202,7 @@ Notes:
 | `/plan`               | Switch to plan mode                            |
 | `/fast`               | Switch to fast mode                            |
 | `/model [name]`       | Show or switch the active model                |
-| `/reasoning [level]`  | Show or set GPT-5 reasoning effort             |
+| `/reasoning [level]`  | Show or set reasoning effort [low|medium|high|xhigh]            |
 | `/compact`            | Compact conversation to save context           |
 | `/resume [id]`        | Resume a previous session                      |
 | `/clear`              | Clear the conversation and start fresh         |
