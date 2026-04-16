@@ -470,66 +470,90 @@ function summarizeAgentOutput(output?: string): string {
     const lines: string[] = [];
     const status = summarizeAgentStatus(result.status);
     const metadata = result.metadata;
+    const detail = compactAgentDetail(
+      firstNonEmpty(
+        result.summary,
+        metadata?.status_message,
+        result.error,
+      ),
+    );
     lines.push(status);
 
-    if (result.summary) {
-      lines.push(result.summary.trim());
+    if (detail && detail !== status) {
+      lines.push(detail);
     }
-    if (
-      metadata?.status_message &&
-      metadata.status_message !== result.summary
-    ) {
-      lines.push(metadata.status_message.trim());
+
+    const stopBlockNote = summarizeStopBlock(metadata);
+    if (stopBlockNote) {
+      lines.push(stopBlockNote);
     }
-    if (result.error) {
-      lines.push(`Error: ${result.error.trim()}`);
-    }
-    if (result.invocation_id || metadata?.invocation_id || result.session_id) {
-      lines.push(
-        `Invocation: ${result.invocation_id || metadata?.invocation_id || result.session_id}`,
-      );
-    }
-    if (result.agent_id) {
-      lines.push(`Agent ID: ${result.agent_id}`);
-    }
-    if (result.subagent_type || metadata?.subagent_type) {
-      lines.push(
-        `Type: ${formatSubagentType(result.subagent_type || metadata?.subagent_type || "")}`,
-      );
-    }
-    if (result.session_id) {
-      lines.push(`Session: ${result.session_id}`);
-    }
-    if (result.transcript_path || metadata?.transcript_path) {
-      lines.push(
-        `Transcript: ${basenameOrFallback(result.transcript_path || metadata?.transcript_path || "")}`,
-      );
-    }
-    if (result.output_file || metadata?.result_path) {
-      lines.push(
-        `Result file: ${basenameOrFallback(result.output_file || metadata?.result_path || "")}`,
-      );
-    }
-    if (metadata?.lifecycle_state) {
-      lines.push(`Lifecycle: ${metadata.lifecycle_state}`);
-    }
-    if (metadata?.stop_block_reason) {
-      lines.push(`Stop blocked: ${metadata.stop_block_reason}`);
-    }
-    if (
-      typeof metadata?.stop_block_count === "number" &&
-      metadata.stop_block_count > 0
-    ) {
-      lines.push(`Stop blocks: ${metadata.stop_block_count}`);
-    }
-    if (Array.isArray(metadata?.tools) && metadata.tools.length > 0) {
-      lines.push(`Tools: ${metadata.tools.join(", ")}`);
+
+    const runningReference = summarizeRunningAgentReference(result, metadata);
+    if (runningReference) {
+      lines.push(runningReference);
     }
 
     return lines.join("\n");
   } catch {
     return summarizeOutput(output);
   }
+}
+
+function compactAgentDetail(detail?: string): string {
+  const normalized = detail?.trim();
+  if (!normalized) {
+    return "";
+  }
+  return summarizeOutput(normalized);
+}
+
+function summarizeStopBlock(metadata?: AgentResultSummary["metadata"]): string {
+  if (!metadata || typeof metadata.stop_block_count !== "number") {
+    return "";
+  }
+  if (metadata.stop_block_count <= 0) {
+    return "";
+  }
+
+  const reason = metadata.stop_block_reason?.trim();
+  const prefix =
+    metadata.stop_block_count === 1
+      ? "Stop blocked once"
+      : `Stop blocked ${metadata.stop_block_count} times`;
+  return reason ? `${prefix}: ${reason}` : prefix;
+}
+
+function summarizeRunningAgentReference(
+  result: AgentResultSummary,
+  metadata?: AgentResultSummary["metadata"],
+): string {
+  switch (result.status) {
+    case "async_launched":
+    case "running":
+    case "cancelling": {
+      const agentID = firstNonEmpty(result.agent_id, metadata?.agent_id);
+      if (agentID) {
+        return `Agent ID: ${agentID}`;
+      }
+      const invocationID = firstNonEmpty(
+        result.invocation_id,
+        metadata?.invocation_id,
+        result.session_id,
+      );
+      return invocationID ? `Invocation: ${invocationID}` : "";
+    }
+    default:
+      return "";
+  }
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
 function summarizeAgentStatus(status?: string): string {

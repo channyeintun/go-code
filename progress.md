@@ -2,6 +2,7 @@
 
 ## 2026-04-16
 
+- Tightened child-agent prompting so delegated search runs make best-effort assumptions instead of bouncing clarification questions back to the parent session, and compacted inline subagent result cards to show status plus a short summary rather than dumping invocation/session/file metadata into chat.
 - Changed the footer shortcut help to stay collapsed as `(?)` by default and reveal the full shortcut list for 2.5 seconds after pressing `?`, so the prompt chrome stays quieter until the user asks for help.
 - Added extra top spacing before inline queued prompt rows so pending messages do not sit cramped against the content immediately above them.
 - Restored a visible `Queued` title on inline pending prompt rows after the previous cleanup hid it entirely; the lighter conversation-first styling stays in place, but the status is now readable at a glance again.

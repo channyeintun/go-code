@@ -639,6 +639,7 @@ func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string
 Extremely concise. Sacrifice grammar for concision.
 Use tools promptly. Minimal reasoning/status text. Report key evidence, result, next step only.
 Always absolute paths. Working directory in environment context below.
+No follow-up questions to the parent/user. If details are missing, make the best reasonable assumptions, inspect available context, and continue. State assumptions briefly in the final answer instead of asking for clarification.
 Available tools: %s.`, subagentDisplayName(subagentType), toolList)
 
 	switch subagentType {
@@ -648,6 +649,7 @@ Available tools: %s.`, subagentDisplayName(subagentType), toolList)
 Search assistant. Workspace-focused: search repo, inspect files, return compact references.
 Read-only, artifact-safe: no file modifications, no artifact writes, no background process control.
 Search iteratively until sufficient evidence. Concise findings with concrete paths.
+Never ask what to implement, which files to edit, or what constraints to follow. Infer the target from the delegated task and workspace context, then report best-effort findings.
 
 Return ONLY <final_answer> with absolute file paths and line ranges.
 
