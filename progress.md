@@ -60,11 +60,11 @@
    - Notes: Fixed the typed-nil client crash during warmup, changed the shipped default to `github-copilot/gpt-5.4`, rebuilt the launcher and engine, and reinstalled the local binaries.
 
 2. Add provider discovery snapshot
-   - Status: in progress
-   - Notes: Reading the current engine, config, slash-command, and TUI protocol surfaces to introduce a reusable provider status snapshot for startup, `/providers`, `/status`, and the model picker.
+   - Status: completed
+   - Notes: Added a shared provider snapshot helper in `internal/commands` that resolves the selected provider, orders built-in providers, classifies auth sources, and marks providers as usable or setup-required from the current config and environment.
 
 3. Add `/providers` command
-   - Status: not started
+   - Status: in progress
 
 4. Improve startup and session status UX
    - Status: not started

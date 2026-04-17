@@ -1,0 +1,267 @@
+package commands
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/channyeintun/chan/internal/api"
+	"github.com/channyeintun/chan/internal/config"
+)
+
+type ProviderStatus struct {
+	ID           string
+	Label        string
+	DefaultModel string
+	AuthSource   string
+	Configured   bool
+	Usable       bool
+	SetupHint    string
+	LastError    string
+	Current      bool
+}
+
+type ProviderSnapshot struct {
+	ActiveProvider string
+	ActiveModel    string
+	Providers      []ProviderStatus
+}
+
+func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
+	activeProvider, activeModel := ResolveModelSelection(cfg.Model)
+	snapshot := ProviderSnapshot{
+		ActiveProvider: activeProvider,
+		ActiveModel:    activeModel,
+		Providers:      make([]ProviderStatus, 0, len(api.Presets)),
+	}
+
+	for _, providerID := range orderedProviderIDs() {
+		preset := api.Presets[providerID]
+		status := ProviderStatus{
+			ID:           providerID,
+			Label:        providerDisplayLabel(providerID),
+			DefaultModel: preset.DefaultModel,
+			AuthSource:   "none",
+			SetupHint:    providerSetupHint(providerID, preset.EnvKeyVar),
+			Current:      providerID == activeProvider,
+		}
+		populateProviderStatus(&status, cfg, activeProvider, preset)
+		snapshot.Providers = append(snapshot.Providers, status)
+	}
+
+	return snapshot
+}
+
+func (snapshot ProviderSnapshot) FirstUsable() (ProviderStatus, bool) {
+	for _, status := range snapshot.Providers {
+		if status.Current && status.Usable {
+			return status, true
+		}
+	}
+	for _, status := range snapshot.Providers {
+		if status.Usable {
+			return status, true
+		}
+	}
+	return ProviderStatus{}, false
+}
+
+func ResolveModelSelection(selection string) (string, string) {
+	provider, model := config.ParseModel(strings.TrimSpace(selection))
+	provider = normalizeProviderID(provider)
+	model = strings.TrimSpace(model)
+	if model == "" && provider != "" {
+		model = provider
+		provider = ""
+	}
+	if provider == "" && model != "" {
+		provider = InferProviderFromModel(model)
+	}
+	return provider, model
+}
+
+func InferProviderFromModel(model string) string {
+	lower := strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case strings.Contains(lower, "gemini"):
+		return "gemini"
+	case strings.Contains(lower, "gpt"), strings.HasPrefix(lower, "o1"), strings.HasPrefix(lower, "o3"), strings.HasPrefix(lower, "o4"):
+		return "openai"
+	case strings.Contains(lower, "deepseek"):
+		return "deepseek"
+	case strings.Contains(lower, "qwen"):
+		return "qwen"
+	case strings.Contains(lower, "glm"):
+		return "glm"
+	case strings.Contains(lower, "mistral"):
+		return "mistral"
+	case strings.Contains(lower, "llama"), strings.Contains(lower, "maverick"):
+		return "groq"
+	case strings.Contains(lower, "gemma"), strings.Contains(lower, "ollama"):
+		return "ollama"
+	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
+		return "anthropic"
+	default:
+		return ""
+	}
+}
+
+func orderedProviderIDs() []string {
+	preferred := []string{
+		"github-copilot",
+		"openai",
+		"anthropic",
+		"gemini",
+		"deepseek",
+		"mistral",
+		"groq",
+		"qwen",
+		"glm",
+		"ollama",
+	}
+	ordered := make([]string, 0, len(api.Presets))
+	seen := make(map[string]struct{}, len(api.Presets))
+	for _, providerID := range preferred {
+		if _, ok := api.Presets[providerID]; !ok {
+			continue
+		}
+		ordered = append(ordered, providerID)
+		seen[providerID] = struct{}{}
+	}
+
+	extra := make([]string, 0, len(api.Presets)-len(ordered))
+	for providerID := range api.Presets {
+		if _, ok := seen[providerID]; ok {
+			continue
+		}
+		extra = append(extra, providerID)
+	}
+	sort.Strings(extra)
+	ordered = append(ordered, extra...)
+	return ordered
+}
+
+func populateProviderStatus(status *ProviderStatus, cfg config.Config, activeProvider string, preset api.ProviderPreset) {
+	if status == nil {
+		return
+	}
+
+	switch status.ID {
+	case "github-copilot":
+		populateGitHubCopilotStatus(status, cfg, activeProvider)
+	case "ollama":
+		populateOllamaStatus(status, cfg, activeProvider)
+	default:
+		populateAPIKeyProviderStatus(status, cfg, activeProvider, preset.EnvKeyVar)
+	}
+}
+
+func populateGitHubCopilotStatus(status *ProviderStatus, cfg config.Config, activeProvider string) {
+	if activeProvider == status.ID && strings.TrimSpace(cfg.APIKey) != "" {
+		status.AuthSource = "env:CHAN_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	creds := cfg.GitHubCopilot
+	if strings.TrimSpace(creds.GitHubToken) != "" {
+		status.AuthSource = "stored device auth"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	if strings.TrimSpace(creds.AccessToken) != "" {
+		status.AuthSource = "stored access token"
+		status.Configured = true
+		if creds.ExpiresAtUnixMS > 0 && time.Now().UnixMilli() > creds.ExpiresAtUnixMS {
+			status.LastError = "saved access token expired"
+			status.SetupHint = "Run /connect github-copilot to refresh credentials."
+			return
+		}
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+}
+
+func populateAPIKeyProviderStatus(status *ProviderStatus, cfg config.Config, activeProvider string, envKey string) {
+	if activeProvider == status.ID && strings.TrimSpace(cfg.APIKey) != "" {
+		status.AuthSource = "env:CHAN_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	if envKey != "" && strings.TrimSpace(os.Getenv(envKey)) != "" {
+		status.AuthSource = "env:" + envKey
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+}
+
+func populateOllamaStatus(status *ProviderStatus, cfg config.Config, activeProvider string) {
+	if activeProvider == status.ID && strings.TrimSpace(cfg.APIKey) != "" {
+		status.AuthSource = "env:CHAN_API_KEY"
+	} else if strings.TrimSpace(os.Getenv("OLLAMA_API_KEY")) != "" {
+		status.AuthSource = "env:OLLAMA_API_KEY"
+	} else {
+		status.AuthSource = "local"
+	}
+	status.Configured = true
+	status.Usable = true
+	status.SetupHint = "Ensure Ollama is running on http://localhost:11434."
+}
+
+func providerDisplayLabel(providerID string) string {
+	switch providerID {
+	case "github-copilot":
+		return "GitHub Copilot"
+	case "openai":
+		return "OpenAI"
+	case "anthropic":
+		return "Anthropic"
+	case "gemini":
+		return "Gemini"
+	case "deepseek":
+		return "DeepSeek"
+	case "qwen":
+		return "Qwen"
+	case "glm":
+		return "GLM"
+	case "mistral":
+		return "Mistral"
+	case "groq":
+		return "Groq"
+	case "ollama":
+		return "Ollama"
+	default:
+		return strings.TrimSpace(providerID)
+	}
+}
+
+func providerSetupHint(providerID string, envKey string) string {
+	switch providerID {
+	case "github-copilot":
+		return "Run /connect github-copilot."
+	case "ollama":
+		return "Ensure Ollama is running on http://localhost:11434."
+	default:
+		if envKey == "" {
+			return "Provider setup is required."
+		}
+		return fmt.Sprintf("Set %s.", envKey)
+	}
+}
+
+func normalizeProviderID(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
+}
