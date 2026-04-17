@@ -14,11 +14,11 @@ type priceTier struct {
 }
 
 var (
-	sonnetTier  = priceTier{inputPerMTok: 3, outputPerMTok: 15, cacheReadPerMTok: 0.3, cacheWritePerMTok: 3.75}
-	opusTier    = priceTier{inputPerMTok: 15, outputPerMTok: 75, cacheReadPerMTok: 1.5, cacheWritePerMTok: 18.75}
-	opus45Tier  = priceTier{inputPerMTok: 5, outputPerMTok: 25, cacheReadPerMTok: 0.5, cacheWritePerMTok: 6.25}
-	haiku35Tier = priceTier{inputPerMTok: 0.8, outputPerMTok: 4, cacheReadPerMTok: 0.08, cacheWritePerMTok: 1}
-	haiku45Tier = priceTier{inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.1, cacheWritePerMTok: 1.25}
+	sonnetTier     = priceTier{inputPerMTok: 3, outputPerMTok: 15, cacheReadPerMTok: 0.3, cacheWritePerMTok: 3.75}
+	legacyOpusTier = priceTier{inputPerMTok: 15, outputPerMTok: 75, cacheReadPerMTok: 1.5, cacheWritePerMTok: 18.75}
+	modernOpusTier = priceTier{inputPerMTok: 5, outputPerMTok: 25, cacheReadPerMTok: 0.5, cacheWritePerMTok: 6.25}
+	haiku35Tier    = priceTier{inputPerMTok: 0.8, outputPerMTok: 4, cacheReadPerMTok: 0.08, cacheWritePerMTok: 1}
+	haiku45Tier    = priceTier{inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.1, cacheWritePerMTok: 1.25}
 )
 
 // CalculateUSDCost estimates the USD cost for a model call from token usage.
@@ -42,10 +42,10 @@ func priceTierForModel(model string) (priceTier, bool) {
 		return haiku35Tier, true
 	case strings.Contains(lower, "haiku"):
 		return haiku45Tier, true
-	case strings.Contains(lower, "opus") && (strings.Contains(lower, "4.5") || strings.Contains(lower, "4-5") || strings.Contains(lower, "4_5")):
-		return opus45Tier, true
+	case strings.Contains(lower, "opus") && (strings.Contains(lower, "4.5") || strings.Contains(lower, "4-5") || strings.Contains(lower, "4_5") || strings.Contains(lower, "4.6") || strings.Contains(lower, "4-6") || strings.Contains(lower, "4_6") || strings.Contains(lower, "4.7") || strings.Contains(lower, "4-7") || strings.Contains(lower, "4_7")):
+		return modernOpusTier, true
 	case strings.Contains(lower, "opus"):
-		return opusTier, true
+		return legacyOpusTier, true
 	case strings.Contains(lower, "sonnet"):
 		return sonnetTier, true
 	default:

@@ -77,19 +77,25 @@ type modelSelectionChoice struct {
 var curatedModelSelectionPresets = []modelSelectionPreset{
 	{
 		Label:       "Claude Sonnet 4.6",
-		Model:       "claude-sonnet-4.6",
+		Model:       "claude-sonnet-4-6",
 		Provider:    "anthropic",
 		Description: "Sonnet preset",
 	},
 	{
-		Label:       "Claude Opus 4.6",
-		Model:       "claude-opus-4.6",
+		Label:       "Claude Opus 4.7",
+		Model:       "claude-opus-4-7",
 		Provider:    "anthropic",
-		Description: "Opus preset",
+		Description: "Latest Opus preset",
+	},
+	{
+		Label:       "Claude Opus 4.6",
+		Model:       "claude-opus-4-6",
+		Provider:    "anthropic",
+		Description: "Previous Opus preset",
 	},
 	{
 		Label:       "Claude Haiku 4.5",
-		Model:       "claude-haiku-4.5",
+		Model:       "claude-haiku-4-5",
 		Provider:    "anthropic",
 		Description: "Haiku preset",
 	},
