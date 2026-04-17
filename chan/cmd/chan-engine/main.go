@@ -73,6 +73,7 @@ func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
 	// CLI flag overrides
 	if modelFlag != "" {
 		cfg.Model = modelFlag
+		cfg.ModelSource = "flag"
 	}
 	if modeFlag != "" {
 		cfg.DefaultMode = modeFlag

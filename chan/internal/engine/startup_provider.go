@@ -16,9 +16,27 @@ type startupProviderSelection struct {
 }
 
 func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection {
-	snapshot := commandspkg.DiscoverProviderSnapshot(cfg)
-	provider, model := commandspkg.ResolveModelSelection(cfg.Model)
+	effectiveCfg := cfg
 	originalSelection := strings.TrimSpace(cfg.Model)
+	startupNotice := ""
+	if shouldPreferRecentModel(cfg.ModelSource) {
+		if recent, err := config.LoadRecentModelSelection(); err == nil {
+			recentModel := strings.TrimSpace(recent.Model)
+			if recentModel != "" && !strings.EqualFold(recentModel, originalSelection) {
+				recentCfg := cfg
+				recentCfg.Model = recentModel
+				recentSnapshot := commandspkg.DiscoverProviderSnapshot(recentCfg)
+				recentProvider, _ := commandspkg.ResolveModelSelection(recentModel)
+				if status, ok := recentSnapshot.LookupProvider(recentProvider); ok && status.Usable {
+					effectiveCfg.Model = recentModel
+					startupNotice = fmt.Sprintf("Using recent successful model %s instead of %s.", recentModel, originalSelection)
+				}
+			}
+		}
+	}
+
+	snapshot := commandspkg.DiscoverProviderSnapshot(effectiveCfg)
+	provider, model := commandspkg.ResolveModelSelection(effectiveCfg.Model)
 
 	if provider != "" {
 		if status, ok := snapshot.LookupProvider(provider); ok && status.Usable {
@@ -29,6 +47,7 @@ func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection
 				Provider: provider,
 				Model:    model,
 				Snapshot: snapshot,
+				Notice:   startupNotice,
 			}
 		}
 	}
@@ -38,10 +57,12 @@ func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection
 			Provider: fallback.ID,
 			Model:    fallback.DefaultModel,
 			Snapshot: snapshot,
+			Notice:   startupNotice,
 		}
 		fallbackRef := modelRef(fallback.ID, fallback.DefaultModel)
-		if originalSelection != "" && !strings.EqualFold(originalSelection, fallbackRef) {
-			selection.Notice = fmt.Sprintf("Preferred model %s is unavailable; using %s instead. Run /providers for setup details.", originalSelection, fallbackRef)
+		preferredSelection := strings.TrimSpace(effectiveCfg.Model)
+		if preferredSelection != "" && !strings.EqualFold(preferredSelection, fallbackRef) {
+			selection.Notice = appendStartupNotice(selection.Notice, fmt.Sprintf("Preferred model %s is unavailable; using %s instead. Run /providers for setup details.", preferredSelection, fallbackRef))
 		}
 		return selection
 	}
@@ -50,13 +71,36 @@ func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection
 		Provider: provider,
 		Model:    model,
 		Snapshot: snapshot,
+		Notice:   startupNotice,
 	}
 	if current, ok := snapshot.LookupProvider(provider); ok && !current.Usable {
-		selection.Notice = formatNoUsableProviderNotice(current)
+		selection.Notice = appendStartupNotice(selection.Notice, formatNoUsableProviderNotice(current))
 	} else {
-		selection.Notice = "No usable providers detected. Run /providers for setup guidance."
+		selection.Notice = appendStartupNotice(selection.Notice, "No usable providers detected. Run /providers for setup guidance.")
 	}
 	return selection
+}
+
+func appendStartupNotice(existing string, next string) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	switch {
+	case existing == "":
+		return next
+	case next == "":
+		return existing
+	default:
+		return existing + " " + next
+	}
+}
+
+func shouldPreferRecentModel(source string) bool {
+	switch strings.TrimSpace(source) {
+	case "", "default", "config":
+		return true
+	default:
+		return false
+	}
 }
 
 func firstStartupFallbackProvider(snapshot commandspkg.ProviderSnapshot) (commandspkg.ProviderStatus, bool) {

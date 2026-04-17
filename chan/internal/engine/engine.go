@@ -57,6 +57,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		startupModelErr = err
 	} else {
 		activeModelID = modelRef(provider, client.ModelID())
+		rememberSuccessfulModelSelection(activeModelID)
 	}
 	client = clientdebug.WrapClient(client)
 	modelState := NewActiveModelState(client, activeModelID)

@@ -17,6 +17,7 @@ type Config struct {
 	SubagentModel   string    `json:"subagent_model,omitempty"`
 	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
 	MCP             MCPConfig `json:"mcp,omitempty"`
+	ModelSource     string    `json:"-"`
 
 	// Provider-level overrides
 	BaseURL string `json:"base_url,omitempty"`
@@ -50,6 +51,7 @@ type GitHubCopilotAuth struct {
 func DefaultConfig() Config {
 	return Config{
 		Model:                   "github-copilot/gpt-5.4",
+		ModelSource:             "default",
 		DefaultMode:             "plan",
 		CostWarningThresholdUSD: 5,
 		EnableSessionMemory:     true,
@@ -99,6 +101,13 @@ func loadUserConfig() Config {
 	if err == nil {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to parse %s: %v\n", ConfigPath(), err)
+		} else {
+			var probe struct {
+				Model *string `json:"model"`
+			}
+			if err := json.Unmarshal(data, &probe); err == nil && probe.Model != nil {
+				cfg.ModelSource = "config"
+			}
 		}
 	}
 
@@ -113,6 +122,7 @@ func applyEnvOverrides(cfg *Config) {
 	// Environment overrides
 	if v := os.Getenv("CHAN_MODEL"); v != "" {
 		cfg.Model = v
+		cfg.ModelSource = "env"
 	}
 	if v := os.Getenv("CHAN_BASE_URL"); v != "" {
 		cfg.BaseURL = v

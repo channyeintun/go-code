@@ -80,7 +80,8 @@
    - Notes: The model picker now builds its options from provider discovery instead of a flat curated preset list, preserves a current custom selection when needed, pushes usable providers to the top, and surfaces provider readiness directly in the option labels and descriptions.
 
 7. Persist recent successful model selections
-   - Status: in progress
+   - Status: completed
+   - Notes: Added a separate recent-model file in the config directory, prefer that selection on startup when the model source is only the default or saved config, and update it after successful startup, `/model`, `/connect`, and `/resume` model initialization paths.
 
 8. Final rebuild and install
-   - Status: not started
+   - Status: in progress

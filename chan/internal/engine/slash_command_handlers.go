@@ -258,6 +258,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	*cmd.client = nextClient
 	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(result.Provider, nextClient.ModelID())
+	rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
 	cmd.state.SubagentModelID = defaultSessionSubagentModel(result.Config, cmd.state.ActiveModelID)
 	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
 		return err
@@ -493,6 +494,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	*cmd.client = nextClient
 	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(provider, nextClient.ModelID())
+	rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
 	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
 		return err
 	}
@@ -809,6 +811,7 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 		}
 		*cmd.client = clientdebug.WrapClient(restoredClient)
 		cmd.state.ActiveModelID = modelRef(provider, restoredClient.ModelID())
+		rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
 		if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
 			return err
 		}
