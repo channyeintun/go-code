@@ -72,7 +72,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const prompt = usePromptHistory();
   const [promptImages, setPromptImages] = useState<UserInputImagePayload[]>([]);
   const [pasteWarning, setPasteWarning] = useState<string | null>(null);
-  const [nextImageId, setNextImageId] = useState(1);
+  const nextImageIdRef = useRef(1);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [nextQueuedPromptId, setNextQueuedPromptId] = useState(1);
   const [transcriptSearchActive, setTranscriptSearchActive] = useState(false);
@@ -269,22 +269,22 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }, FOOTER_HINT_REVEAL_MS);
   }, []);
 
-  const handleImagePaste = (images: PastedImageData[]) => {
-    let startId = nextImageId;
+  const handleImagePaste = useCallback((images: PastedImageData[]) => {
+    const startId = nextImageIdRef.current;
     const nextImages = images.map((image, index) => {
       const id = startId + index;
       prompt.insertImageReference(id);
       return toUserInputImagePayload(id, image);
     });
 
+    nextImageIdRef.current = startId + images.length;
     setPromptImages((current) => [...current, ...nextImages]);
-    setNextImageId(startId + images.length);
     setPasteWarning(null);
-  };
+  }, [prompt]);
 
-  const handlePasteWarning = (warnings: string[]) => {
+  const handlePasteWarning = useCallback((warnings: string[]) => {
     setPasteWarning(warnings.length > 0 ? warnings.join(" | ") : null);
-  };
+  }, []);
 
   const handleSubmit = (overrideText?: string) => {
     // Derive text before calling submit – silvery's renderer may defer

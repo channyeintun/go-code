@@ -21,15 +21,15 @@ interface ReadImageFileResult {
   warning: string | null;
 }
 
-function execFileAsync(file: string, args: string[]): Promise<void> {
+function execFileAsync(file: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, (error) => {
+    execFile(file, args, (error, stdout) => {
       if (error) {
         reject(error);
         return;
       }
 
-      resolve();
+      resolve(stdout.toString());
     });
   });
 }
@@ -92,6 +92,28 @@ async function readImageFile(path: string): Promise<ReadImageFileResult> {
 async function readClipboardImageOnMac(): Promise<PastedImageData | null> {
   if (process.platform !== "darwin") {
     return null;
+  }
+
+  try {
+    const clipboardPath = (
+      await execFileAsync("osascript", [
+        "-e",
+        "get POSIX path of (the clipboard as «class furl»)",
+      ])
+    ).trim();
+
+    if (clipboardPath.length > 0) {
+      if (!isAbsoluteImagePath(clipboardPath)) {
+        return null;
+      }
+
+      const result = await readImageFile(clipboardPath);
+      if (result.image) {
+        return result.image;
+      }
+    }
+  } catch {
+    // Fall through to raw image clipboard extraction when no file path exists.
   }
 
   const outputPath = join(

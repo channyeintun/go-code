@@ -322,25 +322,31 @@ function buildInputHint(
     return "(?)";
   }
 
+  const pasteHint =
+    process.platform === "darwin"
+      ? terminalColumns >= 96
+        ? " | Cmd+V text | Ctrl+V image"
+        : " | Ctrl+V image"
+      : "";
   const queueHint =
     queuedPromptCount > 0 ? " | Ctrl+Y send queued | Ctrl+K drop queued" : "";
 
   if (terminalColumns < 72) {
     return disabled
-      ? `Busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
-      : `Enter send | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
+      ? `Busy${pasteHint} | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
+      : `Enter send${pasteHint} | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
   }
 
   if (terminalColumns < 96) {
     return disabled
-      ? `Busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
-      : `Enter send | ${artifactsShortcutLabel} artifacts${queueHint} | Ctrl+G search | Esc cancel`;
+      ? `Busy${pasteHint} | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`
+      : `Enter send${pasteHint} | ${artifactsShortcutLabel} artifacts${queueHint} | Ctrl+G search | Esc cancel`;
   }
 
   if (disabled) {
-    return `Engine busy | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
+    return `Engine busy${pasteHint} | ${artifactsShortcutLabel} artifacts${queueHint} | Esc cancel`;
   }
-  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts${queueHint} | Tab mode | Esc cancel`;
+  return `Enter send${pasteHint} | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts${queueHint} | Tab mode | Esc cancel`;
 }
 
 function buildMemoryRecallText(

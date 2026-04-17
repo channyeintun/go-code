@@ -161,6 +161,39 @@ const Input: FC<InputProps> = ({
     slashCommands,
   });
 
+  const handleParsedPaste = React.useCallback(
+    (
+      text: string,
+      options?: {
+        warnIfClipboardImageMissing?: boolean;
+      },
+    ) => {
+      if (disabled) {
+        return;
+      }
+
+      void parsePasteParts(text).then((parts) => {
+        if (parts.text.length > 0) {
+          prompt.insertText(parts.text);
+        }
+        if (parts.images.length > 0) {
+          onImagePaste(parts.images);
+        }
+        if (
+          options?.warnIfClipboardImageMissing &&
+          parts.images.length === 0 &&
+          parts.text.length === 0 &&
+          parts.warnings.length === 0
+        ) {
+          onPasteWarning(["No image found in clipboard"]);
+          return;
+        }
+        onPasteWarning(parts.warnings);
+      });
+    },
+    [disabled, onImagePaste, onPasteWarning, prompt],
+  );
+
   useInput(
     (input, key) => {
       const text = key.text ?? input;
@@ -203,6 +236,11 @@ const Input: FC<InputProps> = ({
       }
 
       if (disabled) return;
+
+      if (process.platform === "darwin" && key.ctrl && input === "v") {
+        handleParsedPaste("", { warnIfClipboardImageMissing: true });
+        return;
+      }
 
       if (key.tab) {
         if (slashPreview.visible) {
@@ -346,19 +384,7 @@ const Input: FC<InputProps> = ({
   );
 
   usePaste((text) => {
-    if (disabled) {
-      return;
-    }
-
-    void parsePasteParts(text).then((parts) => {
-      if (parts.text.length > 0) {
-        prompt.insertText(parts.text);
-      }
-      if (parts.images.length > 0) {
-        onImagePaste(parts.images);
-      }
-      onPasteWarning(parts.warnings);
-    });
+    handleParsedPaste(text);
   });
 
   const showPlaceholder = prompt.value.length === 0;
