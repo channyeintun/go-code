@@ -792,6 +792,13 @@ func handleReasoningSlashCommand(cmd *slashCommandContext) error {
 	if err := config.Save(persisted); err != nil {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("save reasoning effort: %v", err))
 	}
+	var activeClient api.LLMClient
+	if cmd.client != nil {
+		activeClient = *cmd.client
+	}
+	if err := emitModelChanged(cmd.bridge, cmd.state.ActiveModelID, activeClient); err != nil {
+		return err
+	}
 
 	updated := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set reasoning effort to %s", updated))
