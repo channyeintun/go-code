@@ -229,6 +229,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	}
 
 	currentCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	currentCfg.Model = cmd.state.ActiveModelID
 	snapshot := commandspkg.DiscoverProviderSnapshot(currentCfg)
 	switch request.Action {
 	case commandspkg.ConnectActionOverview, commandspkg.ConnectActionHelp:

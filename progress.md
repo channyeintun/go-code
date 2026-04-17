@@ -50,8 +50,8 @@
    - Notes: Added provider-usability checks for carried subagent selections, fall back to a safe default when startup or provider switches leave an old subagent unusable, and applied the same coercion in startup-derived defaults, `/connect`, `/model`, `/resume`, and runtime subagent resolution.
 
 2. Make `/connect status` reflect live session state
-   - Status: pending
-   - Notes: Pending implementation.
+   - Status: completed
+   - Notes: Updated `/connect` provider snapshots to use the live session model instead of the persisted config model so overview and status output match startup fallback and in-session model switches.
 
 3. Restore richer provider-aware model picker choices
    - Status: pending
