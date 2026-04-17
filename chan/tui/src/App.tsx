@@ -19,6 +19,7 @@ import {
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
+import BackgroundTasksDialog from "./components/BackgroundTasksDialog.js";
 import Input from "./components/Input.js";
 import ModelSelectionPrompt from "./components/ModelSelectionPrompt.js";
 import PromptFooter from "./components/PromptFooter.js";
@@ -35,13 +36,22 @@ import {
 } from "./utils/imagePaste.js";
 import { activeTurnStatusLabel } from "./utils/activeTurnStatus.js";
 import type {
+  BackgroundAgentDetailPayload,
+  BackgroundCommandDetailPayload,
+  BackgroundCommandUpdatedPayload,
   PermissionResponseDecision,
+  StreamEvent,
   UserInputImagePayload,
 } from "./protocol/types.js";
 
 const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
 const ARTIFACTS_TOGGLE_SHORTCUT_LABEL = "Opt+A";
+const TASKS_TOGGLE_SHORTCUT_LABEL = "Opt+B";
 const FOOTER_HINT_REVEAL_MS = 2500;
+
+type BackgroundTaskDetailRecord =
+  | BackgroundCommandDetailPayload
+  | BackgroundAgentDetailPayload;
 
 interface AppProps {
   enginePath: string;
@@ -53,6 +63,11 @@ interface QueuedPrompt {
   id: number;
   text: string;
   images: UserInputImagePayload[];
+}
+
+interface PendingTaskNotification {
+  id: number;
+  text: string;
 }
 
 function toUserInputImagePayload(
@@ -75,6 +90,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const nextImageIdRef = useRef(1);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [nextQueuedPromptId, setNextQueuedPromptId] = useState(1);
+  const [pendingTaskNotifications, setPendingTaskNotifications] = useState<
+    PendingTaskNotification[]
+  >([]);
+  const nextTaskNotificationIdRef = useRef(1);
   const [transcriptSearchActive, setTranscriptSearchActive] = useState(false);
   const [transcriptSearchQuery, setTranscriptSearchQuery] = useState("");
   const [transcriptSearchSelectedIndex, setTranscriptSearchSelectedIndex] =
@@ -83,6 +102,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     useState(0);
   const [showThinking, setShowThinking] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(true);
+  const [showBackgroundTasks, setShowBackgroundTasks] = useState(false);
+  const [backgroundTaskDetails, setBackgroundTaskDetails] = useState<
+    Record<string, BackgroundTaskDetailRecord>
+  >({});
   const [showFooterHints, setShowFooterHints] = useState(false);
   const previousStreamingRef = useRef(false);
   const footerHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -103,7 +126,55 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     submitRewindSelection,
     submitResumeSelection,
   } = useEvents(model, mode);
-  const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
+  const handleEngineEvent = useCallback(
+    (event: StreamEvent) => {
+      if (event.type === "background_tasks_requested") {
+        setShowBackgroundTasks(true);
+      }
+
+      if (event.type === "background_command_detail") {
+        const payload = event.payload as BackgroundCommandDetailPayload | undefined;
+        const commandId = payload?.command_id?.trim();
+        if (payload && commandId) {
+          setBackgroundTaskDetails((current) => ({
+            ...current,
+            [backgroundTaskKey("command", commandId)]: payload,
+          }));
+        }
+      }
+
+      if (event.type === "background_agent_detail") {
+        const payload = event.payload as BackgroundAgentDetailPayload | undefined;
+        const agentId = payload?.agent_id?.trim();
+        if (payload && agentId) {
+          setBackgroundTaskDetails((current) => ({
+            ...current,
+            [backgroundTaskKey("agent", agentId)]: payload,
+          }));
+        }
+      }
+
+      handleEvent(event);
+
+      const taskNotification = buildBackgroundCommandTaskNotification(event);
+      if (!taskNotification) {
+        return;
+      }
+
+      const id = nextTaskNotificationIdRef.current;
+      nextTaskNotificationIdRef.current += 1;
+      setPendingTaskNotifications((current) => [
+        ...current,
+        { id, text: taskNotification },
+      ]);
+    },
+    [handleEvent],
+  );
+  const engine = useEngine(enginePath, {
+    model,
+    mode,
+    onEvent: handleEngineEvent,
+  });
   const visibleArtifacts = showArtifacts
     ? selectVisibleArtifacts(
         uiState.artifacts,
@@ -140,6 +211,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.pendingResumeSelection ||
       uiState.pendingRewindSelection ||
       uiState.pendingModelSelection ||
+      showBackgroundTasks ||
       uiState.pendingArtifactReview
     ) {
       focusManager.blur();
@@ -151,6 +223,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.pendingPermission,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
+    showBackgroundTasks,
   ]);
 
   useEffect(() => {
@@ -204,6 +277,15 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     [appendUserMessage, beginAssistantTurn, clearStream, engine],
   );
 
+  const submitTaskNotification = useCallback(
+    (text: string) => {
+      clearStream();
+      beginAssistantTurn();
+      engine.sendInput(text);
+    },
+    [beginAssistantTurn, clearStream, engine],
+  );
+
   useEffect(() => {
     setPromptImages((current) => {
       const referencedIds = parseImageReferenceIds(prompt.value);
@@ -214,6 +296,32 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
   useEffect(() => {
     if (isQueuedPromptDispatchBlocked(uiState, isEngineReady)) {
+      return;
+    }
+
+    const nextNotification = pendingTaskNotifications[0];
+    if (!nextNotification) {
+      return;
+    }
+
+    setPendingTaskNotifications((current) =>
+      current[0]?.id === nextNotification.id ? current.slice(1) : current,
+    );
+    submitTaskNotification(nextNotification.text);
+  }, [
+    isEngineReady,
+    pendingTaskNotifications,
+    submitTaskNotification,
+    uiState.isStreaming,
+    uiState.pendingPermission,
+    uiState.pendingArtifactReview,
+    uiState.pendingModelSelection,
+    uiState.pendingRewindSelection,
+    uiState.pendingResumeSelection,
+  ]);
+
+  useEffect(() => {
+    if (pendingTaskNotifications.length > 0) {
       return;
     }
 
@@ -228,6 +336,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     submitPrompt(nextPrompt.text, nextPrompt.images);
   }, [
     isEngineReady,
+    pendingTaskNotifications.length,
     queuedPrompts,
     submitPrompt,
     uiState.isStreaming,
@@ -239,7 +348,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   ]);
 
   const handleSendNextQueuedPrompt = useCallback(() => {
-    if (isQueuedPromptDispatchBlocked(uiState, isEngineReady)) {
+    if (
+      pendingTaskNotifications.length > 0 ||
+      isQueuedPromptDispatchBlocked(uiState, isEngineReady)
+    ) {
       return;
     }
 
@@ -251,7 +363,13 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     setQueuedPrompts((current) => current.slice(1));
     setPasteWarning(null);
     submitPrompt(queuedPrompt.text, queuedPrompt.images);
-  }, [isEngineReady, queuedPrompts, submitPrompt, uiState]);
+  }, [
+    isEngineReady,
+    pendingTaskNotifications.length,
+    queuedPrompts,
+    submitPrompt,
+    uiState,
+  ]);
 
   const handleRemoveNextQueuedPrompt = useCallback(() => {
     setQueuedPrompts((current) => current.slice(1));
@@ -309,6 +427,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.pendingModelSelection ||
       uiState.pendingRewindSelection ||
       uiState.pendingResumeSelection ||
+      pendingTaskNotifications.length > 0 ||
       queuedPrompts.length
     ) {
       if (queuedPrompts.length > 0) {
@@ -426,6 +545,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     !isEngineReady ||
     !!engine.error ||
     transcriptSearchActive ||
+    showBackgroundTasks ||
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
@@ -446,6 +566,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     pendingModelSelection: uiState.pendingModelSelection !== null,
     pendingRewindSelection: uiState.pendingRewindSelection !== null,
     pendingResumeSelection: uiState.pendingResumeSelection !== null,
+    backgroundTasksOpen: showBackgroundTasks,
   });
   const promptActivityLabel = uiState.isStreaming
     ? activeTurnStatusLabel(
@@ -508,6 +629,36 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const handleArtifactVisibilityToggle = useCallback(() => {
     setShowArtifacts((current) => !current);
   }, []);
+
+  const handleBackgroundTasksToggle = useCallback(() => {
+    setShowBackgroundTasks((current) => !current);
+  }, []);
+
+  const handleBackgroundTasksClose = useCallback(() => {
+    setShowBackgroundTasks(false);
+  }, []);
+
+  const handleBackgroundTaskInspect = useCallback(
+    (kind: "command" | "agent", id: string) => {
+      if (kind === "command") {
+        engine.sendBackgroundCommandInspect({ command_id: id });
+        return;
+      }
+      engine.sendBackgroundAgentInspect({ agent_id: id });
+    },
+    [engine],
+  );
+
+  const handleBackgroundTaskStop = useCallback(
+    (kind: "command" | "agent", id: string) => {
+      if (kind === "command") {
+        engine.sendBackgroundCommandStop({ command_id: id, wait_ms: 1000 });
+        return;
+      }
+      engine.sendBackgroundAgentStop({ agent_id: id, wait_ms: 1000 });
+    },
+    [engine],
+  );
 
   return (
     <Screen>
@@ -689,6 +840,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onModeToggle={engine.sendModeToggle}
               onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
               onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
+              onBackgroundTasksToggle={handleBackgroundTasksToggle}
               onRevealFooterHints={handleRevealFooterHints}
               onSendQueuedPromptNow={handleSendNextQueuedPrompt}
               onRemoveQueuedPrompt={handleRemoveNextQueuedPrompt}
@@ -722,6 +874,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             showExpandedHint={showFooterHints}
             showArtifacts={showArtifacts}
             artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
+            backgroundTasksShortcutLabel={TASKS_TOGGLE_SHORTCUT_LABEL}
           />
         </Box>
       ) : null}
@@ -750,6 +903,17 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             onCancel={() => handleModelSelection()}
           />
         </CenteredViewportOverlay>
+      ) : showBackgroundTasks ? (
+        <CenteredViewportOverlay>
+          <BackgroundTasksDialog
+            commands={uiState.backgroundCommands}
+            agents={uiState.backgroundAgents}
+            details={backgroundTaskDetails}
+            onClose={handleBackgroundTasksClose}
+            onInspectTask={handleBackgroundTaskInspect}
+            onStopTask={handleBackgroundTaskStop}
+          />
+        </CenteredViewportOverlay>
       ) : null}
       </Box>
     </Screen>
@@ -775,6 +939,106 @@ function SafeToastContainer({ toasts }: { toasts: ToastData[] }) {
       <SafeToastItem toast={latestToast} />
     </Box>
   );
+}
+
+function buildBackgroundCommandTaskNotification(event: StreamEvent): string | null {
+  if (event.type !== "background_command_updated") {
+    return null;
+  }
+
+  const payload = event.payload as BackgroundCommandUpdatedPayload | undefined;
+  if (!payload) {
+    return null;
+  }
+
+  const commandId = payload.command_id?.trim();
+  if (!commandId) {
+    return null;
+  }
+
+  const status = normalizeBackgroundCommandTaskStatus(payload.status);
+  if (status !== "completed" && status !== "failed") {
+    return null;
+  }
+
+  const summary = buildBackgroundCommandTaskSummary(payload, status);
+  const lines = [
+    "<task-notification>",
+    `  <task-id>${escapeTaskNotificationText(commandId)}</task-id>`,
+    `  <status>${escapeTaskNotificationText(status)}</status>`,
+    `  <summary>${escapeTaskNotificationText(summary)}</summary>`,
+    `  <command-id>${escapeTaskNotificationText(commandId)}</command-id>`,
+  ];
+
+  const command = payload.command?.trim();
+  if (command) {
+    lines.push(`  <command>${escapeTaskNotificationText(command)}</command>`);
+  }
+
+  const cwd = payload.cwd?.trim();
+  if (cwd) {
+    lines.push(`  <cwd>${escapeTaskNotificationText(cwd)}</cwd>`);
+  }
+
+  if (typeof payload.exit_code === "number") {
+    lines.push(`  <exit-code>${payload.exit_code}</exit-code>`);
+  }
+
+  const preview = payload.output_preview?.trim();
+  if (preview) {
+    lines.push(`  <result>${escapeTaskNotificationText(preview)}</result>`);
+  }
+
+  if (typeof payload.unread_bytes === "number" && payload.unread_bytes > 0) {
+    lines.push(`  <unread-bytes>${payload.unread_bytes}</unread-bytes>`);
+  }
+
+  if (payload.error?.trim()) {
+    lines.push(
+      `  <error>${escapeTaskNotificationText(payload.error.trim())}</error>`,
+    );
+  }
+
+  lines.push("</task-notification>");
+  lines.push("");
+  lines.push(
+    `This is a background command update, not a new user request. If the preview is insufficient, call command_status with CommandId \"${escapeTaskNotificationText(commandId)}\" before replying.`,
+  );
+
+  return lines.join("\n");
+}
+
+function buildBackgroundCommandTaskSummary(
+  payload: BackgroundCommandUpdatedPayload,
+  status: string,
+): string {
+  const label = payload.command?.trim() || payload.command_id;
+  switch (status) {
+    case "completed":
+      return `Background command ${label} completed.`;
+    case "failed":
+      if (typeof payload.exit_code === "number") {
+        return `Background command ${label} failed with exit code ${payload.exit_code}.`;
+      }
+      return `Background command ${label} failed.`;
+    default:
+      return `Background command ${label} updated.`;
+  }
+}
+
+function normalizeBackgroundCommandTaskStatus(status: string | undefined): string {
+  const normalized = status?.trim().toLowerCase();
+  if (!normalized) {
+    return "updated";
+  }
+  return normalized;
+}
+
+function escapeTaskNotificationText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
@@ -904,6 +1168,7 @@ function mergeQueuedPromptText(currentText: string, nextText: string): string {
 function getPromptBlockedReason({
   isEngineReady,
   engineError,
+  backgroundTasksOpen,
   pendingModelSelection,
   pendingRewindSelection,
   pendingResumeSelection,
@@ -912,6 +1177,7 @@ function getPromptBlockedReason({
 }: {
   isEngineReady: boolean;
   engineError: string | null;
+  backgroundTasksOpen: boolean;
   pendingModelSelection: boolean;
   pendingRewindSelection: boolean;
   pendingResumeSelection: boolean;
@@ -933,6 +1199,9 @@ function getPromptBlockedReason({
   if (pendingRewindSelection) {
     return "rewind selection open";
   }
+  if (backgroundTasksOpen) {
+    return "tasks open";
+  }
   if (transcriptSearchActive) {
     return "search open";
   }
@@ -940,4 +1209,8 @@ function getPromptBlockedReason({
     return "turn active";
   }
   return null;
+}
+
+function backgroundTaskKey(kind: "command" | "agent", id: string): string {
+  return `${kind}:${id}`;
 }

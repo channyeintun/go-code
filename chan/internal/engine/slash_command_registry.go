@@ -170,6 +170,15 @@ func slashCommandSpecs() []slashCommandSpec {
 			},
 			Handler: slashCommandHandlerFunc(handleSubagentSlashCommand),
 		},
+		{
+			Descriptor: commandspkg.Descriptor{
+				Name:           "tasks",
+				Description:    "Open the background tasks dialog",
+				Usage:          "/tasks",
+				TakesArguments: false,
+			},
+			Handler: slashCommandHandlerFunc(handleTasksSlashCommand),
+		},
 	}
 }
 

@@ -21,6 +21,7 @@ interface InputProps {
   onModeToggle: () => void;
   onThinkingVisibilityToggle: () => void;
   onArtifactVisibilityToggle: () => void;
+  onBackgroundTasksToggle: () => void;
   onRevealFooterHints: () => void;
   onSendQueuedPromptNow: () => void;
   onRemoveQueuedPrompt: () => void;
@@ -128,6 +129,7 @@ const Input: FC<InputProps> = ({
   onModeToggle,
   onThinkingVisibilityToggle,
   onArtifactVisibilityToggle,
+  onBackgroundTasksToggle,
   onRevealFooterHints,
   onSendQueuedPromptNow,
   onRemoveQueuedPrompt,
@@ -215,6 +217,11 @@ const Input: FC<InputProps> = ({
 
       if (key.meta && input?.toLowerCase() === "a") {
         onArtifactVisibilityToggle();
+        return;
+      }
+
+      if (key.meta && input?.toLowerCase() === "b") {
+        onBackgroundTasksToggle();
         return;
       }
 

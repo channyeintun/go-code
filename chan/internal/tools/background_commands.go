@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -19,26 +20,28 @@ import (
 
 const backgroundCommandMaxOutputBytes = 256 * 1024
 const backgroundCommandSummaryPreviewBytes = 160
+const backgroundCommandNotificationPreviewBytes = 4096
 
 const backgroundCommandRetention = 5 * time.Minute
 
 type backgroundCommand struct {
-	mu        sync.Mutex
-	consumeMu sync.Mutex
-	id        string
-	command   string
-	cwd       string
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	terminal  *os.File
-	cancel    context.CancelFunc
-	output    *boundedOutput
-	running   bool
-	exitCode  *int
-	errText   string
-	done      chan struct{}
-	startedAt time.Time
-	updatedAt time.Time
+	mu                        sync.Mutex
+	consumeMu                 sync.Mutex
+	id                        string
+	command                   string
+	cwd                       string
+	cmd                       *exec.Cmd
+	stdin                     io.WriteCloser
+	terminal                  *os.File
+	cancel                    context.CancelFunc
+	output                    *boundedOutput
+	running                   bool
+	exitCode                  *int
+	errText                   string
+	suppressAsyncNotification bool
+	done                      chan struct{}
+	startedAt                 time.Time
+	updatedAt                 time.Time
 }
 
 type boundedOutput struct {
@@ -48,7 +51,7 @@ type boundedOutput struct {
 	droppedUnreadLen int
 }
 
-type backgroundCommandResult struct {
+type BackgroundCommandResult struct {
 	CommandID string    `json:"CommandId"`
 	Command   string    `json:"Command,omitempty"`
 	Cwd       string    `json:"Cwd,omitempty"`
@@ -60,11 +63,62 @@ type backgroundCommandResult struct {
 	ExitCode  *int      `json:"ExitCode,omitempty"`
 }
 
+type BackgroundCommandDetail struct {
+	CommandID       string
+	Command         string
+	Cwd             string
+	Status          string
+	Running         bool
+	StartedAt       time.Time
+	UpdatedAt       time.Time
+	Output          string
+	HasUnreadOutput bool
+	UnreadBytes     int
+	ExitCode        *int
+	Error           string
+}
+
+// BackgroundCommandUpdate is emitted when a retained background command changes
+// state asynchronously outside the active tool turn.
+type BackgroundCommandUpdate struct {
+	CommandID       string
+	Command         string
+	Cwd             string
+	Status          string
+	Running         bool
+	StartedAt       time.Time
+	UpdatedAt       time.Time
+	OutputPreview   string
+	HasUnreadOutput bool
+	UnreadBytes     int
+	ExitCode        *int
+	Error           string
+}
+
 var (
 	backgroundCommands   = make(map[string]*backgroundCommand)
 	backgroundCommandsMu sync.RWMutex
 	backgroundCounter    uint64
+	backgroundNotifierMu sync.RWMutex
+	backgroundNotifier   func(BackgroundCommandUpdate)
 )
+
+// SetBackgroundCommandNotifier configures a process-local callback for
+// asynchronous background command state updates.
+func SetBackgroundCommandNotifier(fn func(BackgroundCommandUpdate)) {
+	backgroundNotifierMu.Lock()
+	defer backgroundNotifierMu.Unlock()
+	backgroundNotifier = fn
+}
+
+func emitBackgroundCommandUpdate(update BackgroundCommandUpdate) {
+	backgroundNotifierMu.RLock()
+	fn := backgroundNotifier
+	backgroundNotifierMu.RUnlock()
+	if fn != nil {
+		fn(update)
+	}
+}
 
 func listBackgroundCommands(includeCompleted bool) []backgroundCommandSummary {
 	backgroundCommandsMu.RLock()
@@ -129,9 +183,6 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	err := bg.cmd.Wait()
 
 	bg.mu.Lock()
-	defer bg.mu.Unlock()
-	defer close(bg.done)
-	defer scheduleBackgroundCommandCleanup(bg)
 	if bg.cancel != nil {
 		bg.cancel()
 		bg.cancel = nil
@@ -144,9 +195,16 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 
 	bg.running = false
 	bg.updatedAt = time.Now()
+	notify := !bg.suppressAsyncNotification
 	if err == nil {
 		exitCode := 0
 		bg.exitCode = &exitCode
+		bg.mu.Unlock()
+		close(bg.done)
+		scheduleBackgroundCommandCleanup(bg)
+		if notify {
+			emitBackgroundCommandUpdate(bg.asyncUpdate())
+		}
 		return
 	}
 
@@ -154,10 +212,22 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 		exitCode := exitErr.ExitCode()
 		bg.exitCode = &exitCode
 		bg.errText = err.Error()
+		bg.mu.Unlock()
+		close(bg.done)
+		scheduleBackgroundCommandCleanup(bg)
+		if notify {
+			emitBackgroundCommandUpdate(bg.asyncUpdate())
+		}
 		return
 	}
 
 	bg.errText = err.Error()
+	bg.mu.Unlock()
+	close(bg.done)
+	scheduleBackgroundCommandCleanup(bg)
+	if notify {
+		emitBackgroundCommandUpdate(bg.asyncUpdate())
+	}
 }
 
 func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *boundedOutput, terminal *os.File) {
@@ -210,6 +280,7 @@ func ShutdownBackgroundCommandsForSession() {
 
 func (bg *backgroundCommand) shutdown() {
 	bg.mu.Lock()
+	bg.suppressAsyncNotification = true
 	if bg.cancel != nil {
 		bg.cancel()
 		bg.cancel = nil
@@ -258,12 +329,12 @@ func getBackgroundCommand(commandID string) (*backgroundCommand, error) {
 	return bg, nil
 }
 
-func forgetBackgroundCommand(commandID string) (backgroundCommandResult, error) {
+func forgetBackgroundCommand(commandID string) (BackgroundCommandResult, error) {
 	backgroundCommandsMu.Lock()
 	bg, ok := backgroundCommands[commandID]
 	if !ok {
 		backgroundCommandsMu.Unlock()
-		return backgroundCommandResult{}, fmt.Errorf("command %q not found", commandID)
+		return BackgroundCommandResult{}, fmt.Errorf("command %q not found", commandID)
 	}
 
 	bg.consumeMu.Lock()
@@ -273,10 +344,10 @@ func forgetBackgroundCommand(commandID string) (backgroundCommandResult, error) 
 	if bg.running {
 		bg.mu.Unlock()
 		backgroundCommandsMu.Unlock()
-		return backgroundCommandResult{}, fmt.Errorf("command %q is still running; stop it before forgetting it", bg.id)
+		return BackgroundCommandResult{}, fmt.Errorf("command %q is still running; stop it before forgetting it", bg.id)
 	}
 
-	result := backgroundCommandResult{
+	result := BackgroundCommandResult{
 		CommandID: bg.id,
 		Command:   bg.command,
 		Cwd:       bg.cwd,
@@ -298,14 +369,14 @@ func forgetBackgroundCommand(commandID string) (backgroundCommandResult, error) 
 	return result, nil
 }
 
-func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (backgroundCommandResult, error) {
+func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (BackgroundCommandResult, error) {
 	bg.consumeMu.Lock()
 	defer bg.consumeMu.Unlock()
 
 	bg.mu.Lock()
 	if !bg.running {
 		bg.mu.Unlock()
-		return backgroundCommandResult{}, fmt.Errorf("command %q is not running", bg.id)
+		return BackgroundCommandResult{}, fmt.Errorf("command %q is not running", bg.id)
 	}
 	_, err := io.WriteString(bg.stdin, input)
 	if err == nil {
@@ -313,7 +384,7 @@ func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (backgr
 	}
 	bg.mu.Unlock()
 	if err != nil {
-		return backgroundCommandResult{}, fmt.Errorf("write command input: %w", err)
+		return BackgroundCommandResult{}, fmt.Errorf("write command input: %w", err)
 	}
 
 	if wait > 0 {
@@ -328,7 +399,7 @@ func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (backgr
 	return bg.snapshotDelta(), nil
 }
 
-func (bg *backgroundCommand) status(wait time.Duration) backgroundCommandResult {
+func (bg *backgroundCommand) status(wait time.Duration) BackgroundCommandResult {
 	bg.consumeMu.Lock()
 	defer bg.consumeMu.Unlock()
 
@@ -343,7 +414,7 @@ func (bg *backgroundCommand) status(wait time.Duration) backgroundCommandResult 
 	return bg.snapshotDelta()
 }
 
-func (bg *backgroundCommand) stop(wait time.Duration) backgroundCommandResult {
+func (bg *backgroundCommand) stop(wait time.Duration) BackgroundCommandResult {
 	bg.consumeMu.Lock()
 	defer bg.consumeMu.Unlock()
 
@@ -359,7 +430,7 @@ func (bg *backgroundCommand) stop(wait time.Duration) backgroundCommandResult {
 	return bg.snapshotDelta()
 }
 
-func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
+func (bg *backgroundCommand) snapshotDelta() BackgroundCommandResult {
 	bg.mu.Lock()
 	running := bg.running
 	errText := bg.errText
@@ -370,7 +441,7 @@ func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
 	}
 	bg.mu.Unlock()
 
-	return backgroundCommandResult{
+	return BackgroundCommandResult{
 		CommandID: bg.id,
 		Command:   bg.command,
 		Cwd:       bg.cwd,
@@ -380,6 +451,40 @@ func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
 		Output:    bg.output.ReadDelta(),
 		Error:     errText,
 		ExitCode:  exitCode,
+	}
+}
+
+func (bg *backgroundCommand) detail(limit int) BackgroundCommandDetail {
+	bg.mu.Lock()
+	running := bg.running
+	errText := bg.errText
+	commandID := bg.id
+	command := bg.command
+	cwd := bg.cwd
+	startedAt := bg.startedAt
+	updatedAt := bg.updatedAt
+	var exitCode *int
+	if bg.exitCode != nil {
+		copied := *bg.exitCode
+		exitCode = &copied
+	}
+	bg.mu.Unlock()
+
+	unread := bg.output.unreadSummary(limit)
+
+	return BackgroundCommandDetail{
+		CommandID:       commandID,
+		Command:         command,
+		Cwd:             cwd,
+		Status:          backgroundCommandAsyncStatus(running, exitCode, errText),
+		Running:         running,
+		StartedAt:       startedAt,
+		UpdatedAt:       updatedAt,
+		Output:          bg.output.tail(limit),
+		HasUnreadOutput: unread.HasUnread,
+		UnreadBytes:     unread.UnreadBytes,
+		ExitCode:        exitCode,
+		Error:           errText,
 	}
 }
 
@@ -417,7 +522,54 @@ func (bg *backgroundCommand) markUpdated(at time.Time) {
 	bg.updatedAt = at
 }
 
-func renderBackgroundCommandResult(result backgroundCommandResult) (string, error) {
+func (bg *backgroundCommand) asyncUpdate() BackgroundCommandUpdate {
+	bg.mu.Lock()
+	running := bg.running
+	errText := bg.errText
+	startedAt := bg.startedAt
+	updatedAt := bg.updatedAt
+	command := bg.command
+	cwd := bg.cwd
+	commandID := bg.id
+	var exitCode *int
+	if bg.exitCode != nil {
+		copied := *bg.exitCode
+		exitCode = &copied
+	}
+	bg.mu.Unlock()
+
+	unread := bg.output.unreadSummary(backgroundCommandNotificationPreviewBytes)
+
+	return BackgroundCommandUpdate{
+		CommandID:       commandID,
+		Command:         command,
+		Cwd:             cwd,
+		Status:          backgroundCommandAsyncStatus(running, exitCode, errText),
+		Running:         running,
+		StartedAt:       startedAt,
+		UpdatedAt:       updatedAt,
+		OutputPreview:   unread.Preview,
+		HasUnreadOutput: unread.HasUnread,
+		UnreadBytes:     unread.UnreadBytes,
+		ExitCode:        exitCode,
+		Error:           errText,
+	}
+}
+
+func backgroundCommandAsyncStatus(running bool, exitCode *int, errText string) string {
+	if running {
+		return "running"
+	}
+	if exitCode != nil && *exitCode != 0 {
+		return "failed"
+	}
+	if strings.TrimSpace(errText) != "" {
+		return "failed"
+	}
+	return "completed"
+}
+
+func renderBackgroundCommandResult(result BackgroundCommandResult) (string, error) {
 	encoded, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return "", err
@@ -508,4 +660,66 @@ func (b *boundedOutput) unreadSummary(limit int) unreadOutputSummary {
 		UnreadBytes: len(unread),
 		Preview:     preview,
 	}
+}
+
+func (b *boundedOutput) tail(limit int) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.data) == 0 {
+		return ""
+	}
+
+	tail := bytes.TrimSpace(b.data)
+	if len(tail) == 0 {
+		return ""
+	}
+
+	truncated := false
+	if limit > 0 && len(tail) > limit {
+		tail = tail[len(tail)-limit:]
+		truncated = true
+	}
+
+	text := string(tail)
+	if truncated {
+		return "[...]" + text
+	}
+	return text
+}
+
+func InspectBackgroundCommand(ctx context.Context, commandID string, wait time.Duration, tailBytes int) (BackgroundCommandDetail, error) {
+	bg, err := getBackgroundCommand(commandID)
+	if err != nil {
+		return BackgroundCommandDetail{}, err
+	}
+
+	if wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-bg.done:
+		case <-timer.C:
+		case <-ctx.Done():
+			return BackgroundCommandDetail{}, ctx.Err()
+		}
+	}
+
+	return bg.detail(tailBytes), nil
+}
+
+func StopBackgroundCommand(commandID string, wait time.Duration) (BackgroundCommandResult, error) {
+	bg, err := getBackgroundCommand(commandID)
+	if err != nil {
+		return BackgroundCommandResult{}, err
+	}
+	return bg.stop(wait), nil
+}
+
+func BackgroundCommandUpdateSnapshot(commandID string) (BackgroundCommandUpdate, error) {
+	bg, err := getBackgroundCommand(commandID)
+	if err != nil {
+		return BackgroundCommandUpdate{}, err
+	}
+	return bg.asyncUpdate(), nil
 }

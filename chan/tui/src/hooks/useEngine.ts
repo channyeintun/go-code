@@ -2,6 +2,10 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type {
+  BackgroundAgentInspectPayload,
+  BackgroundAgentStopPayload,
+  BackgroundCommandInspectPayload,
+  BackgroundCommandStopPayload,
   ModelSelectionResponsePayload,
   PermissionResponseDecision,
   RewindSelectionResponsePayload,
@@ -203,6 +207,30 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendBackgroundCommandInspect = useCallback(
+    (payload: BackgroundCommandInspectPayload) =>
+      send(createMessage("background_command_inspect", payload)),
+    [send],
+  );
+
+  const sendBackgroundCommandStop = useCallback(
+    (payload: BackgroundCommandStopPayload) =>
+      send(createMessage("background_command_stop", payload)),
+    [send],
+  );
+
+  const sendBackgroundAgentInspect = useCallback(
+    (payload: BackgroundAgentInspectPayload) =>
+      send(createMessage("background_agent_inspect", payload)),
+    [send],
+  );
+
+  const sendBackgroundAgentStop = useCallback(
+    (payload: BackgroundAgentStopPayload) =>
+      send(createMessage("background_agent_stop", payload)),
+    [send],
+  );
+
   return {
     ...state,
     sendInput,
@@ -215,5 +243,9 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendModelSelectionResponse,
     sendRewindSelectionResponse,
     sendResumeSelectionResponse,
+    sendBackgroundCommandInspect,
+    sendBackgroundCommandStop,
+    sendBackgroundAgentInspect,
+    sendBackgroundAgentStop,
   };
 }

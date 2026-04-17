@@ -31,6 +31,10 @@ export type EventType =
   | "artifact_status_changed"
   | "artifact_review_requested"
   | "artifact_review_resolved"
+  | "background_tasks_requested"
+  | "background_command_detail"
+  | "background_agent_detail"
+  | "background_command_updated"
   | "background_agent_updated"
   | "ready"
   | "error"
@@ -55,7 +59,11 @@ export type ClientMessageType =
   | "cancel"
   | "mode_toggle"
   | "shutdown"
-  | "artifact_review_response";
+  | "artifact_review_response"
+  | "background_command_inspect"
+  | "background_command_stop"
+  | "background_agent_inspect"
+  | "background_agent_stop";
 
 export interface ClientMessage {
   type: ClientMessageType;
@@ -210,6 +218,26 @@ export interface ResumeSelectionResponsePayload {
 
 export interface ModeChangedPayload {
   mode: string;
+}
+
+export interface BackgroundCommandInspectPayload {
+  command_id: string;
+  wait_ms?: number;
+}
+
+export interface BackgroundCommandStopPayload {
+  command_id: string;
+  wait_ms?: number;
+}
+
+export interface BackgroundAgentInspectPayload {
+  agent_id: string;
+  wait_ms?: number;
+}
+
+export interface BackgroundAgentStopPayload {
+  agent_id: string;
+  wait_ms?: number;
 }
 
 export interface ModelChangedPayload {
@@ -435,6 +463,53 @@ export interface BackgroundAgentUpdatedPayload {
   input_tokens?: number;
   output_tokens?: number;
   metadata?: ChildAgentMetadata;
+}
+
+export interface BackgroundAgentDetailPayload {
+  agent_id: string;
+  invocation_id?: string;
+  description?: string;
+  subagent_type?: string;
+  status: string;
+  summary?: string;
+  session_id?: string;
+  transcript_path?: string;
+  output_file?: string;
+  error?: string;
+  total_cost_usd?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  metadata?: ChildAgentMetadata;
+}
+
+export interface BackgroundCommandUpdatedPayload {
+  command_id: string;
+  command?: string;
+  cwd?: string;
+  status: string;
+  running: boolean;
+  started_at?: string;
+  updated_at?: string;
+  output_preview?: string;
+  has_unread_output?: boolean;
+  unread_bytes?: number;
+  exit_code?: number;
+  error?: string;
+}
+
+export interface BackgroundCommandDetailPayload {
+  command_id: string;
+  command?: string;
+  cwd?: string;
+  status: string;
+  running: boolean;
+  started_at?: string;
+  updated_at?: string;
+  output?: string;
+  has_unread_output?: boolean;
+  unread_bytes?: number;
+  exit_code?: number;
+  error?: string;
 }
 
 export interface ChildAgentMetadata {

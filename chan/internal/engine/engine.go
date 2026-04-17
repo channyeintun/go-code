@@ -41,6 +41,23 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	var stdoutW io.Writer = debuglog.NewIPCWriter(os.Stdout)
 
 	bridge := ipc.NewBridge(stdinR, stdoutW)
+	toolpkg.SetBackgroundCommandNotifier(func(update toolpkg.BackgroundCommandUpdate) {
+		_ = bridge.Emit(ipc.EventBackgroundCommandUpdated, ipc.BackgroundCommandUpdatedPayload{
+			CommandID:       update.CommandID,
+			Command:         update.Command,
+			Cwd:             update.Cwd,
+			Status:          update.Status,
+			Running:         update.Running,
+			StartedAt:       update.StartedAt,
+			UpdatedAt:       update.UpdatedAt,
+			OutputPreview:   update.OutputPreview,
+			HasUnreadOutput: update.HasUnreadOutput,
+			UnreadBytes:     update.UnreadBytes,
+			ExitCode:        update.ExitCode,
+			Error:           update.Error,
+		})
+	})
+	defer toolpkg.SetBackgroundCommandNotifier(nil)
 	registry := toolpkg.NewRegistry()
 	startupSelection := resolveStartupProviderSelection(cfg)
 	provider := normalizeProvider(startupSelection.Provider)
@@ -305,6 +322,42 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 				return err
 			}
 			continue
+		case ipc.MsgBackgroundCommandInspect:
+			var payload ipc.BackgroundCommandInspectPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode background command inspect: %w", err)
+			}
+			if err := handleBackgroundCommandInspectMessage(ctx, bridge, payload); err != nil {
+				return err
+			}
+			continue
+		case ipc.MsgBackgroundCommandStop:
+			var payload ipc.BackgroundCommandStopPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode background command stop: %w", err)
+			}
+			if err := handleBackgroundCommandStopMessage(bridge, payload); err != nil {
+				return err
+			}
+			continue
+		case ipc.MsgBackgroundAgentInspect:
+			var payload ipc.BackgroundAgentInspectPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode background agent inspect: %w", err)
+			}
+			if err := handleBackgroundAgentInspectMessage(ctx, bridge, payload); err != nil {
+				return err
+			}
+			continue
+		case ipc.MsgBackgroundAgentStop:
+			var payload ipc.BackgroundAgentStopPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode background agent stop: %w", err)
+			}
+			if err := handleBackgroundAgentStopMessage(ctx, bridge, payload); err != nil {
+				return err
+			}
+			continue
 		case ipc.MsgModeToggle:
 			if loopState.mode == agent.ModePlan {
 				loopState.mode = agent.ModeFast
@@ -448,6 +501,7 @@ agent subagent_type: Explore (read-only codebase search), general-purpose (broad
 Choreograph, don't orchestrate: delegate bounded work to child agents with clear objective/constraints/output, let them finish, synthesize.
 Use child agents proactively for non-trivial exploration or terminal-heavy work.
 run_in_background=true only when user explicitly wants async. agent_status/agent_stop only for background agents.
+Async results may arrive later as user-role <task-notification> XML. These are system events, not fresh user asks. Read the status/summary/details, inspect referenced background work when needed, then proactively tell the user the relevant result.
 
 Read policy:
 - For large files, use grep_search first to find anchors, then read_file for exact text.

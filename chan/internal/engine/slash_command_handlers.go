@@ -1249,6 +1249,16 @@ func handleStatusSlashCommand(cmd *slashCommandContext) error {
 	return emitTextResponse(cmd.bridge, statusText)
 }
 
+func handleTasksSlashCommand(cmd *slashCommandContext) error {
+	if strings.TrimSpace(cmd.args) != "" {
+		return emitTextResponse(cmd.bridge, "usage: /tasks")
+	}
+	if err := cmd.bridge.Emit(ipc.EventBackgroundTasksRequested, nil); err != nil {
+		return err
+	}
+	return emitTextResponse(cmd.bridge, "")
+}
+
 func enabledDisabled(value bool) string {
 	if value {
 		return "enabled"

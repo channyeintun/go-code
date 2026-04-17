@@ -1,6 +1,9 @@
 package ipc
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ProtocolVersion is the current IPC protocol version.
 const ProtocolVersion = 2
@@ -45,13 +48,17 @@ const (
 	EventCompactEnd               EventType = "compact_end"
 
 	// Artifacts
-	EventArtifactCreated         EventType = "artifact_created"
-	EventArtifactUpdated         EventType = "artifact_updated"
-	EventArtifactFocused         EventType = "artifact_focused"
-	EventArtifactStatusChanged   EventType = "artifact_status_changed"
-	EventArtifactReviewRequested EventType = "artifact_review_requested"
-	EventArtifactReviewResolved  EventType = "artifact_review_resolved"
-	EventBackgroundAgentUpdated  EventType = "background_agent_updated"
+	EventArtifactCreated          EventType = "artifact_created"
+	EventArtifactUpdated          EventType = "artifact_updated"
+	EventArtifactFocused          EventType = "artifact_focused"
+	EventArtifactStatusChanged    EventType = "artifact_status_changed"
+	EventArtifactReviewRequested  EventType = "artifact_review_requested"
+	EventArtifactReviewResolved   EventType = "artifact_review_resolved"
+	EventBackgroundTasksRequested EventType = "background_tasks_requested"
+	EventBackgroundCommandDetail  EventType = "background_command_detail"
+	EventBackgroundAgentDetail    EventType = "background_agent_detail"
+	EventBackgroundCommandUpdated EventType = "background_command_updated"
+	EventBackgroundAgentUpdated   EventType = "background_agent_updated"
 
 	// Engine status
 	EventReady           EventType = "ready"
@@ -74,16 +81,20 @@ type StreamEvent struct {
 type ClientMessageType string
 
 const (
-	MsgUserInput               ClientMessageType = "user_input"
-	MsgSlashCommand            ClientMessageType = "slash_command"
-	MsgPermissionResponse      ClientMessageType = "permission_response"
-	MsgModelSelectionResponse  ClientMessageType = "model_selection_response"
-	MsgRewindSelectionResponse ClientMessageType = "rewind_selection_response"
-	MsgResumeSelectionResponse ClientMessageType = "resume_selection_response"
-	MsgCancel                  ClientMessageType = "cancel"
-	MsgModeToggle              ClientMessageType = "mode_toggle"
-	MsgShutdown                ClientMessageType = "shutdown"
-	MsgArtifactReviewResponse  ClientMessageType = "artifact_review_response"
+	MsgUserInput                ClientMessageType = "user_input"
+	MsgSlashCommand             ClientMessageType = "slash_command"
+	MsgPermissionResponse       ClientMessageType = "permission_response"
+	MsgModelSelectionResponse   ClientMessageType = "model_selection_response"
+	MsgRewindSelectionResponse  ClientMessageType = "rewind_selection_response"
+	MsgResumeSelectionResponse  ClientMessageType = "resume_selection_response"
+	MsgCancel                   ClientMessageType = "cancel"
+	MsgModeToggle               ClientMessageType = "mode_toggle"
+	MsgShutdown                 ClientMessageType = "shutdown"
+	MsgArtifactReviewResponse   ClientMessageType = "artifact_review_response"
+	MsgBackgroundCommandInspect ClientMessageType = "background_command_inspect"
+	MsgBackgroundCommandStop    ClientMessageType = "background_command_stop"
+	MsgBackgroundAgentInspect   ClientMessageType = "background_agent_inspect"
+	MsgBackgroundAgentStop      ClientMessageType = "background_agent_stop"
 )
 
 // ClientMessage is one NDJSON line from Ink frontend → Go engine.
@@ -413,6 +424,26 @@ type SlashCommandPayload struct {
 	Args    string `json:"args"`
 }
 
+type BackgroundCommandInspectPayload struct {
+	CommandID string `json:"command_id"`
+	WaitMs    int    `json:"wait_ms,omitempty"`
+}
+
+type BackgroundCommandStopPayload struct {
+	CommandID string `json:"command_id"`
+	WaitMs    int    `json:"wait_ms,omitempty"`
+}
+
+type BackgroundAgentInspectPayload struct {
+	AgentID string `json:"agent_id"`
+	WaitMs  int    `json:"wait_ms,omitempty"`
+}
+
+type BackgroundAgentStopPayload struct {
+	AgentID string `json:"agent_id"`
+	WaitMs  int    `json:"wait_ms,omitempty"`
+}
+
 type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
@@ -469,6 +500,59 @@ type BackgroundAgentUpdatedPayload struct {
 	InputTokens    int                        `json:"input_tokens,omitempty"`
 	OutputTokens   int                        `json:"output_tokens,omitempty"`
 	Metadata       *ChildAgentMetadataPayload `json:"metadata,omitempty"`
+}
+
+// BackgroundAgentDetailPayload is emitted when the UI requests detailed state
+// for a retained background child agent.
+type BackgroundAgentDetailPayload struct {
+	AgentID        string                     `json:"agent_id"`
+	InvocationID   string                     `json:"invocation_id,omitempty"`
+	Description    string                     `json:"description,omitempty"`
+	SubagentType   string                     `json:"subagent_type,omitempty"`
+	Status         string                     `json:"status"`
+	Summary        string                     `json:"summary,omitempty"`
+	SessionID      string                     `json:"session_id,omitempty"`
+	TranscriptPath string                     `json:"transcript_path,omitempty"`
+	OutputFile     string                     `json:"output_file,omitempty"`
+	Error          string                     `json:"error,omitempty"`
+	TotalCostUSD   float64                    `json:"total_cost_usd,omitempty"`
+	InputTokens    int                        `json:"input_tokens,omitempty"`
+	OutputTokens   int                        `json:"output_tokens,omitempty"`
+	Metadata       *ChildAgentMetadataPayload `json:"metadata,omitempty"`
+}
+
+// BackgroundCommandUpdatedPayload is emitted when a background shell command
+// finishes asynchronously and has unread retained output.
+type BackgroundCommandUpdatedPayload struct {
+	CommandID       string    `json:"command_id"`
+	Command         string    `json:"command,omitempty"`
+	Cwd             string    `json:"cwd,omitempty"`
+	Status          string    `json:"status"`
+	Running         bool      `json:"running"`
+	StartedAt       time.Time `json:"started_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+	OutputPreview   string    `json:"output_preview,omitempty"`
+	HasUnreadOutput bool      `json:"has_unread_output,omitempty"`
+	UnreadBytes     int       `json:"unread_bytes,omitempty"`
+	ExitCode        *int      `json:"exit_code,omitempty"`
+	Error           string    `json:"error,omitempty"`
+}
+
+// BackgroundCommandDetailPayload is emitted when the UI requests detailed
+// state for a retained background shell command.
+type BackgroundCommandDetailPayload struct {
+	CommandID       string    `json:"command_id"`
+	Command         string    `json:"command,omitempty"`
+	Cwd             string    `json:"cwd,omitempty"`
+	Status          string    `json:"status"`
+	Running         bool      `json:"running"`
+	StartedAt       time.Time `json:"started_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+	Output          string    `json:"output,omitempty"`
+	HasUnreadOutput bool      `json:"has_unread_output,omitempty"`
+	UnreadBytes     int       `json:"unread_bytes,omitempty"`
+	ExitCode        *int      `json:"exit_code,omitempty"`
+	Error           string    `json:"error,omitempty"`
 }
 
 type ChildAgentMetadataPayload struct {

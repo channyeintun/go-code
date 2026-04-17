@@ -132,7 +132,7 @@ func (t *BashTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, er
 		if err != nil {
 			return ToolOutput{}, err
 		}
-		result, err := renderBackgroundCommandResult(backgroundCommandResult{
+		result, err := renderBackgroundCommandResult(BackgroundCommandResult{
 			CommandID: bg.id,
 			Command:   command,
 			Cwd:       workingDir,

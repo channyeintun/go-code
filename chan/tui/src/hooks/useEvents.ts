@@ -4,6 +4,7 @@ import type {
   ArtifactFocusedPayload,
   ArtifactReviewRequestedPayload,
   ArtifactReviewResolvedPayload,
+  BackgroundCommandUpdatedPayload,
   BackgroundAgentUpdatedPayload,
   ChildAgentMetadata,
   ArtifactStatusChangedPayload,
@@ -1345,6 +1346,46 @@ export function useEvents(initialModel: string, initialMode: string) {
         });
         break;
       }
+      case "background_command_updated": {
+        const p = event.payload as BackgroundCommandUpdatedPayload;
+        setUIState((s) => {
+          const nextCommand = backgroundCommandFromEventPayload(p);
+          if (!nextCommand) {
+            return s;
+          }
+
+          const previousCommand = s.backgroundCommands.find(
+            (command) => command.commandId === nextCommand.commandId,
+          );
+          const notice = buildBackgroundCommandTransitionNotice(
+            previousCommand,
+            mergeBackgroundCommand(previousCommand, nextCommand),
+            "background_command_updated",
+          );
+          const noticeMessage = notice
+            ? createSystemMessage(notice.text, notice.tone)
+            : null;
+
+          return {
+            ...s,
+            backgroundCommands: upsertBackgroundCommand(
+              s.backgroundCommands,
+              nextCommand,
+            ),
+            messages: noticeMessage
+              ? [...s.messages, noticeMessage]
+              : s.messages,
+            transcript: noticeMessage
+              ? appendTranscriptEntry(s.transcript, {
+                  id: noticeMessage.id,
+                  kind: "message",
+                })
+              : s.transcript,
+            statusLine: notice?.text ?? s.statusLine,
+          };
+        });
+        break;
+      }
       case "session_restored": {
         const p = event.payload as SessionRestoredPayload;
         setUIState((s) => ({
@@ -1767,6 +1808,18 @@ function normalizeHydratedMessages(
         const text = stringOrEmpty(message.text);
         if (text.length === 0) {
           return [];
+        }
+        const taskNotification = parseTaskNotificationMessage(text);
+        if (taskNotification) {
+          return [
+            {
+              id: message.id.trim(),
+              role: "system",
+              text: taskNotification.summary,
+              tone: taskNotification.tone,
+              timestamp,
+            },
+          ];
         }
         return [
           {
@@ -2293,10 +2346,10 @@ function buildBackgroundCommandNotice(
       (command) => command.commandId === update.commandId,
     );
     const mergedCommand = mergeBackgroundCommand(previousCommand, update);
-    const notice = buildSingleBackgroundCommandNotice(
-      payload,
+    const notice = buildBackgroundCommandTransitionNotice(
       previousCommand,
       mergedCommand,
+      payload.name,
     );
     if (notice) {
       nextNotice = notice;
@@ -2320,6 +2373,48 @@ function reduceBackgroundCommands(
   }
 
   return applyBackgroundCommandResult(commands, payload);
+}
+
+function backgroundCommandFromEventPayload(
+  payload: BackgroundCommandUpdatedPayload,
+): UIBackgroundCommand | null {
+  const commandId = stringOrEmpty(payload.command_id);
+  if (commandId.length === 0) {
+    return null;
+  }
+
+  const command = stringOrEmpty(payload.command);
+  const cwd = stringOrUndefined(payload.cwd);
+  const running = payload.running === true;
+  const status = normalizeBackgroundCommandEventStatus(
+    payload.status,
+    running,
+    payload.exit_code,
+    payload.error,
+  );
+  const preview = stringOrEmpty(payload.output_preview);
+  const unreadBytes = numberOrZero(payload.unread_bytes);
+
+  return {
+    commandId,
+    command,
+    cwd,
+    status,
+    running,
+    startedAt: stringOrUndefined(payload.started_at),
+    updatedAt: stringOrUndefined(payload.updated_at),
+    preview: preview || undefined,
+    previewKind:
+      preview.length > 0 && payload.has_unread_output === true
+        ? "unread"
+        : preview.length > 0
+          ? "latest"
+          : undefined,
+    unreadBytes,
+    exitCode: numberOrUndefined(payload.exit_code),
+    error: stringOrUndefined(payload.error),
+    retainedAt: new Date().toISOString(),
+  };
 }
 
 function parseBackgroundAgentResult(
@@ -2898,14 +2993,14 @@ function buildBackgroundAgentNotice(
   }
 }
 
-function buildSingleBackgroundCommandNotice(
-  payload: ToolResultPayload,
+function buildBackgroundCommandTransitionNotice(
   previousCommand: UIBackgroundCommand | undefined,
   nextCommand: UIBackgroundCommand,
+  sourceToolName?: string,
 ): BackgroundCommandNotice | null {
   const subject = backgroundCommandSubject(nextCommand);
 
-  if (payload.name === "bash" && !previousCommand && nextCommand.running) {
+  if (sourceToolName === "bash" && !previousCommand && nextCommand.running) {
     return {
       text: `${subject} started in the background.`,
       tone: "info",
@@ -3012,6 +3107,91 @@ function summarizeNoticeWithDetail(prefix: string, detail: string): string {
   const truncated =
     normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
   return `${prefix} ${truncated}`;
+}
+
+interface ParsedTaskNotification {
+  summary: string;
+  tone: UISystemMessage["tone"];
+}
+
+function parseTaskNotificationMessage(
+  text: string,
+): ParsedTaskNotification | null {
+  const normalized = text.trim();
+  if (!normalized.startsWith("<task-notification>")) {
+    return null;
+  }
+
+  const status = extractTaskNotificationTag(normalized, "status");
+  const summary = extractTaskNotificationTag(normalized, "summary");
+  return {
+    summary:
+      decodeTaskNotificationText(summary?.trim() || "") ||
+      fallbackTaskNotificationSummary(status?.trim() || "updated"),
+    tone: taskNotificationTone(status?.trim() || "updated"),
+  };
+}
+
+function extractTaskNotificationTag(
+  text: string,
+  tag: string,
+): string | null {
+  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+  return match?.[1] ?? null;
+}
+
+function decodeTaskNotificationText(value: string): string {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+function fallbackTaskNotificationSummary(status: string): string {
+  switch (status) {
+    case "completed":
+      return "Background task completed.";
+    case "failed":
+      return "Background task failed.";
+    case "stopped":
+    case "killed":
+      return "Background task stopped.";
+    default:
+      return "Background task updated.";
+  }
+}
+
+function taskNotificationTone(status: string): UISystemMessage["tone"] {
+  switch (status) {
+    case "completed":
+      return "success";
+    case "failed":
+      return "error";
+    case "stopped":
+    case "killed":
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
+function normalizeBackgroundCommandEventStatus(
+  status: string | undefined,
+  running: boolean,
+  exitCode: number | undefined,
+  error: string | undefined,
+): string {
+  const normalized = stringOrEmpty(status).toLowerCase();
+  if (normalized.length > 0) {
+    return normalized;
+  }
+  if (running) {
+    return "running";
+  }
+  if ((typeof exitCode === "number" && exitCode !== 0) || stringOrEmpty(error)) {
+    return "failed";
+  }
+  return "completed";
 }
 
 function parseJSONObject<T>(
