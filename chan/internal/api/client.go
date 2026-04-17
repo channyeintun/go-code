@@ -7,6 +7,7 @@ import (
 	"iter"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -167,10 +168,28 @@ type capabilitiesOverrideClient struct {
 }
 
 func WithCapabilities(client LLMClient, capabilities ModelCapabilities) LLMClient {
-	if client == nil {
+	if IsNilValue(client) {
 		return nil
 	}
 	return &capabilitiesOverrideClient{inner: client, capabilities: capabilities}
+}
+
+func IsNilValue(value any) bool {
+	if value == nil {
+		return true
+	}
+
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+func IsNilLLMClient(client LLMClient) bool {
+	return IsNilValue(client)
 }
 
 func (c *capabilitiesOverrideClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
@@ -199,6 +218,9 @@ type APIKeyFuncSetter interface {
 // SetAPIKeyFunc sets an API key resolver on the client if it supports it.
 // It unwraps decorator layers (e.g. WithCapabilities) to reach the inner client.
 func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
+	if IsNilLLMClient(client) {
+		return
+	}
 	if setter, ok := client.(APIKeyFuncSetter); ok {
 		setter.SetAPIKeyFunc(fn)
 		return
@@ -209,8 +231,11 @@ func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
 }
 
 func (c *capabilitiesOverrideClient) Warmup(ctx context.Context) error {
+	if IsNilLLMClient(c.inner) {
+		return nil
+	}
 	warmable, ok := c.inner.(WarmupCapable)
-	if !ok || warmable == nil {
+	if !ok || IsNilValue(warmable) {
 		return nil
 	}
 	return warmable.Warmup(ctx)

@@ -14,7 +14,7 @@ type proxy struct {
 }
 
 func WrapClient(inner api.LLMClient) api.LLMClient {
-	if inner == nil {
+	if api.IsNilLLMClient(inner) {
 		return nil
 	}
 	if _, ok := inner.(*proxy); ok {
@@ -93,7 +93,7 @@ func (p *proxy) Capabilities() api.ModelCapabilities {
 
 func (p *proxy) Warmup(ctx context.Context) error {
 	warmable, ok := p.inner.(api.WarmupCapable)
-	if !ok || warmable == nil {
+	if !ok || api.IsNilValue(warmable) {
 		return nil
 	}
 	debuglog.Log("client", "warmup_start", nil)

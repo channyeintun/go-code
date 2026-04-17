@@ -26,7 +26,7 @@ const enginePath =
   candidates.find((p) => existsSync(p)) ??
   "chan-engine";
 
-let model = "anthropic/claude-sonnet-4-20250514";
+let model = "github-copilot/gpt-5.4";
 let mode = "plan";
 const theme = createTheme()
   .preset("sonokai")
@@ -49,7 +49,7 @@ for (let i = 0; i < args.length; i++) {
     console.log(`Usage: chan [options]
 
 Options:
-  --model, -m <provider/model>  Model to use (default: anthropic/claude-sonnet-4-20250514)
+  --model, -m <provider/model>  Model to use (default: github-copilot/gpt-5.4)
   --mode <plan|fast>            Execution mode (default: plan)
   --help, -h                    Show this help`);
     process.exit(0);

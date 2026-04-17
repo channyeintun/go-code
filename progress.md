@@ -42,3 +42,41 @@
 - Fixed `read_file` parameter validation so unexpected params fail fast instead of being silently ignored.
 - Fixed reread dedup bookkeeping so slices are only remembered after inline delivery survives output budgeting.
 - Tightened the compatibility alias path so it uses the same fail-fast validation and canonical `filePath` forwarding.
+
+---
+
+# Provider UX Implementation Progress
+
+## References
+
+- Reviewed `plan.md` for the target multi-provider UX.
+- Reviewed `reference/opencode` provider onboarding, auth-method, and provider selection flows.
+- Reviewed current `chan` startup, `/connect`, `/model`, and TUI model picker behavior.
+
+## Task Status
+
+1. Stabilize startup and align the default provider
+   - Status: completed
+   - Notes: Fixed the typed-nil client crash during warmup, changed the shipped default to `github-copilot/gpt-5.4`, rebuilt the launcher and engine, and reinstalled the local binaries.
+
+2. Add provider discovery snapshot
+   - Status: in progress
+   - Notes: Reading the current engine, config, slash-command, and TUI protocol surfaces to introduce a reusable provider status snapshot for startup, `/providers`, `/status`, and the model picker.
+
+3. Add `/providers` command
+   - Status: not started
+
+4. Improve startup and session status UX
+   - Status: not started
+
+5. Generalize `/connect`
+   - Status: not started
+
+6. Redesign model picker around provider state
+   - Status: not started
+
+7. Persist recent successful model selections
+   - Status: not started
+
+8. Final rebuild and install
+   - Status: not started

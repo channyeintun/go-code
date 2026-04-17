@@ -49,7 +49,7 @@ type GitHubCopilotAuth struct {
 // DefaultConfig returns the configuration with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Model:                   "anthropic/claude-sonnet-4-20250514",
+		Model:                   "github-copilot/gpt-5.4",
 		DefaultMode:             "plan",
 		CostWarningThresholdUSD: 5,
 		EnableSessionMemory:     true,

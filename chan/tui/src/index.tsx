@@ -8,7 +8,7 @@ import { installClipboardBridge } from "./utils/clipboardBridge.js";
 installClipboardBridge();
 
 const enginePath = process.env["CHAN_ENGINE_PATH"] ?? "chan-engine";
-const model = process.env["CHAN_MODEL"] ?? "anthropic/claude-sonnet-4-20250514";
+const model = process.env["CHAN_MODEL"] ?? "github-copilot/gpt-5.4";
 const mode = process.env["CHAN_MODE"] ?? "plan";
 const theme = createTheme()
   .preset("sonokai")

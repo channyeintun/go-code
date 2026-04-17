@@ -331,14 +331,21 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 
 func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
 	provider = normalizeProvider(provider)
-	return providerBehaviorFor(provider).NewClient(provider, model, cfg)
+	client, err := providerBehaviorFor(provider).NewClient(provider, model, cfg)
+	if api.IsNilLLMClient(client) {
+		return nil, err
+	}
+	return client, err
 }
 
 const clientWarmupTimeout = 3 * time.Second
 
 func startClientWarmup(ctx context.Context, logger *timing.Logger, startupMetrics *timing.CheckpointRecorder, sessionID, activeModelID string, client api.LLMClient) {
+	if api.IsNilLLMClient(client) {
+		return
+	}
 	warmable, ok := client.(api.WarmupCapable)
-	if !ok || warmable == nil {
+	if !ok || api.IsNilValue(warmable) {
 		return
 	}
 	startupMetrics.Mark("api_preconnect_started")
