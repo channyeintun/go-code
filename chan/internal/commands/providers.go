@@ -29,6 +29,47 @@ type ProviderSnapshot struct {
 	Providers      []ProviderStatus
 }
 
+func FormatProviderSnapshot(snapshot ProviderSnapshot) string {
+	lines := make([]string, 0, len(snapshot.Providers)*2+4)
+	if snapshot.ActiveProvider != "" && snapshot.ActiveModel != "" {
+		lines = append(lines, fmt.Sprintf("Active selection: %s/%s", snapshot.ActiveProvider, snapshot.ActiveModel))
+	} else if snapshot.ActiveModel != "" {
+		lines = append(lines, fmt.Sprintf("Active selection: %s", snapshot.ActiveModel))
+	}
+
+	if firstUsable, ok := snapshot.FirstUsable(); ok {
+		lines = append(lines, fmt.Sprintf("First usable: %s/%s", firstUsable.ID, firstUsable.DefaultModel))
+	} else {
+		lines = append(lines, "First usable: none")
+	}
+
+	lines = append(lines, "", "Providers:")
+	for _, status := range snapshot.Providers {
+		marker := "  "
+		if status.Current {
+			marker = "* "
+		}
+
+		line := fmt.Sprintf(
+			"%s%-16s %-24s default %s · source %s",
+			marker,
+			status.ID,
+			providerStateLabel(status),
+			status.DefaultModel,
+			status.AuthSource,
+		)
+		lines = append(lines, strings.TrimRight(line, " "))
+		if status.LastError != "" {
+			lines = append(lines, "  Last error: "+status.LastError)
+		}
+		if !status.Usable && status.SetupHint != "" {
+			lines = append(lines, "  Next: "+status.SetupHint)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
 	activeProvider, activeModel := ResolveModelSelection(cfg.Model)
 	snapshot := ProviderSnapshot{
@@ -264,4 +305,15 @@ func providerSetupHint(providerID string, envKey string) string {
 
 func normalizeProviderID(provider string) string {
 	return strings.ToLower(strings.TrimSpace(provider))
+}
+
+func providerStateLabel(status ProviderStatus) string {
+	switch {
+	case status.Usable:
+		return "usable"
+	case status.Configured:
+		return "configured, needs attention"
+	default:
+		return "needs setup"
+	}
 }

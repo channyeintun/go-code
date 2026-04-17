@@ -64,10 +64,11 @@
    - Notes: Added a shared provider snapshot helper in `internal/commands` that resolves the selected provider, orders built-in providers, classifies auth sources, and marks providers as usable or setup-required from the current config and environment.
 
 3. Add `/providers` command
-   - Status: in progress
+   - Status: completed
+   - Notes: Added a new `/providers` slash command that uses the shared provider snapshot and reports the active selection, first usable provider, per-provider auth source, setup state, and next action when setup is required.
 
 4. Improve startup and session status UX
-   - Status: not started
+   - Status: in progress
 
 5. Generalize `/connect`
    - Status: not started

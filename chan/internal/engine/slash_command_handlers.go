@@ -371,6 +371,15 @@ func handlePlanSlashCommand(cmd *slashCommandContext) error {
 	return cmd.bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(cmd.state.Mode)})
 }
 
+func handleProvidersSlashCommand(cmd *slashCommandContext) error {
+	if strings.TrimSpace(cmd.args) != "" {
+		return emitTextResponse(cmd.bridge, "usage: /providers")
+	}
+
+	snapshot := commandspkg.DiscoverProviderSnapshot(config.LoadForWorkingDir(cmd.state.CWD))
+	return emitTextResponse(cmd.bridge, commandspkg.FormatProviderSnapshot(snapshot))
+}
+
 func handleFastSlashCommand(cmd *slashCommandContext) error {
 	cmd.state.Mode = agent.ModeFast
 	if err := cmd.persistState(); err != nil {

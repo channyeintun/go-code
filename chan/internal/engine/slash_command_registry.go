@@ -99,6 +99,15 @@ func slashCommandSpecs() []slashCommandSpec {
 		},
 		{
 			Descriptor: commandspkg.Descriptor{
+				Name:           "providers",
+				Description:    "Show provider availability and setup state",
+				Usage:          "/providers",
+				TakesArguments: false,
+			},
+			Handler: slashCommandHandlerFunc(handleProvidersSlashCommand),
+		},
+		{
+			Descriptor: commandspkg.Descriptor{
 				Name:           "plan-mode",
 				Description:    "Alias for /plan",
 				Usage:          "/plan-mode",
