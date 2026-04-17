@@ -26,6 +26,16 @@ interface PermissionPromptProps {
   onCancelTurn: () => void;
 }
 
+interface DetailPreview {
+  lines: string[];
+  hiddenLineCount: number;
+  truncated: boolean;
+}
+
+const DETAIL_PREVIEW_MAX_LINES = 4;
+const DETAIL_PREVIEW_MAX_CHARS = 320;
+const DETAIL_PREVIEW_MAX_LINE_CHARS = 120;
+
 const OPTIONS: PermissionOption[] = [
   {
     decision: "allow",
@@ -133,38 +143,45 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   const detailLabel = useMemo(() => buildDetailLabel(targetKind), [targetKind]);
   const toolLabel = useMemo(() => formatToolLabel(tool), [tool]);
   const accessLabel = permissionLevel?.trim() || inferAccessLabel(tool);
+  const detailPreview = useMemo(
+    () => buildDetailPreview(detailValue, targetKind, tool),
+    [detailValue, targetKind, tool],
+  );
 
   return (
     <Box
       flexDirection="column"
       flexGrow={1}
       flexShrink={1}
+      minWidth={0}
       minHeight={0}
       borderStyle="round"
       borderColor={riskColor}
-      overflow="scroll"
+      overflow="hidden"
       paddingX={1}
       userSelect="contain"
     >
-      <Text bold color={riskColor}>
-        Permission Required
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text>{question}</Text>
-        <Text color="$muted">
+      <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        <Text bold color={riskColor}>
+          Permission Required
+        </Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column" flexShrink={0} minWidth={0}>
+        <Text wrap="truncate-end">{question}</Text>
+        <Text color="$muted" wrap="truncate-end">
           Tool: <Text color="$fg">{toolLabel}</Text>
         </Text>
-        <Text color="$muted">
+        <Text color="$muted" wrap="truncate-end">
           Access: <Text color="$fg">{accessLabel}</Text>
         </Text>
-        <Text color="$muted">
+        <Text color="$muted" wrap="truncate-end">
           Risk: <Text color={riskColor}>{risk || "normal"}</Text>
         </Text>
         {riskReason?.trim() ? (
-          <Text color="$warning">Policy: {riskReason}</Text>
+          <Text color="$warning" wrap="truncate-end">{`Policy: ${riskReason}`}</Text>
         ) : null}
         {workingDir ? (
-          <Text color="$muted">
+          <Text color="$muted" wrap="truncate-end">
             Cwd: <Text color="$fg">{workingDir}</Text>
           </Text>
         ) : null}
@@ -172,16 +189,33 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       <Box
         marginTop={1}
         paddingX={1}
+        paddingY={1}
         borderStyle="round"
         borderColor="$border"
         flexDirection="column"
+        flexShrink={0}
+        minWidth={0}
+        overflow="hidden"
       >
         <Text color="$muted">{detailLabel}</Text>
-        <Text>{detailValue}</Text>
+        <Box flexDirection="column" minWidth={0}>
+          {detailPreview.lines.map((line, index) => (
+            <Text
+              key={`${detailLabel.toLowerCase()}-${index}`}
+              wrap="truncate-end"
+            >
+              {line.length > 0 ? line : " "}
+            </Text>
+          ))}
+        </Box>
+        {detailPreview.truncated ? (
+          <Text dimColor>{formatDetailPreviewHint(detailPreview.hiddenLineCount)}</Text>
+        ) : null}
       </Box>
       <Box
         marginTop={1}
         flexDirection="column"
+        flexShrink={0}
       >
         {OPTIONS.map((option, index) => {
           const isSelected = index === selectedIndex;
@@ -200,7 +234,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
           );
         })}
       </Box>
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" flexShrink={0}>
         <Text dimColor>
           Enter confirm · Up/Down change selection · Esc cancel turn
         </Text>
@@ -326,4 +360,78 @@ function inferAccessLabel(tool: string): string {
     return "write";
   }
   return "ask";
+}
+
+function buildDetailPreview(
+  value: string,
+  targetKind: string | undefined,
+  tool: string,
+): DetailPreview {
+  if (targetKind === "command" || tool === "bash") {
+    const singleLine = value.replace(/\s+/g, " ").trim();
+    return {
+      lines: [truncateEnd(singleLine, DETAIL_PREVIEW_MAX_CHARS)],
+      hiddenLineCount: 0,
+      truncated: singleLine.length > DETAIL_PREVIEW_MAX_CHARS,
+    };
+  }
+
+  const sourceLines = value.replace(/\r\n/g, "\n").split("\n");
+  const previewLines: string[] = [];
+  let remainingChars = DETAIL_PREVIEW_MAX_CHARS;
+  let consumedSourceLines = 0;
+  let truncated = false;
+
+  for (const line of sourceLines) {
+    if (
+      previewLines.length >= DETAIL_PREVIEW_MAX_LINES ||
+      remainingChars <= 0
+    ) {
+      truncated = true;
+      break;
+    }
+
+    const lineBudget = Math.min(DETAIL_PREVIEW_MAX_LINE_CHARS, remainingChars);
+    if (line.length > lineBudget) {
+      truncated = true;
+    }
+
+    previewLines.push(truncateEnd(line, lineBudget));
+    remainingChars -= Math.min(line.length, lineBudget);
+    consumedSourceLines += 1;
+  }
+
+  if (consumedSourceLines < sourceLines.length) {
+    truncated = true;
+  }
+
+  return {
+    lines: previewLines.length > 0 ? previewLines : [""],
+    hiddenLineCount: Math.max(0, sourceLines.length - consumedSourceLines),
+    truncated,
+  };
+}
+
+function truncateEnd(value: string, limit: number): string {
+  if (limit <= 0) {
+    return "";
+  }
+
+  if (value.length <= limit) {
+    return value;
+  }
+
+  if (limit <= 3) {
+    return ".".repeat(limit);
+  }
+
+  return `${value.slice(0, limit - 3)}...`;
+}
+
+function formatDetailPreviewHint(hiddenLineCount: number): string {
+  if (hiddenLineCount > 0) {
+    return `Preview truncated to keep actions visible. ${hiddenLineCount} more line${hiddenLineCount === 1 ? "" : "s"} hidden.`;
+  }
+
+  return "Preview truncated to keep actions visible.";
 }
