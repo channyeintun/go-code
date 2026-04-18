@@ -39,6 +39,7 @@ interface PromptFooterProps {
   showArtifacts?: boolean;
   artifactsShortcutLabel?: string;
   backgroundTasksShortcutLabel?: string;
+  reasoningShortcutLabel?: string;
 }
 
 const PromptFooter: FC<PromptFooterProps> = ({
@@ -63,6 +64,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   showArtifacts = true,
   artifactsShortcutLabel = "Opt+A",
   backgroundTasksShortcutLabel = "Opt+B",
+  reasoningShortcutLabel = "Opt+R",
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -117,12 +119,14 @@ const PromptFooter: FC<PromptFooterProps> = ({
         disabled,
         terminalColumns,
         artifactsShortcutLabel,
+        reasoningShortcutLabel,
         backgroundTasksShortcutLabel,
         queuedPromptCount,
         showExpandedHint,
       ),
     [
       artifactsShortcutLabel,
+      reasoningShortcutLabel,
       backgroundTasksShortcutLabel,
       disabled,
       queuedPromptCount,
@@ -319,6 +323,7 @@ function buildInputHint(
   disabled: boolean | undefined,
   terminalColumns: number,
   artifactsShortcutLabel: string,
+  reasoningShortcutLabel: string,
   backgroundTasksShortcutLabel: string,
   queuedPromptCount: number,
   showExpandedHint: boolean,
@@ -336,23 +341,24 @@ function buildInputHint(
   const queueHint =
     queuedPromptCount > 0 ? " | Ctrl+Y send queued | Ctrl+K drop queued" : "";
   const tasksHint = ` | ${backgroundTasksShortcutLabel} tasks`;
+  const reasoningHint = ` | ${reasoningShortcutLabel} reason`;
 
   if (terminalColumns < 72) {
     return disabled
-      ? `Busy${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Esc cancel`
-      : `Enter send${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Esc cancel`;
+      ? `Busy${pasteHint} | ${artifactsShortcutLabel} arts${tasksHint}${reasoningHint}${queueHint} | Esc cancel`
+      : `Enter send${pasteHint} | ${artifactsShortcutLabel} arts${tasksHint}${reasoningHint}${queueHint} | Esc cancel`;
   }
 
   if (terminalColumns < 96) {
     return disabled
-      ? `Busy${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Esc cancel`
-      : `Enter send${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Ctrl+G search | Esc cancel`;
+      ? `Busy${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${reasoningHint}${queueHint} | Esc cancel`
+      : `Enter send${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${reasoningHint}${queueHint} | Ctrl+G search | Esc cancel`;
   }
 
   if (disabled) {
-    return `Engine busy${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Esc cancel`;
+    return `Engine busy${pasteHint} | ${artifactsShortcutLabel} artifacts${tasksHint}${reasoningHint}${queueHint} | Esc cancel`;
   }
-  return `Enter send${pasteHint} | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts${tasksHint}${queueHint} | Tab mode | Esc cancel`;
+  return `Enter send${pasteHint} | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts${tasksHint}${reasoningHint}${queueHint} | Tab mode | Esc cancel`;
 }
 
 function buildMemoryRecallText(

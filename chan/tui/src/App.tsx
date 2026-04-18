@@ -47,6 +47,7 @@ import type {
 
 const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
 const ARTIFACTS_TOGGLE_SHORTCUT_LABEL = "Opt+A";
+const REASONING_TOGGLE_SHORTCUT_LABEL = "Opt+R";
 const TASKS_TOGGLE_SHORTCUT_LABEL = "Opt+B";
 const FOOTER_HINT_REVEAL_MS = 2500;
 
@@ -631,6 +632,16 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     setShowArtifacts((current) => !current);
   }, []);
 
+  const handleReasoningToggle = useCallback(() => {
+    const levels = ["default", "low", "medium", "high", "xhigh"];
+    const current = uiState.reasoningEffort ?? "default";
+    const currentIndex = levels.indexOf(current);
+    const nextIndex = (currentIndex + 1) % levels.length;
+    const nextEffort = levels[nextIndex];
+
+    engine.sendCommand("reasoning", nextEffort);
+  }, [engine, uiState.reasoningEffort]);
+
   const handleBackgroundTasksToggle = useCallback(() => {
     setShowBackgroundTasks((current) => !current);
   }, []);
@@ -842,6 +853,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onModeToggle={engine.sendModeToggle}
               onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
               onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
+              onReasoningToggle={handleReasoningToggle}
               onBackgroundTasksToggle={handleBackgroundTasksToggle}
               onRevealFooterHints={handleRevealFooterHints}
               onSendQueuedPromptNow={handleSendNextQueuedPrompt}
@@ -877,6 +889,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             showArtifacts={showArtifacts}
             artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
             backgroundTasksShortcutLabel={TASKS_TOGGLE_SHORTCUT_LABEL}
+            reasoningShortcutLabel={REASONING_TOGGLE_SHORTCUT_LABEL}
           />
         </Box>
       ) : null}
