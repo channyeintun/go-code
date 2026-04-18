@@ -35,17 +35,19 @@ func main() {
 		flagModel string
 		flagMode  string
 		flagStdio bool
+		flagAuto  bool
 	)
 	rootCmd.PersistentFlags().StringVar(&flagModel, "model", "", "Model to use (provider/model format, e.g. github-copilot/gpt-5.4)")
 	rootCmd.PersistentFlags().StringVar(&flagMode, "mode", "", "Execution mode: plan or fast")
 	rootCmd.PersistentFlags().BoolVar(&flagStdio, "stdio", false, "Run in stdio mode (NDJSON engine only, no TUI)")
+	rootCmd.PersistentFlags().BoolVar(&flagAuto, "auto-mode", false, "Auto-approve non-destructive tool calls")
 
 	// Run command (default)
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Start the agent (default command)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runEngine(flagModel, flagMode, flagStdio)
+			return runEngine(flagModel, flagMode, flagStdio, flagAuto)
 		},
 	}
 	rootCmd.AddCommand(runCmd)
@@ -55,7 +57,7 @@ func main() {
 
 	// Make "run" the default command
 	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		return runEngine(flagModel, flagMode, flagStdio)
+		return runEngine(flagModel, flagMode, flagStdio, flagAuto)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
@@ -63,7 +65,7 @@ func main() {
 	}
 }
 
-func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
+func runEngine(modelFlag, modeFlag string, stdioMode, autoMode bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -77,6 +79,9 @@ func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
 	}
 	if modeFlag != "" {
 		cfg.DefaultMode = modeFlag
+	}
+	if autoMode {
+		cfg.AutoMode = true
 	}
 
 	// Setup context with signal handling
@@ -124,6 +129,7 @@ func launchTUI(ctx context.Context, cfg config.Config) error {
 		"CHAN_ENGINE_PATH="+enginePath,
 		"CHAN_MODEL="+cfg.Model,
 		"CHAN_MODE="+cfg.DefaultMode,
+		"CHAN_AUTO_MODE="+strconv.FormatBool(cfg.AutoMode),
 		"CHAN_COST_WARNING_THRESHOLD_USD="+strconv.FormatFloat(cfg.CostWarningThresholdUSD, 'f', -1, 64),
 	)
 

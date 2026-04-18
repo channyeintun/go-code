@@ -82,7 +82,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	subagentModelState := NewActiveSubagentModelState(subagentModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
-	permissionCtx := newPermissionContext(cfg.PermissionMode)
+	permissionCtx := newPermissionContext(cfg.PermissionMode, cfg.AutoMode)
 	tracker := costpkg.NewTracker()
 	hookRunner := hooks.NewRunner(hooks.DefaultHooksDir())
 	sessionStore := session.NewStore(session.DefaultBaseDir())

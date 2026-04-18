@@ -478,8 +478,9 @@ type permissionResponse struct {
 	Feedback string
 }
 
-func newPermissionContext(mode string) *permissions.Context {
+func newPermissionContext(mode string, autoMode bool) *permissions.Context {
 	ctx := permissions.NewContext()
+	ctx.SessionAllowAll = autoMode
 	switch permissions.Mode(mode) {
 	case permissions.ModeBypassPermissions:
 		ctx.Mode = permissions.ModeBypassPermissions

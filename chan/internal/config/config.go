@@ -31,6 +31,7 @@ type Config struct {
 
 	// Permissions
 	PermissionMode string `json:"permission_mode,omitempty"` // "default", "bypassPermissions", "autoApprove"
+	AutoMode       bool   `json:"auto_mode,omitempty"`
 
 	// Paths
 	HooksDir string `json:"hooks_dir,omitempty"`
@@ -135,6 +136,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("CHAN_PERMISSION_MODE"); v != "" {
 		cfg.PermissionMode = v
+	}
+	if v := os.Getenv("CHAN_AUTO_MODE"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.AutoMode = parsed
+		}
 	}
 	if cfg.PermissionMode != "" {
 		switch cfg.PermissionMode {
