@@ -153,7 +153,8 @@
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
-                Bun 1.0+ to run the current <code>nami</code> launcher
+                One supported runtime to run the launcher:
+                <code>node</code>, <code>bun</code>, or <code>deno</code>
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
@@ -172,8 +173,9 @@
               Installation
             </h2>
             <p class="text-gray-400 mb-8 leading-relaxed">
-              Downloads prebuilt binaries automatically. Current releases still
-              use the Bun-based launcher, so Bun 1.0+ must already be installed.
+              Downloads prebuilt binaries automatically. Current releases ship
+              a launcher shim, a portable <code>nami.js</code> bundle, and the
+              Go engine binary.
             </p>
             <div class="space-y-8">
               <div>
@@ -198,8 +200,9 @@
                   </button>
                 </div>
                 <p class="text-xs text-gray-600">
-                  Installs <code>nami</code> and <code>nami-engine</code> to
-                  <code>/usr/local/bin</code> or <code>~/.local/bin</code>.
+                  Installs <code>nami</code>, <code>nami.js</code>, and
+                  <code>nami-engine</code> to <code>/usr/local/bin</code> or
+                  <code>~/.local/bin</code>.
                 </p>
               </div>
               <div>
@@ -225,7 +228,7 @@
                   </button>
                 </div>
                 <p class="text-xs text-gray-600">
-                  Installs the current launcher plus
+                  Installs <code>nami.cmd</code>, <code>nami.js</code>, and
                   <code>nami-engine.exe</code> into
                   <code>%LOCALAPPDATA%\Programs\nami\bin</code> and adds that
                   directory to the user <code>PATH</code>.
@@ -249,7 +252,7 @@
                 <p class="text-sm text-gray-300 leading-relaxed">
                   Download <code>nami-windows-amd64.zip</code> or
                   <code>nami-windows-arm64.zip</code> from GitHub Releases, then
-                  place <code>nami</code>, <code>nami.cmd</code>, and
+                  place <code>nami.cmd</code>, <code>nami.js</code>, and
                   <code>nami-engine.exe</code> in a directory on your
                   <code>PATH</code>.
                 </p>
@@ -263,6 +266,7 @@
                 <pre
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto relative group"
                 ><code>sudo install -m 755 nami /usr/local/bin/nami
+sudo install -m 755 nami.js /usr/local/bin/nami.js
 sudo install -m 755 nami-engine /usr/local/bin/nami-engine</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
               </div>
               <div>
@@ -275,6 +279,7 @@ sudo install -m 755 nami-engine /usr/local/bin/nami-engine</code><button class="
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto relative group"
                 ><code>mkdir -p "$HOME/.local/bin"
 install -m 755 nami "$HOME/.local/bin/nami"
+install -m 755 nami.js "$HOME/.local/bin/nami.js"
 install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
               </div>
             </div>
@@ -2253,7 +2258,7 @@ tail -F ~/.config/nami/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
               class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"
             ><code>bun run setup       # Build TS & compile Go
 bun run start       # Run dev Silvery TUI
-make release-local  # Package per-platform bin
+make release-local  # Package launcher shim + nami.js + engine
 make install        # Install to /usr/local/bin</code></pre>
           </section>
 

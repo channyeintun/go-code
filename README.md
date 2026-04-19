@@ -33,7 +33,7 @@ Nami is built on three core pillars:
 ### Prerequisites
 
 - macOS, Linux, or Windows 11
-- Bun 1.0+ to run the `nami` launcher
+- One supported JavaScript runtime to run the `nami` launcher: Node.js, Bun, or Deno
 - One configured model provider: Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, Ollama, or GitHub Copilot
 - Go 1.26+ only if building from source or rebuilding `nami-engine`
 
@@ -47,7 +47,13 @@ curl -fsSL https://raw.githubusercontent.com/channyeintun/nami/main/nami/install
 
 This downloads prebuilt `nami` and `nami-engine` release assets from GitHub Releases. It does **not** build from source.
 
-Current releases install a Bun launcher plus the Go engine, so Bun must already be installed on the target machine.
+Current releases install a launcher shim, a portable `nami.js` bundle, and the Go engine.
+
+You need one of these runtimes on your `PATH` to run the installed launcher:
+
+- `node`
+- `bun`
+- `deno`
 
 The installer chooses a writable directory automatically:
 
@@ -72,7 +78,7 @@ export PATH="$HOME/.local/bin:$PATH"
 powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1 -UseBasicParsing | iex"
 ```
 
-This downloads the Windows release archive, installs the bundled Bun launcher plus `nami-engine.exe`, and adds the install directory to your user `PATH`.
+This downloads the Windows release archive, installs `nami.cmd`, `nami.js`, and `nami-engine.exe`, and adds the install directory to your user `PATH`.
 
 Current Windows releases install into:
 
@@ -88,16 +94,17 @@ nami --help
 
 On Windows, download `nami-windows-amd64.zip` or `nami-windows-arm64.zip` from GitHub Releases, extract it, then copy these files into a directory on your `PATH`:
 
-- `nami`
 - `nami.cmd`
+- `nami.js`
 - `nami-engine.exe`
 
-Nami uses a Bun launcher on Windows too, so `bun` must already be installed.
+You also need one supported runtime on your `PATH`: `node`, `bun`, or `deno`.
 
-If you already have local `nami` and `nami-engine` executables:
+If you already have local Unix launcher assets and engine binaries:
 
 ```bash
 sudo install -m 755 nami /usr/local/bin/nami
+sudo install -m 755 nami.js /usr/local/bin/nami.js
 sudo install -m 755 nami-engine /usr/local/bin/nami-engine
 ```
 
@@ -106,6 +113,7 @@ Without `sudo`:
 ```bash
 mkdir -p "$HOME/.local/bin"
 install -m 755 nami "$HOME/.local/bin/nami"
+install -m 755 nami.js "$HOME/.local/bin/nami.js"
 install -m 755 nami-engine "$HOME/.local/bin/nami-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
@@ -117,6 +125,7 @@ cd nami/tui
 make release-local
 mkdir -p "$HOME/.local/bin"
 install -m 755 release/nami "$HOME/.local/bin/nami"
+install -m 755 release/nami.js "$HOME/.local/bin/nami.js"
 install -m 755 release/nami-engine "$HOME/.local/bin/nami-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
@@ -452,7 +461,7 @@ reference/  Reference material and external notes
 
 ```text
 ┌──────────────────────────────┐
-│  nami (Bun launcher)         │  ← Terminal UI
+│  nami (JS launcher)          │  ← Terminal UI
 │    Renders TUI, handles I/O  │
 │         │ stdin/stdout NDJSON│
 │  ┌──────▼─────────────────┐  │
@@ -463,11 +472,11 @@ reference/  Reference material and external notes
 └──────────────────────────────┘
 ```
 
-Both executables must be in the same directory, or `nami-engine` must be in `PATH`.
+The launcher shim, `nami.js`, and `nami-engine` should live in the same directory, or `nami-engine` must be in `PATH`.
 
 ## Building from Source
 
-Requires: Go 1.26+, Bun 1.0+
+Requires: Go 1.26+, Bun 1.0+ for local builds
 
 ```bash
 cd nami/tui
