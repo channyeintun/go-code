@@ -15,13 +15,49 @@ import { spawn } from "node:child_process";
 
 const OSC52_REGEX = /\x1b\]52;c;([A-Za-z0-9+/=]+)\x07/;
 
+function resolveWindowsPowerShell(): string {
+  const override =
+    process.env.NAMI_POWERSHELL?.trim() ||
+    process.env.NAMI_WINDOWS_SHELL?.trim();
+  if (override) {
+    return override;
+  }
+
+  return "powershell.exe";
+}
+
 function writeToNativeClipboard(text: string): void {
   try {
-    const proc = spawn("pbcopy", [], { stdio: ["pipe", "ignore", "ignore"] });
+    let proc;
+    if (process.platform === "darwin") {
+      proc = spawn("pbcopy", [], {
+        stdio: ["pipe", "ignore", "ignore"],
+      });
+    } else if (process.platform === "win32") {
+      proc = spawn(
+        resolveWindowsPowerShell(),
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "$text = [Console]::In.ReadToEnd(); Set-Clipboard -Value $text",
+        ],
+        {
+          stdio: ["pipe", "ignore", "ignore"],
+          windowsHide: true,
+        },
+      );
+    } else {
+      return;
+    }
+
+    proc.stdin.on("error", () => {
+      // Ignore clipboard pipe shutdown races.
+    });
     proc.stdin.write(text);
     proc.stdin.end();
   } catch {
-    // pbcopy unavailable — no-op
+    // Native clipboard bridge unavailable — no-op.
   }
 }
 

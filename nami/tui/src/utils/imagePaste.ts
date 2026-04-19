@@ -23,7 +23,7 @@ interface ReadImageFileResult {
 
 function execFileAsync(file: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, (error, stdout) => {
+    execFile(file, args, { windowsHide: true }, (error, stdout) => {
       if (error) {
         reject(error);
         return;
@@ -47,11 +47,37 @@ function isAbsoluteImagePath(value: string): boolean {
     return false;
   }
 
-  return value.startsWith("/") || /^[a-zA-Z]:\\/.test(value);
+  return value.startsWith("/") || /^[a-zA-Z]:(\\|\/)/.test(value);
 }
 
 function decodeEscapedPath(value: string): string {
-  return value.replace(/\\ /g, " ").replace(/^file:\/\//, "");
+  let decoded = value.replace(/\\ /g, " ");
+  if (!decoded.startsWith("file://")) {
+    return decoded;
+  }
+
+  try {
+    decoded = decodeURIComponent(new URL(decoded).pathname);
+  } catch {
+    decoded = decoded.replace(/^file:\/\//, "");
+  }
+
+  if (/^\/[a-zA-Z]:\//.test(decoded)) {
+    return decoded.slice(1);
+  }
+
+  return decoded;
+}
+
+function resolveWindowsPowerShell(): string {
+  const override =
+    process.env.NAMI_POWERSHELL?.trim() ||
+    process.env.NAMI_WINDOWS_SHELL?.trim();
+  if (override) {
+    return override;
+  }
+
+  return "powershell.exe";
 }
 
 function mediaTypeFromFilename(filename: string): string {
@@ -145,6 +171,76 @@ async function readClipboardImageOnMac(): Promise<PastedImageData | null> {
   }
 }
 
+async function readClipboardImageOnWindows(): Promise<PastedImageData | null> {
+  if (process.platform !== "win32") {
+    return null;
+  }
+
+  const outputPath = join(
+    tmpdir(),
+    `nami-clipboard-${process.pid}-${Date.now()}.png`,
+  );
+  const escapedOutputPath = outputPath.replace(/'/g, "''");
+  const script = [
+    "Add-Type -AssemblyName System.Windows.Forms | Out-Null",
+    "Add-Type -AssemblyName System.Drawing | Out-Null",
+    "if ([System.Windows.Forms.Clipboard]::ContainsFileDropList()) {",
+    "  $paths = [System.Windows.Forms.Clipboard]::GetFileDropList()",
+    "  if ($paths.Count -gt 0) { [Console]::Out.Write($paths[0]); exit 0 }",
+    "}",
+    "if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { exit 1 }",
+    "$image = [System.Windows.Forms.Clipboard]::GetImage()",
+    "if ($null -eq $image) { exit 1 }",
+    `$image.Save('${escapedOutputPath}', [System.Drawing.Imaging.ImageFormat]::Png)`,
+    "$image.Dispose()",
+    `[Console]::Out.Write('${escapedOutputPath}')`,
+  ].join("; ");
+
+  try {
+    const clipboardPath = (
+      await execFileAsync(resolveWindowsPowerShell(), [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Sta",
+        "-Command",
+        script,
+      ])
+    ).trim();
+
+    if (!isAbsoluteImagePath(clipboardPath)) {
+      return null;
+    }
+
+    const result = await readImageFile(clipboardPath);
+    if (!result.image) {
+      return null;
+    }
+
+    if (clipboardPath === outputPath) {
+      return {
+        ...result.image,
+        filename: "clipboard.png",
+      };
+    }
+
+    return result.image;
+  } catch {
+    return null;
+  } finally {
+    void rm(outputPath, { force: true });
+  }
+}
+
+async function readClipboardImage(): Promise<PastedImageData | null> {
+  if (process.platform === "darwin") {
+    return readClipboardImageOnMac();
+  }
+  if (process.platform === "win32") {
+    return readClipboardImageOnWindows();
+  }
+  return null;
+}
+
 function extractImageDataUrls(text: string): ParsedPasteParts {
   const images: PastedImageData[] = [];
   const stripped = text.replace(
@@ -168,7 +264,7 @@ function extractImageDataUrls(text: string): ParsedPasteParts {
 export async function parsePasteParts(text: string): Promise<ParsedPasteParts> {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
-    const clipboardImage = await readClipboardImageOnMac();
+    const clipboardImage = await readClipboardImage();
     return {
       text: "",
       images: clipboardImage ? [clipboardImage] : [],
