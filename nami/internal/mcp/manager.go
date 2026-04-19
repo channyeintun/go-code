@@ -54,6 +54,12 @@ type ResourceInventory struct {
 	Error             string
 }
 
+type ResourceReadResult struct {
+	ServerName string
+	URI        string
+	Contents   []ResourceContent
+}
+
 type Manager struct {
 	mu          sync.RWMutex
 	definitions map[string]ServerDefinition
@@ -280,6 +286,34 @@ func (m *Manager) ResourceInventories(serverName string, includeTemplates bool) 
 	return inventories, nil
 }
 
+func (m *Manager) ReadResource(ctx context.Context, serverName, uri string) (ResourceReadResult, error) {
+	if m == nil {
+		return ResourceReadResult{}, fmt.Errorf("mcp manager is unavailable")
+	}
+	serverName = strings.TrimSpace(serverName)
+	uri = strings.TrimSpace(uri)
+	if serverName == "" {
+		return ResourceReadResult{}, fmt.Errorf("mcp server name is required")
+	}
+	if uri == "" {
+		return ResourceReadResult{}, fmt.Errorf("resource uri is required")
+	}
+
+	m.mu.RLock()
+	runtime, ok := m.runtimes[serverName]
+	m.mu.RUnlock()
+	if !ok || runtime == nil {
+		return ResourceReadResult{}, fmt.Errorf("mcp server %q is not connected", serverName)
+	}
+	if !runtime.resourcesCapable {
+		return ResourceReadResult{}, fmt.Errorf("mcp server %q does not expose resources", serverName)
+	}
+	contents, err := runtime.session.ReadResource(ctx, uri)
+	if err != nil {
+		return ResourceReadResult{}, err
+	}
+	return ResourceReadResult{ServerName: serverName, URI: uri, Contents: contents}, nil
+}
 func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) {
 	connectCtx, cancel := context.WithTimeout(ctx, definition.ConnectTimeout)
 	defer cancel()

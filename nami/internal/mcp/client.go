@@ -50,6 +50,13 @@ type ResourceTemplateDescriptor struct {
 	MIMEType    string
 }
 
+type ResourceContent struct {
+	URI      string
+	MIMEType string
+	Text     string
+	Blob     []byte
+}
+
 type ServerInfo struct {
 	Name         string
 	Title        string
@@ -107,6 +114,7 @@ type Session interface {
 	ListPrompts(context.Context) ([]PromptDescriptor, error)
 	ListResources(context.Context) ([]ResourceDescriptor, error)
 	ListResourceTemplates(context.Context) ([]ResourceTemplateDescriptor, error)
+	ReadResource(context.Context, string) ([]ResourceContent, error)
 	CallTool(context.Context, string, any) (CallResult, error)
 	Close() error
 }
@@ -260,6 +268,29 @@ func (s *sdkClientSession) ListResourceTemplates(ctx context.Context) ([]Resourc
 		})
 	}
 	return templates, nil
+}
+
+func (s *sdkClientSession) ReadResource(ctx context.Context, uri string) ([]ResourceContent, error) {
+	if initialize := s.session.InitializeResult(); initialize != nil && initialize.Capabilities != nil && initialize.Capabilities.Resources == nil {
+		return nil, nil
+	}
+	result, err := s.session.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: strings.TrimSpace(uri)})
+	if err != nil {
+		return nil, err
+	}
+	contents := make([]ResourceContent, 0, len(result.Contents))
+	for _, content := range result.Contents {
+		if content == nil {
+			continue
+		}
+		contents = append(contents, ResourceContent{
+			URI:      strings.TrimSpace(content.URI),
+			MIMEType: strings.TrimSpace(content.MIMEType),
+			Text:     content.Text,
+			Blob:     append([]byte(nil), content.Blob...),
+		})
+	}
+	return contents, nil
 }
 
 func (s *sdkClientSession) CallTool(ctx context.Context, name string, arguments any) (CallResult, error) {

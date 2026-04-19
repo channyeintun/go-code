@@ -19,6 +19,8 @@ var globalMCPManagerRuntime mcpManagerRuntime
 
 type ListMCPResourcesTool struct{}
 
+type ReadMCPResourceTool struct{}
+
 type listMCPResourcesResponse struct {
 	Servers []listMCPResourcesServer `json:"servers"`
 }
@@ -50,6 +52,21 @@ type mcpResourceTemplateDescriptor struct {
 	MIMEType    string `json:"mimeType,omitempty"`
 }
 
+type readMCPResourceResponse struct {
+	Server   string                   `json:"server"`
+	URI      string                   `json:"uri"`
+	Contents []readMCPResourceContent `json:"contents"`
+}
+
+type readMCPResourceContent struct {
+	Kind     string `json:"kind"`
+	URI      string `json:"uri,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Size     int    `json:"size,omitempty"`
+	Summary  string `json:"summary,omitempty"`
+}
+
 func SetGlobalMCPManager(manager *mcppkg.Manager) {
 	globalMCPManagerRuntime.mu.Lock()
 	defer globalMCPManagerRuntime.mu.Unlock()
@@ -67,6 +84,10 @@ func getGlobalMCPManager() (*mcppkg.Manager, error) {
 
 func NewListMCPResourcesTool() *ListMCPResourcesTool {
 	return &ListMCPResourcesTool{}
+}
+
+func NewReadMCPResourceTool() *ReadMCPResourceTool {
+	return &ReadMCPResourceTool{}
 }
 
 func (t *ListMCPResourcesTool) Name() string {
@@ -174,4 +195,137 @@ func (t *ListMCPResourcesTool) Execute(ctx context.Context, input ToolInput) (To
 		return ToolOutput{}, fmt.Errorf("marshal list_mcp_resources: %w", err)
 	}
 	return ToolOutput{Output: string(encoded)}, nil
+}
+
+func (t *ReadMCPResourceTool) Name() string {
+	return "read_mcp_resource"
+}
+
+func (t *ReadMCPResourceTool) Description() string {
+	return "Read the contents of a specific MCP resource by server name and URI. Text content is returned inline; binary content is summarized safely."
+}
+
+func (t *ReadMCPResourceTool) InputSchema() any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"server": map[string]any{
+				"type":        "string",
+				"description": "The MCP server name.",
+			},
+			"uri": map[string]any{
+				"type":        "string",
+				"description": "The resource URI to read.",
+			},
+			"maxBytes": map[string]any{
+				"type":        "integer",
+				"minimum":     1,
+				"description": "Optional safety cap for returned text content.",
+			},
+			"max_bytes": map[string]any{
+				"type":        "integer",
+				"minimum":     1,
+				"description": "Snake_case alias for maxBytes.",
+			},
+		},
+		"required": []string{"server", "uri"},
+	}
+}
+
+func (t *ReadMCPResourceTool) Permission() PermissionLevel {
+	return PermissionReadOnly
+}
+
+func (t *ReadMCPResourceTool) Concurrency(input ToolInput) ConcurrencyDecision {
+	return ConcurrencyParallel
+}
+
+func (t *ReadMCPResourceTool) Validate(input ToolInput) error {
+	server, ok := stringParam(input.Params, "server")
+	if !ok || strings.TrimSpace(server) == "" {
+		return fmt.Errorf("read_mcp_resource requires server")
+	}
+	uri, ok := stringParam(input.Params, "uri")
+	if !ok || strings.TrimSpace(uri) == "" {
+		return fmt.Errorf("read_mcp_resource requires uri")
+	}
+	if maxBytes, ok := firstIntParam(input.Params, "maxBytes", "max_bytes"); ok && maxBytes < 1 {
+		return fmt.Errorf("read_mcp_resource maxBytes must be >= 1")
+	}
+	return nil
+}
+
+func (t *ReadMCPResourceTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	manager, err := getGlobalMCPManager()
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	server, _ := stringParam(input.Params, "server")
+	uri, _ := stringParam(input.Params, "uri")
+	maxBytes := firstPositiveIntOrDefault(input.Params, 32*1024, "maxBytes", "max_bytes")
+
+	result, err := manager.ReadResource(ctx, server, uri)
+	if err != nil {
+		return ToolOutput{}, err
+	}
+
+	response := readMCPResourceResponse{
+		Server:   result.ServerName,
+		URI:      result.URI,
+		Contents: make([]readMCPResourceContent, 0, len(result.Contents)),
+	}
+	for _, content := range result.Contents {
+		select {
+		case <-ctx.Done():
+			return ToolOutput{}, ctx.Err()
+		default:
+		}
+		response.Contents = append(response.Contents, summarizeReadMCPResourceContent(content, maxBytes))
+	}
+
+	encoded, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("marshal read_mcp_resource: %w", err)
+	}
+	return ToolOutput{Output: string(encoded)}, nil
+}
+
+func summarizeReadMCPResourceContent(content mcppkg.ResourceContent, maxBytes int) readMCPResourceContent {
+	entry := readMCPResourceContent{
+		URI:      content.URI,
+		MIMEType: content.MIMEType,
+	}
+	if strings.TrimSpace(content.Text) != "" {
+		entry.Kind = "text"
+		entry.Text = clipMCPText(content.Text, maxBytes)
+		entry.Size = len([]byte(content.Text))
+		return entry
+	}
+	entry.Size = len(content.Blob)
+	switch {
+	case strings.HasPrefix(strings.ToLower(content.MIMEType), "image/"):
+		entry.Kind = "image"
+		entry.Summary = "Binary image content omitted from transcript"
+	case strings.HasPrefix(strings.ToLower(content.MIMEType), "audio/"):
+		entry.Kind = "audio"
+		entry.Summary = "Binary audio content omitted from transcript"
+	default:
+		entry.Kind = "binary"
+		entry.Summary = "Binary content omitted from transcript"
+	}
+	return entry
+}
+
+func clipMCPText(text string, maxBytes int) string {
+	if maxBytes <= 0 || len([]byte(text)) <= maxBytes {
+		return text
+	}
+	clipped := []byte(text)
+	if len(clipped) > maxBytes {
+		clipped = clipped[:maxBytes]
+		for len(clipped) > 0 && (clipped[len(clipped)-1]&0xC0) == 0x80 {
+			clipped = clipped[:len(clipped)-1]
+		}
+	}
+	return string(clipped) + "\n\n[truncated]"
 }
