@@ -118,7 +118,8 @@ func makeSubagentRunner(
 	hookRunner *hooks.Runner,
 	modelState *ActiveModelState,
 	subagentModelState *ActiveSubagentModelState,
-	cwd string,
+	state *engineLoopState,
+	fallbackCWD string,
 ) toolpkg.AgentRunner {
 	return func(ctx context.Context, req toolpkg.AgentRunRequest) (toolpkg.AgentRunResult, error) {
 		client, activeModelID := modelState.Get()
@@ -144,12 +145,14 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, err
 		}
 
+		currentCWD := currentSubagentCWD(state, fallbackCWD)
+
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, nil, nil)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, nil, nil)
 		}
 		if req.Background {
 			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, func(runCtx context.Context, stopControl *agent.StopController, reportStatus func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error) {
-				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, stopControl, reportStatus)
+				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, stopControl, reportStatus)
 			})
 			launch.SubagentType = subagentType
 			launch.Tools = subagentToolNames(subagentType)
@@ -161,6 +164,20 @@ func makeSubagentRunner(
 		}
 		return withChildMetadata(result, strings.TrimSpace(req.Description)), nil
 	}
+}
+
+func currentSubagentCWD(state *engineLoopState, fallback string) string {
+	if state != nil {
+		if cwd := strings.TrimSpace(state.cwd); cwd != "" {
+			return cwd
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if trimmed := strings.TrimSpace(cwd); trimmed != "" {
+			return trimmed
+		}
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func resolveSubagentClient(parent api.LLMClient, activeModelID string, subagentModelState *ActiveSubagentModelState) (api.LLMClient, string, error) {

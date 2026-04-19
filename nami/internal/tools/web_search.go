@@ -177,8 +177,15 @@ type webSearchResponse struct {
 	Results     []webSearchResult `json:"results"`
 }
 
+type webSearchAnchorMatch struct {
+	start int
+	end   int
+	href  string
+	title string
+}
+
 func extractWebSearchResults(body string, allowedDomains, blockedDomains []string, limit int) []webSearchResult {
-	matches := webSearchResultAnchorPattern.FindAllStringSubmatch(body, -1)
+	matches := extractWebSearchAnchorMatches(body)
 	if len(matches) == 0 {
 		return nil
 	}
@@ -189,11 +196,7 @@ func extractWebSearchResults(body string, allowedDomains, blockedDomains []strin
 	results := make([]webSearchResult, 0, min(limit, len(matches)))
 
 	for index, match := range matches {
-		if len(match) < 3 {
-			continue
-		}
-
-		resolvedURL, err := resolveSearchResultURL(match[1])
+		resolvedURL, err := resolveSearchResultURL(match.href)
 		if err != nil || resolvedURL == "" {
 			continue
 		}
@@ -204,7 +207,7 @@ func extractWebSearchResults(body string, allowedDomains, blockedDomains []strin
 			continue
 		}
 
-		title := sanitizeSearchTitle(match[2])
+		title := sanitizeSearchTitle(match.title)
 		if title == "" {
 			continue
 		}
@@ -221,17 +224,36 @@ func extractWebSearchResults(body string, allowedDomains, blockedDomains []strin
 	return results
 }
 
-func extractWebSearchSnippet(body string, matches [][]string, index int) string {
-	current := matches[index][0]
-	start := strings.Index(body, current)
-	if start < 0 {
+func extractWebSearchAnchorMatches(body string) []webSearchAnchorMatch {
+	rawMatches := webSearchResultAnchorPattern.FindAllStringSubmatchIndex(body, -1)
+	if len(rawMatches) == 0 {
+		return nil
+	}
+	matches := make([]webSearchAnchorMatch, 0, len(rawMatches))
+	for _, raw := range rawMatches {
+		if len(raw) < 6 {
+			continue
+		}
+		matches = append(matches, webSearchAnchorMatch{
+			start: raw[0],
+			end:   raw[1],
+			href:  body[raw[2]:raw[3]],
+			title: body[raw[4]:raw[5]],
+		})
+	}
+	return matches
+}
+
+func extractWebSearchSnippet(body string, matches []webSearchAnchorMatch, index int) string {
+	current := matches[index]
+	if current.end < 0 || current.end > len(body) {
 		return ""
 	}
-	searchRegion := body[start+len(current):]
+	searchRegion := body[current.end:]
 	if index+1 < len(matches) {
-		next := matches[index+1][0]
-		if end := strings.Index(searchRegion, next); end >= 0 {
-			searchRegion = searchRegion[:end]
+		next := matches[index+1]
+		if next.start >= current.end && next.start <= len(body) {
+			searchRegion = body[current.end:next.start]
 		}
 	}
 	match := webSearchSnippetPattern.FindStringSubmatch(searchRegion)

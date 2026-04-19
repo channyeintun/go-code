@@ -115,7 +115,7 @@ func convertAskUserQuestionResponse(request toolpkg.AskUserQuestionRequest, resp
 				return toolpkg.AskUserQuestionResult{}, fmt.Errorf("ask_user_question response for %q selected unknown option %q", question.Header, value)
 			}
 		}
-		if len(question.Options) > 0 && len(selectedValues) == 0 && freeformText == "" {
+		if len(selectedValues) == 0 && freeformText == "" {
 			return toolpkg.AskUserQuestionResult{}, fmt.Errorf("ask_user_question response for %q is empty", question.Header)
 		}
 		rawAnswer := strings.TrimSpace(answer.RawAnswer)

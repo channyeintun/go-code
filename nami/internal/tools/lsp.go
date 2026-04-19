@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -297,11 +298,16 @@ func parseLSPRequest(params map[string]any) (lspRequest, error) {
 		MaxResults:         firstPositiveIntOrDefault(params, defaultLSPMaxResults, "maxResults", "max_results"),
 		IncludeDeclaration: firstBoolParam(params, "includeDeclaration", "include_declaration"),
 	}
-	if filePath, ok := firstStringParam(params, "filePath", "path"); ok && strings.TrimSpace(filePath) != "" {
+	if filePath, ok := firstStringParam(params, "filePath"); ok && strings.TrimSpace(filePath) != "" {
 		request.FilePath = strings.TrimSpace(filePath)
 	}
-	if searchPath, ok := stringParam(params, "path"); ok && strings.TrimSpace(searchPath) != "" {
-		request.SearchPath = strings.TrimSpace(searchPath)
+	if pathHint, ok := stringParam(params, "path"); ok && strings.TrimSpace(pathHint) != "" {
+		trimmedPath := strings.TrimSpace(pathHint)
+		if request.Operation == "workspace_symbols" {
+			request.SearchPath = trimmedPath
+		} else if request.FilePath == "" {
+			request.FilePath = trimmedPath
+		}
 	}
 	if query, ok := stringParam(params, "query"); ok {
 		request.Query = strings.TrimSpace(query)
@@ -734,7 +740,11 @@ func fileURIToPath(value string) string {
 	if err != nil || parsed.Scheme != "file" {
 		return value
 	}
-	return filepath.Clean(parsed.Path)
+	path := filepath.FromSlash(parsed.Path)
+	if runtime.GOOS == "windows" && len(path) >= 3 && path[0] == '\\' && path[2] == ':' {
+		path = path[1:]
+	}
+	return filepath.Clean(path)
 }
 
 func parseLSPResponseID(raw json.RawMessage) (int64, bool) {

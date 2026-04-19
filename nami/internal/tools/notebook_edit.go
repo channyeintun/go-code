@@ -72,7 +72,12 @@ func (t *NotebookEditTool) Validate(input ToolInput) error {
 		if _, ok := firstIntParam(input.Params, "cellIndex", "cell_index"); !ok {
 			return fmt.Errorf("notebook_edit edit requires cellIndex")
 		}
-		if firstStringOrEmpty(input.Params, "source", "cellType", "cell_type") == "" {
+		hasSource := false
+		if _, exists := input.Params["source"]; exists {
+			hasSource = true
+		}
+		hasCellType := firstStringOrEmpty(input.Params, "cellType", "cell_type") != ""
+		if !hasSource && !hasCellType {
 			return fmt.Errorf("notebook_edit edit requires source or cellType")
 		}
 	case "delete":
@@ -140,7 +145,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input ToolInput) (ToolOu
 			return ToolOutput{}, fmt.Errorf("cell %d is not a valid notebook cell", cellIndex)
 		}
 		if cellType != "" {
-			cellMap["cell_type"] = cellType
+			applyNotebookCellType(cellMap, cellType)
 		}
 		if _, exists := input.Params["source"]; exists {
 			cellMap["source"] = notebookSourceLines(source)
@@ -187,6 +192,30 @@ func normalizeNotebookEditCellType(value string) string {
 	return value
 }
 
+func applyNotebookCellType(cell map[string]any, cellType string) {
+	if cell == nil {
+		return
+	}
+	if cellType == "" {
+		cellType = "markdown"
+	}
+	cell["cell_type"] = cellType
+	if _, ok := cell["metadata"].(map[string]any); !ok {
+		cell["metadata"] = map[string]any{}
+	}
+	if cellType == "code" {
+		if _, ok := cell["execution_count"]; !ok {
+			cell["execution_count"] = nil
+		}
+		if _, ok := cell["outputs"]; !ok {
+			cell["outputs"] = []any{}
+		}
+		return
+	}
+	delete(cell, "execution_count")
+	delete(cell, "outputs")
+}
+
 func buildNotebookCell(cellType, source string) map[string]any {
 	if cellType == "" {
 		cellType = "markdown"
@@ -196,10 +225,7 @@ func buildNotebookCell(cellType, source string) map[string]any {
 		"metadata":  map[string]any{},
 		"source":    notebookSourceLines(source),
 	}
-	if cellType == "code" {
-		cell["execution_count"] = nil
-		cell["outputs"] = []any{}
-	}
+	applyNotebookCellType(cell, cellType)
 	return cell
 }
 

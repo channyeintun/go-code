@@ -44,8 +44,13 @@ var (
 type backgroundTeam struct {
 	id          string
 	description string
-	agentIDs    []string
+	members     []backgroundTeamMember
 	createdAt   time.Time
+}
+
+type backgroundTeamMember struct {
+	agentID    string
+	outputFile string
 }
 
 func newBackgroundAgentID() string {
@@ -63,13 +68,18 @@ func registerBackgroundAgent(bg *backgroundAgent) {
 }
 
 func getBackgroundAgent(agentID string) (*backgroundAgent, error) {
-	backgroundAgentsMu.RLock()
-	defer backgroundAgentsMu.RUnlock()
-	bg, ok := backgroundAgents[agentID]
+	bg, ok := findBackgroundAgent(agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent %q not found", agentID)
 	}
 	return bg, nil
+}
+
+func findBackgroundAgent(agentID string) (*backgroundAgent, bool) {
+	backgroundAgentsMu.RLock()
+	defer backgroundAgentsMu.RUnlock()
+	bg, ok := backgroundAgents[agentID]
+	return bg, ok
 }
 
 func registerBackgroundTeam(team *backgroundTeam) {
@@ -116,6 +126,65 @@ func writeBackgroundAgentResultFile(result toolpkg.AgentRunResult) {
 	}
 	_ = os.MkdirAll(filepath.Dir(result.OutputFile), 0o755)
 	_ = os.WriteFile(result.OutputFile, data, 0o644)
+}
+
+func readBackgroundAgentResultFile(path string) (toolpkg.AgentRunResult, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	var result toolpkg.AgentRunResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	return result, nil
+}
+
+func cancelBackgroundAgent(agentID string) {
+	bg, ok := findBackgroundAgent(strings.TrimSpace(agentID))
+	if !ok {
+		return
+	}
+	bg.mu.Lock()
+	forceCancel := false
+	if bg.running {
+		if bg.stopControl != nil {
+			forceCancel = bg.stopControl.Request("cancelled")
+		} else if bg.cancel != nil {
+			forceCancel = true
+		}
+		if strings.TrimSpace(bg.result.Status) == "" || bg.result.Status == "running" || bg.result.Status == "async_launched" {
+			bg.result.Status = "cancelling"
+			bg.result = withChildMetadata(bg.result, bg.description)
+		}
+	}
+	cancel := bg.cancel
+	bg.mu.Unlock()
+	if forceCancel && cancel != nil {
+		cancel()
+	}
+}
+
+func cancelBackgroundTeamMembers(members []backgroundTeamMember) {
+	for _, member := range members {
+		cancelBackgroundAgent(member.agentID)
+	}
+}
+
+func lookupBackgroundTeamMemberStatus(ctx context.Context, member backgroundTeamMember, waitMs int) (toolpkg.AgentRunResult, error) {
+	agentID := strings.TrimSpace(member.agentID)
+	if agentID != "" {
+		if _, ok := findBackgroundAgent(agentID); ok {
+			return lookupBackgroundAgentStatus(ctx, toolpkg.AgentStatusRequest{AgentID: agentID, WaitMs: waitMs})
+		}
+	}
+	if outputFile := strings.TrimSpace(member.outputFile); outputFile != "" {
+		return readBackgroundAgentResultFile(outputFile)
+	}
+	if agentID != "" {
+		return toolpkg.AgentRunResult{}, fmt.Errorf("agent %q not found", agentID)
+	}
+	return toolpkg.AgentRunResult{}, fmt.Errorf("background team member is missing result metadata")
 }
 
 func emitBackgroundAgentUpdated(bridge *ipc.Bridge, bg *backgroundAgent, result toolpkg.AgentRunResult) {
@@ -376,7 +445,7 @@ func launchBackgroundTeam(ctx context.Context, runner toolpkg.AgentRunner, req t
 		return toolpkg.AgentTeamLaunchResult{}, fmt.Errorf("agent team launcher is not configured")
 	}
 	teamID := newBackgroundTeamID()
-	team := &backgroundTeam{id: teamID, description: req.Description, createdAt: time.Now(), agentIDs: make([]string, 0, len(req.Tasks))}
+	team := &backgroundTeam{id: teamID, description: req.Description, createdAt: time.Now(), members: make([]backgroundTeamMember, 0, len(req.Tasks))}
 	results := make([]toolpkg.AgentRunResult, 0, len(req.Tasks))
 	for _, task := range req.Tasks {
 		result, err := runner(ctx, toolpkg.AgentRunRequest{
@@ -386,11 +455,10 @@ func launchBackgroundTeam(ctx context.Context, runner toolpkg.AgentRunner, req t
 			Background:   true,
 		})
 		if err != nil {
+			cancelBackgroundTeamMembers(team.members)
 			return toolpkg.AgentTeamLaunchResult{}, err
 		}
-		if strings.TrimSpace(result.AgentID) != "" {
-			team.agentIDs = append(team.agentIDs, result.AgentID)
-		}
+		team.members = append(team.members, backgroundTeamMember{agentID: strings.TrimSpace(result.AgentID), outputFile: strings.TrimSpace(result.OutputFile)})
 		results = append(results, result)
 	}
 	registerBackgroundTeam(team)
@@ -402,10 +470,10 @@ func lookupBackgroundTeamStatus(ctx context.Context, req toolpkg.AgentTeamStatus
 	if err != nil {
 		return toolpkg.AgentTeamStatusResult{}, err
 	}
-	results := make([]toolpkg.AgentRunResult, 0, len(team.agentIDs))
+	results := make([]toolpkg.AgentRunResult, 0, len(team.members))
 	overall := "completed"
-	for _, agentID := range team.agentIDs {
-		result, err := lookupBackgroundAgentStatus(ctx, toolpkg.AgentStatusRequest{AgentID: agentID, WaitMs: req.WaitMs})
+	for _, member := range team.members {
+		result, err := lookupBackgroundTeamMemberStatus(ctx, member, req.WaitMs)
 		if err != nil {
 			return toolpkg.AgentTeamStatusResult{}, err
 		}
