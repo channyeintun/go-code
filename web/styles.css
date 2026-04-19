@@ -53,13 +53,6 @@ nav {
   min-width: 0;
 }
 
-.ascii-lockup {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-  flex-shrink: 0;
-}
-
 .prompt-mark {
   color: #ff4000;
   font-family: "JetBrains Mono", monospace;
