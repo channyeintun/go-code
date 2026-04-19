@@ -117,110 +117,112 @@ const StatusBar: FC<StatusBarProps> = ({
   );
 
   return (
-    <Box paddingX={1} paddingY={0} userSelect="none">
-      <Box flexDirection="row" justifyContent="space-between" minWidth={0}>
+    <Box paddingX={1} paddingY={0} userSelect="none" flexDirection="column">
+      <Box flexDirection="row" minWidth={0}>
         <Text wrap="truncate-end">
-        <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
-        <Text color="$muted"> · </Text>
-        <Text bold>{workspaceLabel}</Text>
-        {sessionLabel ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$muted">{sessionLabel}</Text>
-          </>
-        ) : null}
-        <Text color="$muted"> · </Text>
-        <Text color={modeLabelColor(mode)} bold>
-          {formatModeLabel(mode)}
-        </Text>
-        <Text color="$muted"> · </Text>
-        <Text backgroundColor="$surface-bg" color="$fg" bold>
-          {` ${modelLabel} `}
-        </Text>
-        {reasoningLabel ? <Text color="$muted"> [{reasoningLabel}]</Text> : null}
-        <Text color="$muted"> · </Text>
-        <Text color={contextColor}>{`ctx ~${contextPercent}%`}</Text>
-        <Text color="$muted"> {formatTokenCount(contextTokens)}/</Text>
-        <Text color="$muted">{formatTokenCount(contextWindow)}</Text>
-        {hasRateLimits ? (
-          <>
-            <Text color="$muted"> · </Text>
-            {rateLimits.fiveHour ? (
-              <>
-                <Text
-                  color={rateLimitColor(rateLimits.fiveHour.usedPercentage)}
-                >
+          <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
+          <Text color="$muted"> · </Text>
+          <Text bold>{workspaceLabel}</Text>
+          {sessionLabel ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$muted">{sessionLabel}</Text>
+            </>
+          ) : null}
+          <Text color="$muted"> · </Text>
+          <Text color={modeLabelColor(mode)} bold>
+            {formatModeLabel(mode)}
+          </Text>
+          <Text color="$muted"> · </Text>
+          <Text backgroundColor="$surface-bg" color="$fg" bold>
+            {` ${modelLabel} `}
+          </Text>
+          {reasoningLabel ? <Text color="$muted"> [{reasoningLabel}]</Text> : null}
+          <Text color="$muted"> · </Text>
+          <Text color={contextColor}>{`ctx ~${contextPercent}%`}</Text>
+          <Text color="$muted"> {formatTokenCount(contextTokens)}/</Text>
+          <Text color="$muted">{formatTokenCount(contextWindow)}</Text>
+          {hasRateLimits ? (
+            <>
+              <Text color="$muted"> · </Text>
+              {rateLimits.fiveHour ? (
+                <>
+                  <Text
+                    color={rateLimitColor(rateLimits.fiveHour.usedPercentage)}
+                  >
+                    {formatRateLimitWindow(
+                      "5h",
+                      rateLimits.fiveHour.usedPercentage,
+                    )}
+                  </Text>
+                  {rateLimits.sevenDay ? <Text color="$muted"> </Text> : null}
+                </>
+              ) : null}
+              {rateLimits.sevenDay ? (
+                <Text color={rateLimitColor(rateLimits.sevenDay.usedPercentage)}>
                   {formatRateLimitWindow(
-                    "5h",
-                    rateLimits.fiveHour.usedPercentage,
+                    "7d",
+                    rateLimits.sevenDay.usedPercentage,
                   )}
                 </Text>
-                {rateLimits.sevenDay ? <Text color="$muted"> </Text> : null}
-              </>
-            ) : null}
-            {rateLimits.sevenDay ? (
-              <Text color={rateLimitColor(rateLimits.sevenDay.usedPercentage)}>
-                {formatRateLimitWindow(
-                  "7d",
-                  rateLimits.sevenDay.usedPercentage,
-                )}
+              ) : null}
+            </>
+          ) : null}
+          <Text color="$muted"> · </Text>
+          <Text color="$muted">{`${formatTokenCount(inputTokens)}↑ ${formatTokenCount(outputTokens)}↓`}</Text>
+          {hasMemoryRecallCost ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$primary">mem</Text>
+              <Text color="$muted">
+                {" "}
+                {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}
               </Text>
-            ) : null}
-          </>
-        ) : null}
-        <Text color="$muted"> · </Text>
-        <Text color="$muted">{`${formatTokenCount(inputTokens)}↑ ${formatTokenCount(outputTokens)}↓`}</Text>
-        {hasMemoryRecallCost ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$primary">mem</Text>
-            <Text color="$muted">
-              {" "}
-              {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}
-            </Text>
-          </>
-        ) : null}
-        {hasChildAgentCost ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$primary">agent</Text>
-            <Text color="$muted">
-              {" "}
-              {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}
-            </Text>
-          </>
-        ) : null}
-        {backgroundAgentSummary ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$primary">bg</Text>
-            <Text color="$muted"> {backgroundAgentSummary}</Text>
-          </>
-        ) : null}
-        {backgroundCommandSummary ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$accent">cmd</Text>
-            <Text color="$muted"> {backgroundCommandSummary}</Text>
-          </>
-        ) : null}
-        {artifactSummary ? (
-          <>
-            <Text color="$muted"> · </Text>
-            <Text color="$primary">art</Text>
-            <Text color="$muted"> {artifactSummary}</Text>
-          </>
-        ) : null}
-        <Text color="$muted"> · </Text>
-        <Text color="$muted">{`$${totalCostUsd.toFixed(4)}`}</Text>
+            </>
+          ) : null}
+          {hasChildAgentCost ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$primary">agent</Text>
+              <Text color="$muted">
+                {" "}
+                {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}
+              </Text>
+            </>
+          ) : null}
+          {backgroundAgentSummary ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$primary">bg</Text>
+              <Text color="$muted"> {backgroundAgentSummary}</Text>
+            </>
+          ) : null}
+          {backgroundCommandSummary ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$accent">cmd</Text>
+              <Text color="$muted"> {backgroundCommandSummary}</Text>
+            </>
+          ) : null}
+          {artifactSummary ? (
+            <>
+              <Text color="$muted"> · </Text>
+              <Text color="$primary">art</Text>
+              <Text color="$muted"> {artifactSummary}</Text>
+            </>
+          ) : null}
+          <Text color="$muted"> · </Text>
+          <Text color="$muted">{`$${totalCostUsd.toFixed(4)}`}</Text>
         </Text>
-        {allowedFileTypeSummary ? (
+      </Box>
+      {allowedFileTypeSummary ? (
+        <Box justifyContent="flex-end" flexDirection="row" minWidth={0}>
           <Text color="$muted" wrap="truncate-start">
             <Text color="$primary">allow</Text>
             {` ${allowedFileTypeSummary}`}
           </Text>
-        ) : null}
-      </Box>
+        </Box>
+      ) : null}
     </Box>
   );
 };
