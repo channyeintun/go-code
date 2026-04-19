@@ -60,12 +60,6 @@ func DefaultConfig() Config {
 	}
 }
 
-// ConfigDir returns ~/.config/nami/.
-func ConfigDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "nami")
-}
-
 // ConfigPath returns the path to the config file.
 func ConfigPath() string {
 	return filepath.Join(ConfigDir(), "config.json")

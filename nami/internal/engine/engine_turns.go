@@ -541,7 +541,8 @@ func emitArtifactUpdates(bridge *ipc.Bridge, updates []agent.ArtifactUpdate, tur
 }
 
 func loadAvailableSkills(bridge *ipc.Bridge, cwd string) ([]skillspkg.Skill, error) {
-	skills, err := skillspkg.LoadAll(cwd)
+	cfg := config.LoadForWorkingDir(cwd)
+	skills, err := skillspkg.LoadAll(cwd, cfg.SkillDir)
 	if err == nil {
 		return skills, nil
 	}

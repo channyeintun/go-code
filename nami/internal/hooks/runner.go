@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/channyeintun/nami/internal/config"
 )
 
 // Runner executes lifecycle hooks from the hooks directory.
@@ -20,10 +21,9 @@ func NewRunner(hooksDir string) *Runner {
 	return &Runner{hooksDir: hooksDir}
 }
 
-// DefaultHooksDir returns ~/.config/nami/hooks/.
+// DefaultHooksDir returns the platform-correct hooks root.
 func DefaultHooksDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "nami", "hooks")
+	return config.HooksDir()
 }
 
 // Run executes all scripts matching the hook type.

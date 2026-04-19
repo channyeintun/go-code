@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	commandspkg "github.com/channyeintun/nami/internal/commands"
+	"github.com/channyeintun/nami/internal/config"
 	"github.com/channyeintun/nami/internal/ipc"
 	skillspkg "github.com/channyeintun/nami/internal/skills"
 )
@@ -226,7 +227,8 @@ func skillSlashCommandCatalog(skills []skillspkg.Skill) []commandspkg.Descriptor
 
 func slashCommandCatalog(cwd string) ([]commandspkg.Descriptor, error) {
 	catalog := builtinSlashCommandCatalog()
-	skills, err := skillspkg.LoadAll(cwd)
+	cfg := config.LoadForWorkingDir(cwd)
+	skills, err := skillspkg.LoadAll(cwd, cfg.SkillDir)
 	if len(skills) == 0 {
 		return catalog, err
 	}
@@ -242,7 +244,8 @@ func lookupSlashSkill(cwd string, command string) (skillspkg.Skill, bool, error)
 	if _, exists := builtinSlashCommandNames()[strings.ToLower(strings.TrimSpace(command))]; exists {
 		return skillspkg.Skill{}, false, nil
 	}
-	skills, err := skillspkg.LoadAll(cwd)
+	cfg := config.LoadForWorkingDir(cwd)
+	skills, err := skillspkg.LoadAll(cwd, cfg.SkillDir)
 	skill, ok := skillspkg.LookupByName(skills, command)
 	if !ok {
 		return skillspkg.Skill{}, false, err

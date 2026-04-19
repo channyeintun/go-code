@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/channyeintun/nami/internal/config"
 )
 
 // Skill represents a loaded skill with its frontmatter and content.
@@ -35,7 +37,7 @@ var ignoredPromptTokens = map[string]struct{}{
 }
 
 // LoadAll discovers built-in, user-global, and project-local skills.
-func LoadAll(projectRoot string) ([]Skill, error) {
+func LoadAll(projectRoot string, userGlobalOverride ...string) ([]Skill, error) {
 	var skills []Skill
 	var loadErrs []error
 
@@ -45,9 +47,13 @@ func LoadAll(projectRoot string) ([]Skill, error) {
 	}
 	skills = mergeSkills(skills, builtinSkills)
 
-	// User-global: ~/.config/nami/agents/*.md
-	home, _ := os.UserHomeDir()
-	globalDir := filepath.Join(home, ".config", "nami", "agents")
+	globalDir := config.GlobalSkillDir()
+	if len(userGlobalOverride) > 0 {
+		override := strings.TrimSpace(userGlobalOverride[0])
+		if override != "" {
+			globalDir = override
+		}
+	}
 	globalSkills, err := loadFromDir(globalDir)
 	if err != nil {
 		loadErrs = append(loadErrs, fmt.Errorf("load global skills: %w", err))

@@ -76,8 +76,8 @@ var recallTokenPattern = regexp.MustCompile(`[a-z0-9][a-z0-9_\-/]{1,}`)
 // LoadMemoryFiles discovers and loads shared instruction files and durable memory indexes.
 //
 // Priority order:
-//  1. User memory index: ~/.config/nami/memory/MEMORY.md
-//  2. Project memory index: ~/.config/nami/projects/{slug}/memory/MEMORY.md
+//  1. User memory index: {config root}/memory/MEMORY.md
+//  2. Project memory index: {config root}/projects/{slug}/memory/MEMORY.md
 //  3. Project instructions: AGENTS.md (walking up from cwd to root)
 //  4. Local instructions: AGENTS.local.md (walking up from cwd to root)
 //
@@ -300,21 +300,21 @@ func FormatMemoryPrompt(files []MemoryFile, currentUserPrompt string, recalls []
 }
 
 func userMemoryIndexPath() string {
-	return filepath.Join(config.ConfigDir(), "memory", "MEMORY.md")
+	return filepath.Join(config.MemoryDir(), "MEMORY.md")
 }
 
 func projectMemoryIndexPath(cwd string) string {
 	projectRoot := findProjectScopeRoot(cwd)
-	return filepath.Join(config.ConfigDir(), "projects", projectSlug(projectRoot), "memory", "MEMORY.md")
+	return filepath.Join(config.ProjectsDir(), projectSlug(projectRoot), "memory", "MEMORY.md")
 }
 
 func userMemoryDirPath() string {
-	return filepath.Join(config.ConfigDir(), "memory")
+	return config.MemoryDir()
 }
 
 func projectMemoryDirPath(cwd string) string {
 	projectRoot := findProjectScopeRoot(cwd)
-	return filepath.Join(config.ConfigDir(), "projects", projectSlug(projectRoot), "memory")
+	return filepath.Join(config.ProjectsDir(), projectSlug(projectRoot), "memory")
 }
 
 func findProjectScopeRoot(start string) string {

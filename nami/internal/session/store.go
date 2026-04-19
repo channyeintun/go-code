@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/channyeintun/nami/internal/api"
+	"github.com/channyeintun/nami/internal/config"
 	"github.com/channyeintun/nami/internal/ipc"
 )
 
@@ -38,10 +39,9 @@ func NewStore(baseDir string) *Store {
 	return &Store{baseDir: baseDir}
 }
 
-// DefaultBaseDir returns ~/.config/nami/sessions/.
+// DefaultBaseDir returns the platform-correct session root.
 func DefaultBaseDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "nami", "sessions")
+	return config.SessionsDir()
 }
 
 // SessionDir returns the directory for a specific session.

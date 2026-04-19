@@ -7,7 +7,6 @@ import (
 	"io"
 	"iter"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -84,9 +83,13 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode, cfg.AutoMode)
 	tracker := costpkg.NewTracker()
-	hookRunner := hooks.NewRunner(hooks.DefaultHooksDir())
+	hooksDir := strings.TrimSpace(cfg.HooksDir)
+	if hooksDir == "" {
+		hooksDir = hooks.DefaultHooksDir()
+	}
+	hookRunner := hooks.NewRunner(hooksDir)
 	sessionStore := session.NewStore(session.DefaultBaseDir())
-	artifactStore := artifactspkg.NewLocalStore(filepath.Join(filepath.Dir(session.DefaultBaseDir()), "artifacts"))
+	artifactStore := artifactspkg.NewLocalStore(config.ArtifactsDir())
 	artifactManager := artifactspkg.NewManager(artifactStore)
 	sessionID, err := newSessionID()
 	if err != nil {
