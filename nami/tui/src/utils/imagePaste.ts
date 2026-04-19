@@ -47,7 +47,11 @@ function isAbsoluteImagePath(value: string): boolean {
     return false;
   }
 
-  return value.startsWith("/") || /^[a-zA-Z]:(\\|\/)/.test(value);
+  return (
+    value.startsWith("/") ||
+    value.startsWith("\\\\") ||
+    /^[a-zA-Z]:(\\|\/)/.test(value)
+  );
 }
 
 function decodeEscapedPath(value: string): string {
@@ -57,7 +61,12 @@ function decodeEscapedPath(value: string): string {
   }
 
   try {
-    decoded = decodeURIComponent(new URL(decoded).pathname);
+    const fileUrl = new URL(decoded);
+    const pathname = decodeURIComponent(fileUrl.pathname);
+    if (fileUrl.host) {
+      return `\\\\${fileUrl.host}${pathname.replace(/\//g, "\\")}`;
+    }
+    decoded = pathname;
   } catch {
     decoded = decoded.replace(/^file:\/\//, "");
   }
@@ -278,7 +287,7 @@ export async function parsePasteParts(text: string): Promise<ParsedPasteParts> {
   }
 
   const parts = text
-    .split(/ (?=\/|[a-zA-Z]:\\|file:\/\/)/)
+    .split(/ (?=\/|\\\\|[a-zA-Z]:(\\|\/)|file:\/\/)/)
     .flatMap((part) => part.split("\n"))
     .map((part) => part.trim())
     .filter(Boolean);

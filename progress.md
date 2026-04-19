@@ -14,7 +14,7 @@ Current focus: complete
 
 - [x] Fix Windows background command startup without PTY support
 - [x] Fix Windows launcher engine path fallback
-- [ ] Fix Windows UNC file URI decoding for pasted images
+- [x] Fix Windows UNC file URI decoding for pasted images
 - [ ] Run final formatting and verification for the follow-up fixes
 
-Current follow-up focus: UNC file URI decoding
+Current follow-up focus: final verification
