@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,18 @@ import (
 )
 
 const defaultBashTimeout = 30 * time.Second
+
+type shellFamily string
+
+const (
+	shellFamilyPOSIX      shellFamily = "posix"
+	shellFamilyPowerShell shellFamily = "powershell"
+)
+
+type localShell struct {
+	family shellFamily
+	path   string
+}
 
 var bashReadOnlyPrograms = map[string]struct{}{
 	"cat":   {},
@@ -234,22 +247,38 @@ func timeoutFromParams(params map[string]any) time.Duration {
 }
 
 func shellCommandContext(ctx context.Context, command string) (*exec.Cmd, error) {
-	shellPath, err := resolveShellPath()
+	shell, err := resolveLocalShell()
 	if err != nil {
 		return nil, err
 	}
-	return exec.CommandContext(ctx, shellPath, "-lc", command), nil
+	return exec.CommandContext(ctx, shell.path, shell.execArgs(command)...), nil
 }
 
 func shellCommand(command string) (*exec.Cmd, error) {
-	shellPath, err := resolveShellPath()
+	shell, err := resolveLocalShell()
 	if err != nil {
 		return nil, err
 	}
-	return exec.Command(shellPath, "-lc", command), nil
+	return exec.Command(shell.path, shell.execArgs(command)...), nil
 }
 
-func resolveShellPath() (string, error) {
+func (s localShell) execArgs(command string) []string {
+	switch s.family {
+	case shellFamilyPowerShell:
+		return []string{"-NoProfile", "-NonInteractive", "-Command", command}
+	default:
+		return []string{"-lc", command}
+	}
+}
+
+func resolveLocalShell() (localShell, error) {
+	if runtime.GOOS == "windows" {
+		return resolveWindowsShell()
+	}
+	return resolvePOSIXShell()
+}
+
+func resolvePOSIXShell() (localShell, error) {
 	candidates := []string{
 		strings.TrimSpace(os.Getenv("SHELL")),
 		"zsh",
@@ -259,6 +288,36 @@ func resolveShellPath() (string, error) {
 		"/bin/bash",
 		"/bin/sh",
 	}
+	resolved, err := resolveShellCandidate(candidates, isSupportedPOSIXShellBinary)
+	if err != nil {
+		return localShell{}, fmt.Errorf("no supported shell found; checked $SHELL, zsh, bash, and sh")
+	}
+	return localShell{family: shellFamilyPOSIX, path: resolved}, nil
+}
+
+func resolveWindowsShell() (localShell, error) {
+	candidates := []string{
+		strings.TrimSpace(os.Getenv("NAMI_POWERSHELL")),
+		strings.TrimSpace(os.Getenv("NAMI_WINDOWS_SHELL")),
+		"pwsh",
+		"pwsh.exe",
+		"powershell",
+		"powershell.exe",
+	}
+	if programFiles := strings.TrimSpace(os.Getenv("ProgramFiles")); programFiles != "" {
+		candidates = append(candidates, filepath.Join(programFiles, "PowerShell", "7", "pwsh.exe"))
+	}
+	if systemRoot := strings.TrimSpace(os.Getenv("SystemRoot")); systemRoot != "" {
+		candidates = append(candidates, filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"))
+	}
+	resolved, err := resolveShellCandidate(candidates, isSupportedWindowsShellBinary)
+	if err != nil {
+		return localShell{}, fmt.Errorf("no supported PowerShell installation found; checked NAMI_POWERSHELL, pwsh, and powershell")
+	}
+	return localShell{family: shellFamilyPowerShell, path: resolved}, nil
+}
+
+func resolveShellCandidate(candidates []string, supported func(string) bool) (string, error) {
 	seen := make(map[string]struct{}, len(candidates))
 	for _, candidate := range candidates {
 		candidate = strings.TrimSpace(candidate)
@@ -266,36 +325,58 @@ func resolveShellPath() (string, error) {
 			continue
 		}
 
-		resolved := candidate
-		if !filepath.IsAbs(candidate) {
-			lookup, err := exec.LookPath(candidate)
-			if err != nil {
-				continue
-			}
-			resolved = lookup
+		resolved, ok := resolveExecutableCandidate(candidate)
+		if !ok {
+			continue
 		}
-
-		resolved = filepath.Clean(resolved)
 		if _, ok := seen[resolved]; ok {
 			continue
 		}
 		seen[resolved] = struct{}{}
-		if !isSupportedShellBinary(resolved) {
-			continue
-		}
-		info, err := os.Stat(resolved)
-		if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+		if !supported(resolved) {
 			continue
 		}
 		return resolved, nil
 	}
 
-	return "", fmt.Errorf("no supported shell found; checked $SHELL, zsh, bash, and sh")
+	return "", fmt.Errorf("no supported shell found")
 }
 
-func isSupportedShellBinary(path string) bool {
+func resolveExecutableCandidate(candidate string) (string, bool) {
+	resolved := candidate
+	if !filepath.IsAbs(candidate) {
+		lookup, err := exec.LookPath(candidate)
+		if err != nil {
+			return "", false
+		}
+		resolved = lookup
+	}
+
+	resolved = filepath.Clean(resolved)
+	info, err := os.Stat(resolved)
+	if err != nil || info.IsDir() {
+		return "", false
+	}
+	if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
+		return "", false
+	}
+	return resolved, true
+}
+
+func isSupportedPOSIXShellBinary(path string) bool {
 	switch filepath.Base(path) {
 	case "zsh", "bash", "sh", "dash":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSupportedWindowsShellBinary(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	base = strings.TrimSuffix(base, ".exe")
+	switch base {
+	case "pwsh", "powershell":
 		return true
 	default:
 		return false

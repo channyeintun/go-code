@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -296,8 +298,18 @@ func (bg *backgroundCommand) shutdown() {
 		_ = terminal.Close()
 	}
 	if running && cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
+		_ = terminateBackgroundProcessTree(cmd)
 	}
+}
+
+func terminateBackgroundProcessTree(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	if runtime.GOOS == "windows" {
+		return exec.Command("taskkill", "/f", "/t", "/pid", strconv.Itoa(cmd.Process.Pid)).Run()
+	}
+	return cmd.Process.Kill()
 }
 
 func scheduleBackgroundCommandCleanup(bg *backgroundCommand) {
