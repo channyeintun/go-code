@@ -57,6 +57,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		})
 	})
 	defer toolpkg.SetBackgroundCommandNotifier(nil)
+	defer toolpkg.SetAskUserQuestionRuntime(nil)
 	registry := toolpkg.NewRegistry()
 	startupSelection := resolveStartupProviderSelection(cfg)
 	provider := normalizeProvider(startupSelection.Provider)
@@ -210,6 +211,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 
 	// Start the message router — single reader goroutine for the bridge.
 	router := ipc.NewMessageRouter(ctx, bridge)
+	toolpkg.SetAskUserQuestionRuntime(newAskUserQuestionRuntime(bridge, router))
 	defer toolpkg.ShutdownBackgroundCommandsForSession()
 
 	// Fire session_start hooks (best-effort)

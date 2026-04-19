@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type {
+  AskUserQuestionOptionPayload,
+  AskUserQuestionRequestedPayload,
   ArtifactCreatedPayload,
   ArtifactFocusedPayload,
   ArtifactReviewRequestedPayload,
@@ -84,6 +86,33 @@ export interface UIResumeSelectionSession {
 export interface UIResumeSelection {
   requestId: string;
   sessions: UIResumeSelectionSession[];
+}
+
+export interface UIAskUserQuestionOption {
+  label: string;
+  value: string;
+  description: string | null;
+  recommended: boolean;
+}
+
+export interface UIAskUserQuestionPrompt {
+  header: string;
+  question: string;
+  multiSelect: boolean;
+  allowFreeform: boolean;
+  options: UIAskUserQuestionOption[];
+}
+
+export interface UIAskUserQuestionAnswer {
+  header: string;
+  selectedValues: string[];
+  freeformText: string;
+  rawAnswer: string;
+}
+
+export interface UIAskUserQuestionRequest {
+  requestId: string;
+  questions: UIAskUserQuestionPrompt[];
 }
 
 export interface UIRewindSelectionTurn {
@@ -319,6 +348,7 @@ export interface EngineUIState {
   pendingModelSelection: UIModelSelection | null;
   pendingRewindSelection: UIRewindSelection | null;
   pendingResumeSelection: UIResumeSelection | null;
+  pendingAskUserQuestion: UIAskUserQuestionRequest | null;
   submittingArtifactReviewRequestId: string | null;
   toolCalls: UIToolCall[];
   backgroundAgents: UIBackgroundAgent[];
@@ -388,6 +418,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   pendingModelSelection: null,
   pendingRewindSelection: null,
   pendingResumeSelection: null,
+  pendingAskUserQuestion: null,
   submittingArtifactReviewRequestId: null,
   toolCalls: [],
   backgroundAgents: [],
@@ -952,6 +983,21 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "ask_user_question_requested": {
+        const p = event.payload as AskUserQuestionRequestedPayload;
+        setUIState((s) => ({
+          ...s,
+          activeTurnStatus: "working",
+          isStreaming: true,
+          pendingAskUserQuestion: {
+            requestId: p.request_id,
+            questions: normalizeAskUserQuestionPrompts(p.questions),
+          },
+          statusLine: "Answer the question to continue.",
+          error: null,
+        }));
+        break;
+      }
       case "model_selection_requested": {
         const p = event.payload as ModelSelectionRequestedPayload;
         setUIState((s) => ({
@@ -1331,11 +1377,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           };
           const notice = buildBackgroundAgentNotice(previousAgent, nextAgent);
           const noticeMessage = notice
-            ? createSystemMessage(
-                notice.text,
-                notice.tone,
-                "Background Agent",
-              )
+            ? createSystemMessage(notice.text, notice.tone, "Background Agent")
             : null;
 
           return {
@@ -1418,6 +1460,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           pendingModelSelection: null,
           pendingRewindSelection: null,
           pendingResumeSelection: null,
+          pendingAskUserQuestion: null,
           submittingArtifactReviewRequestId: null,
           pendingPermission: null,
           isStreaming: false,
@@ -1449,6 +1492,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           pendingModelSelection: null,
           pendingRewindSelection: null,
           pendingResumeSelection: null,
+          pendingAskUserQuestion: null,
           submittingArtifactReviewRequestId: null,
           pendingPermission: null,
           toolCalls: [],
@@ -1482,6 +1526,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.toolCalls.length > 0 ||
             s.artifacts.length > 0 ||
             s.pendingArtifactReview !== null ||
+            s.pendingAskUserQuestion !== null ||
             s.pendingModelSelection !== null ||
             s.pendingRewindSelection !== null ||
             s.pendingPermission !== null ||
@@ -1522,6 +1567,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               pendingModelSelection: null,
               pendingRewindSelection: null,
               pendingResumeSelection: null,
+              pendingAskUserQuestion: null,
               submittingArtifactReviewRequestId: null,
               toolCalls: [],
               backgroundAgents: [],
@@ -1567,6 +1613,9 @@ export function useEvents(initialModel: string, initialMode: string) {
                 : s.isStreaming
               : false,
             compact: null,
+            pendingAskUserQuestion: p.recoverable
+              ? s.pendingAskUserQuestion
+              : null,
             statusLine: p.message,
           };
         });
@@ -1594,6 +1643,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       pendingModelSelection: null,
       pendingRewindSelection: null,
       pendingResumeSelection: null,
+      pendingAskUserQuestion: null,
       submittingArtifactReviewRequestId: null,
       turnTiming: {
         firstTokenMs: null,
@@ -1735,6 +1785,21 @@ export function useEvents(initialModel: string, initialMode: string) {
     });
   }, []);
 
+  const submitAskUserQuestion = useCallback((requestId: string) => {
+    setUIState((s) => {
+      if (s.pendingAskUserQuestion?.requestId !== requestId) {
+        return s;
+      }
+
+      return {
+        ...s,
+        pendingAskUserQuestion: null,
+        statusLine: null,
+        error: null,
+      };
+    });
+  }, []);
+
   const submitRewindSelection = useCallback((requestId: string) => {
     setUIState((s) => {
       if (s.pendingRewindSelection?.requestId !== requestId) {
@@ -1774,10 +1839,61 @@ export function useEvents(initialModel: string, initialMode: string) {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitAskUserQuestion,
     submitModelSelection,
     submitRewindSelection,
     submitResumeSelection,
   };
+}
+
+function normalizeAskUserQuestionPrompts(
+  payload: AskUserQuestionRequestedPayload["questions"] | undefined,
+): UIAskUserQuestionPrompt[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .filter(
+      (question) =>
+        typeof question?.header === "string" &&
+        question.header.trim().length > 0 &&
+        typeof question?.question === "string" &&
+        question.question.trim().length > 0,
+    )
+    .map((question) => ({
+      header: question.header.trim(),
+      question: question.question.trim(),
+      multiSelect: Boolean(question.multi_select),
+      allowFreeform: Boolean(question.allow_freeform),
+      options: normalizeAskUserQuestionOptions(question.options),
+    }));
+}
+
+function normalizeAskUserQuestionOptions(
+  payload: AskUserQuestionOptionPayload[] | undefined,
+): UIAskUserQuestionOption[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .filter(
+      (option) =>
+        typeof option?.label === "string" &&
+        option.label.trim().length > 0 &&
+        typeof option?.value === "string" &&
+        option.value.trim().length > 0,
+    )
+    .map((option) => ({
+      label: option.label.trim(),
+      value: option.value.trim(),
+      description:
+        typeof option.description === "string" && option.description.trim()
+          ? option.description.trim()
+          : null,
+      recommended: Boolean(option.recommended),
+    }));
 }
 
 function normalizeRewindSelectionTurns(
@@ -3151,10 +3267,7 @@ function parseTaskNotificationMessage(
   };
 }
 
-function extractTaskNotificationTag(
-  text: string,
-  tag: string,
-): string | null {
+function extractTaskNotificationTag(text: string, tag: string): string | null {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
   return match?.[1] ?? null;
 }
@@ -3207,7 +3320,10 @@ function normalizeBackgroundCommandEventStatus(
   if (running) {
     return "running";
   }
-  if ((typeof exitCode === "number" && exitCode !== 0) || stringOrEmpty(error)) {
+  if (
+    (typeof exitCode === "number" && exitCode !== 0) ||
+    stringOrEmpty(error)
+  ) {
     return "failed";
   }
   return "completed";

@@ -27,7 +27,8 @@ const (
 	EventToolError    EventType = "tool_error"
 
 	// Permission
-	EventPermissionRequest EventType = "permission_request"
+	EventPermissionRequest        EventType = "permission_request"
+	EventAskUserQuestionRequested EventType = "ask_user_question_requested"
 
 	// Session state
 	EventModeChanged              EventType = "mode_changed"
@@ -84,6 +85,7 @@ const (
 	MsgUserInput                ClientMessageType = "user_input"
 	MsgSlashCommand             ClientMessageType = "slash_command"
 	MsgPermissionResponse       ClientMessageType = "permission_response"
+	MsgAskUserQuestionResponse  ClientMessageType = "ask_user_question_response"
 	MsgModelSelectionResponse   ClientMessageType = "model_selection_response"
 	MsgRewindSelectionResponse  ClientMessageType = "rewind_selection_response"
 	MsgResumeSelectionResponse  ClientMessageType = "resume_selection_response"
@@ -166,6 +168,26 @@ type PermissionRequestPayload struct {
 	TargetKind      string `json:"target_kind,omitempty"`
 	TargetValue     string `json:"target_value,omitempty"`
 	WorkingDir      string `json:"working_dir,omitempty"`
+}
+
+type AskUserQuestionOptionPayload struct {
+	Label       string `json:"label"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
+	Recommended bool   `json:"recommended,omitempty"`
+}
+
+type AskUserQuestionPromptPayload struct {
+	Header        string                         `json:"header"`
+	Question      string                         `json:"question"`
+	MultiSelect   bool                           `json:"multi_select,omitempty"`
+	AllowFreeform bool                           `json:"allow_freeform,omitempty"`
+	Options       []AskUserQuestionOptionPayload `json:"options,omitempty"`
+}
+
+type AskUserQuestionRequestedPayload struct {
+	RequestID string                         `json:"request_id"`
+	Questions []AskUserQuestionPromptPayload `json:"questions"`
 }
 
 type ModeChangedPayload struct {
@@ -449,6 +471,19 @@ type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
 	Feedback  string `json:"feedback,omitempty"`
+}
+
+type AskUserQuestionAnswerPayload struct {
+	Header         string   `json:"header"`
+	SelectedValues []string `json:"selected_values,omitempty"`
+	FreeformText   string   `json:"freeform_text,omitempty"`
+	RawAnswer      string   `json:"raw_answer,omitempty"`
+}
+
+type AskUserQuestionResponsePayload struct {
+	RequestID string                         `json:"request_id"`
+	Status    string                         `json:"status,omitempty"`
+	Answers   []AskUserQuestionAnswerPayload `json:"answers,omitempty"`
 }
 
 type ResumeSelectionResponsePayload struct {

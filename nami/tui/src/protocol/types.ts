@@ -9,6 +9,7 @@ export type EventType =
   | "tool_result"
   | "tool_error"
   | "permission_request"
+  | "ask_user_question_requested"
   | "conversation_hydrated"
   | "model_selection_requested"
   | "rewind_selection_requested"
@@ -53,6 +54,7 @@ export type ClientMessageType =
   | "user_input"
   | "slash_command"
   | "permission_response"
+  | "ask_user_question_response"
   | "model_selection_response"
   | "rewind_selection_response"
   | "resume_selection_response"
@@ -147,6 +149,26 @@ export interface PermissionRequestPayload {
   working_dir?: string;
 }
 
+export interface AskUserQuestionOptionPayload {
+  label: string;
+  value: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+export interface AskUserQuestionPromptPayload {
+  header: string;
+  question: string;
+  multi_select?: boolean;
+  allow_freeform?: boolean;
+  options?: AskUserQuestionOptionPayload[];
+}
+
+export interface AskUserQuestionRequestedPayload {
+  request_id: string;
+  questions: AskUserQuestionPromptPayload[];
+}
+
 export type PermissionResponseDecision =
   | "allow"
   | "deny"
@@ -157,6 +179,21 @@ export interface PermissionResponsePayload {
   request_id: string;
   decision: PermissionResponseDecision;
   feedback?: string;
+}
+
+export interface AskUserQuestionAnswerPayload {
+  header: string;
+  selected_values?: string[];
+  freeform_text?: string;
+  raw_answer?: string;
+}
+
+export type AskUserQuestionStatus = "answered" | "declined" | "cancelled";
+
+export interface AskUserQuestionResponsePayload {
+  request_id: string;
+  status?: AskUserQuestionStatus;
+  answers?: AskUserQuestionAnswerPayload[];
 }
 
 export interface ResumeSelectionSessionPayload {

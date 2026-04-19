@@ -33,6 +33,7 @@ func NewRegistry() *Registry {
 	r.Register(NewGrepTool())
 	r.Register(NewGoDefinitionTool())
 	r.Register(NewGoReferencesTool())
+	r.Register(NewAskUserQuestionTool())
 	r.Register(NewReadProjectStructureTool())
 	r.Register(NewProjectOverviewTool())
 	r.Register(NewDependencyOverviewTool())

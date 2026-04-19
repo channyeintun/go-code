@@ -1,0 +1,27 @@
+# Progress
+
+## Phase 1
+
+- [x] Task 1: Add structured clarification runtime and `ask_user_question` tool
+- [ ] Task 2: Add generic `lsp` tool
+- [ ] Task 3: Add `list_mcp_resources`
+- [ ] Task 4: Add `read_mcp_resource`
+
+## Phase 2
+
+- [ ] Task 5: Strengthen `bash`
+- [ ] Task 6: Expose `skill` tool
+- [ ] Task 7: Improve `read_file`
+- [ ] Task 8: Improve `web_search`
+
+## Phase 3
+
+- [ ] Task 9: Expose explicit plan/worktree controls
+- [ ] Task 10: Add notebook editing support
+- [ ] Task 11: Add richer task/team orchestration
+- [ ] Task 12: Add tool search
+
+## Current Focus
+
+- Completed: Task 1
+- In progress: Task 2

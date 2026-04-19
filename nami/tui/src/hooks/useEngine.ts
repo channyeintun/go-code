@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type {
+  AskUserQuestionResponsePayload,
   BackgroundAgentInspectPayload,
   BackgroundAgentStopPayload,
   BackgroundCommandInspectPayload,
@@ -181,6 +182,12 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendAskUserQuestionResponse = useCallback(
+    (payload: AskUserQuestionResponsePayload) =>
+      send(createMessage("ask_user_question_response", payload)),
+    [send],
+  );
+
   const sendArtifactReviewResponse = useCallback(
     (requestId: string, decision: string, feedback?: string) =>
       send(
@@ -243,6 +250,7 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendModeToggle,
     sendShutdown,
     sendPermissionResponse,
+    sendAskUserQuestionResponse,
     sendArtifactReviewResponse,
     sendModelSelectionResponse,
     sendRewindSelectionResponse,

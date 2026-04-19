@@ -19,6 +19,7 @@ import {
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
+import AskUserQuestionPrompt from "./components/AskUserQuestionPrompt.js";
 import BackgroundTasksDialog from "./components/BackgroundTasksDialog.js";
 import Input from "./components/Input.js";
 import ModelSelectionPrompt from "./components/ModelSelectionPrompt.js";
@@ -125,6 +126,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitAskUserQuestion,
     submitModelSelection,
     submitRewindSelection,
     submitResumeSelection,
@@ -136,7 +138,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
       }
 
       if (event.type === "background_command_detail") {
-        const payload = event.payload as BackgroundCommandDetailPayload | undefined;
+        const payload = event.payload as
+          | BackgroundCommandDetailPayload
+          | undefined;
         const commandId = payload?.command_id?.trim();
         if (payload && commandId) {
           setBackgroundTaskDetails((current) => ({
@@ -147,7 +151,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
       }
 
       if (event.type === "background_agent_detail") {
-        const payload = event.payload as BackgroundAgentDetailPayload | undefined;
+        const payload = event.payload as
+          | BackgroundAgentDetailPayload
+          | undefined;
         const agentId = payload?.agent_id?.trim();
         if (payload && agentId) {
           setBackgroundTaskDetails((current) => ({
@@ -212,6 +218,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
   useEffect(() => {
     if (
       uiState.pendingPermission ||
+      uiState.pendingAskUserQuestion ||
       uiState.pendingResumeSelection ||
       uiState.pendingRewindSelection ||
       uiState.pendingModelSelection ||
@@ -223,6 +230,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
   }, [
     focusManager,
     uiState.pendingArtifactReview,
+    uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
     uiState.pendingPermission,
     uiState.pendingRewindSelection,
@@ -319,6 +327,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.isStreaming,
     uiState.pendingPermission,
     uiState.pendingArtifactReview,
+    uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
@@ -346,6 +355,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.isStreaming,
     uiState.pendingPermission,
     uiState.pendingArtifactReview,
+    uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
@@ -391,18 +401,21 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     }, FOOTER_HINT_REVEAL_MS);
   }, []);
 
-  const handleImagePaste = useCallback((images: PastedImageData[]) => {
-    const startId = nextImageIdRef.current;
-    const nextImages = images.map((image, index) => {
-      const id = startId + index;
-      prompt.insertImageReference(id);
-      return toUserInputImagePayload(id, image);
-    });
+  const handleImagePaste = useCallback(
+    (images: PastedImageData[]) => {
+      const startId = nextImageIdRef.current;
+      const nextImages = images.map((image, index) => {
+        const id = startId + index;
+        prompt.insertImageReference(id);
+        return toUserInputImagePayload(id, image);
+      });
 
-    nextImageIdRef.current = startId + images.length;
-    setPromptImages((current) => [...current, ...nextImages]);
-    setPasteWarning(null);
-  }, [prompt]);
+      nextImageIdRef.current = startId + images.length;
+      setPromptImages((current) => [...current, ...nextImages]);
+      setPasteWarning(null);
+    },
+    [prompt],
+  );
 
   const handlePasteWarning = useCallback((warnings: string[]) => {
     setPasteWarning(warnings.length > 0 ? warnings.join(" | ") : null);
@@ -503,6 +516,32 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     });
   };
 
+  const handleAskUserQuestion = (
+    status: "answered" | "declined" | "cancelled",
+    answers: {
+      header: string;
+      selectedValues: string[];
+      freeformText: string;
+      rawAnswer: string;
+    }[],
+  ) => {
+    if (!uiState.pendingAskUserQuestion) {
+      return;
+    }
+
+    submitAskUserQuestion(uiState.pendingAskUserQuestion.requestId);
+    engine.sendAskUserQuestionResponse({
+      request_id: uiState.pendingAskUserQuestion.requestId,
+      status,
+      answers: answers.map((answer) => ({
+        header: answer.header,
+        selected_values: answer.selectedValues,
+        freeform_text: answer.freeformText || undefined,
+        raw_answer: answer.rawAnswer || undefined,
+      })),
+    });
+  };
+
   const handleModelSelection = (modelId?: string, provider?: string) => {
     if (!uiState.pendingModelSelection) {
       return;
@@ -551,22 +590,26 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     transcriptSearchActive ||
     showBackgroundTasks ||
     uiState.pendingPermission !== null ||
+    uiState.pendingAskUserQuestion !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
     uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null;
   const keepPromptVisibleWithOverlay =
     uiState.pendingResumeSelection !== null ||
+    uiState.pendingAskUserQuestion !== null ||
     uiState.pendingModelSelection !== null ||
     uiState.pendingRewindSelection !== null;
   const showPromptArea =
     uiState.pendingPermission === null &&
+    uiState.pendingAskUserQuestion === null &&
     uiState.pendingArtifactReview === null;
   const promptBlockedReason = getPromptBlockedReason({
     isEngineReady,
     engineError: engine.error,
     transcriptSearchActive,
     isStreaming: uiState.isStreaming,
+    pendingAskUserQuestion: uiState.pendingAskUserQuestion !== null,
     pendingModelSelection: uiState.pendingModelSelection !== null,
     pendingRewindSelection: uiState.pendingRewindSelection !== null,
     pendingResumeSelection: uiState.pendingResumeSelection !== null,
@@ -711,227 +754,245 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
           />
         </Box>
 
-      <Box
-        flexDirection="row"
-        flexGrow={1}
-        flexShrink={1}
-        minWidth={0}
-        minHeight={0}
-        gap={1}
-      >
         <Box
-          flexDirection="column"
+          flexDirection="row"
           flexGrow={1}
           flexShrink={1}
           minWidth={0}
           minHeight={0}
+          gap={1}
         >
-          {engine.error && !uiState.error && (
-            <Box
-              borderStyle="round"
-              borderColor="$error"
-              paddingX={1}
-              marginTop={1}
-            >
-              <Text color="$error">{engine.error}</Text>
-            </Box>
-          )}
+          <Box
+            flexDirection="column"
+            flexGrow={1}
+            flexShrink={1}
+            minWidth={0}
+            minHeight={0}
+          >
+            {engine.error && !uiState.error && (
+              <Box
+                borderStyle="round"
+                borderColor="$error"
+                paddingX={1}
+                marginTop={1}
+              >
+                <Text color="$error">{engine.error}</Text>
+              </Box>
+            )}
 
-          {!isEngineReady && !engine.error && (
-            <Box paddingLeft={1} marginTop={1}>
-              <Text color="$muted">
-                <Spinner type="dots" /> <ShimmerText text="Starting Go engine..." />
-              </Text>
-            </Box>
-          )}
+            {!isEngineReady && !engine.error && (
+              <Box paddingLeft={1} marginTop={1}>
+                <Text color="$muted">
+                  <Spinner type="dots" />{" "}
+                  <ShimmerText text="Starting Go engine..." />
+                </Text>
+              </Box>
+            )}
 
-          {uiState.statusLine && (
-            <Box paddingLeft={1} marginTop={1}>
-              <Text color={uiState.error ? "$error" : "$primary"}>
-                {uiState.statusLine}
-              </Text>
-            </Box>
-          )}
+            {uiState.statusLine && (
+              <Box paddingLeft={1} marginTop={1}>
+                <Text color={uiState.error ? "$error" : "$primary"}>
+                  {uiState.statusLine}
+                </Text>
+              </Box>
+            )}
 
-          {uiState.compact && (
-            <Box paddingLeft={1} marginTop={1}>
-              <Text color="$warning">
-                {uiState.compact.active
-                  ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
-                  : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
-              </Text>
-            </Box>
-          )}
+            {uiState.compact && (
+              <Box paddingLeft={1} marginTop={1}>
+                <Text color="$warning">
+                  {uiState.compact.active
+                    ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
+                    : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
+                </Text>
+              </Box>
+            )}
 
-          <StreamOutput
-            messages={uiState.messages}
-            progressEntries={uiState.progressEntries}
-            toolCalls={uiState.toolCalls}
-            transcript={uiState.transcript}
-            artifacts={visibleArtifacts}
-            queuedPrompts={queuedPrompts.map((queuedPrompt) => ({
-              id: queuedPrompt.id,
-              text: queuedPrompt.text,
-              imageCount: queuedPrompt.images.length,
-            }))}
-            liveBlocks={uiState.liveAssistantBlocks}
-            liveAssistantMessageId={uiState.liveAssistantMessageId}
-            isStreaming={uiState.isStreaming}
-            activeTurnStatus={uiState.activeTurnStatus}
-            model={uiState.model}
-            showThinking={showThinking}
-            thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
-            transcriptSearchQuery={transcriptSearchQuery}
-            transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
-            onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
-          />
-
-          {uiState.error && (
-            <Box
-              borderStyle="round"
-              borderColor="$error"
-              paddingX={1}
-              marginTop={1}
-            >
-              <Text color="$error">{uiState.error}</Text>
-            </Box>
-          )}
-        </Box>
-      </Box>
-
-      {uiState.pendingPermission ? (
-        <Box flexDirection="column" flexShrink={1} minHeight={0} marginTop={1}>
-          <PermissionPrompt
-            tool={uiState.pendingPermission.tool}
-            command={uiState.pendingPermission.command}
-            rawInput={uiState.pendingPermission.raw_input}
-            risk={uiState.pendingPermission.risk}
-            riskReason={uiState.pendingPermission.risk_reason}
-            permissionLevel={uiState.pendingPermission.permission_level}
-            targetKind={uiState.pendingPermission.target_kind}
-            targetValue={uiState.pendingPermission.target_value}
-            workingDir={uiState.pendingPermission.working_dir}
-            onRespond={handlePermissionResponse}
-            onCancelTurn={handleCancel}
-          />
-        </Box>
-      ) : uiState.pendingArtifactReview ? (
-        <Box flexDirection="column" flexShrink={0} minHeight={0} marginTop={1}>
-          <ArtifactReviewPrompt
-            review={uiState.pendingArtifactReview}
-            onRespond={handleArtifactReviewResponse}
-          />
-        </Box>
-      ) : showPromptArea ? (
-        <Box
-          flexDirection="column"
-          flexShrink={0}
-          maxHeight="45%"
-          position="relative"
-          overflow="scroll"
-        >
-          <SafeToastContainer toasts={toasts} />
-          {transcriptSearchActive && !keepPromptVisibleWithOverlay ? (
-            <TranscriptSearchPrompt
-              query={transcriptSearchQuery}
-              matchCount={transcriptSearchMatchCount}
-              selectedIndex={transcriptSearchSelectedIndex}
-              onChange={handleTranscriptSearchQueryChange}
-              onNext={handleTranscriptSearchNext}
-              onPrevious={handleTranscriptSearchPrevious}
-              onClose={closeTranscriptSearch}
+            <StreamOutput
+              messages={uiState.messages}
+              progressEntries={uiState.progressEntries}
+              toolCalls={uiState.toolCalls}
+              transcript={uiState.transcript}
+              artifacts={visibleArtifacts}
+              queuedPrompts={queuedPrompts.map((queuedPrompt) => ({
+                id: queuedPrompt.id,
+                text: queuedPrompt.text,
+                imageCount: queuedPrompt.images.length,
+              }))}
+              liveBlocks={uiState.liveAssistantBlocks}
+              liveAssistantMessageId={uiState.liveAssistantMessageId}
+              isStreaming={uiState.isStreaming}
+              activeTurnStatus={uiState.activeTurnStatus}
+              model={uiState.model}
+              showThinking={showThinking}
+              thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
+              transcriptSearchQuery={transcriptSearchQuery}
+              transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
+              onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
             />
-          ) : (
-            <Input
-              prompt={prompt}
+
+            {uiState.error && (
+              <Box
+                borderStyle="round"
+                borderColor="$error"
+                paddingX={1}
+                marginTop={1}
+              >
+                <Text color="$error">{uiState.error}</Text>
+              </Box>
+            )}
+          </Box>
+        </Box>
+
+        {uiState.pendingPermission ? (
+          <Box
+            flexDirection="column"
+            flexShrink={1}
+            minHeight={0}
+            marginTop={1}
+          >
+            <PermissionPrompt
+              tool={uiState.pendingPermission.tool}
+              command={uiState.pendingPermission.command}
+              rawInput={uiState.pendingPermission.raw_input}
+              risk={uiState.pendingPermission.risk}
+              riskReason={uiState.pendingPermission.risk_reason}
+              permissionLevel={uiState.pendingPermission.permission_level}
+              targetKind={uiState.pendingPermission.target_kind}
+              targetValue={uiState.pendingPermission.target_value}
+              workingDir={uiState.pendingPermission.working_dir}
+              onRespond={handlePermissionResponse}
+              onCancelTurn={handleCancel}
+            />
+          </Box>
+        ) : uiState.pendingArtifactReview ? (
+          <Box
+            flexDirection="column"
+            flexShrink={0}
+            minHeight={0}
+            marginTop={1}
+          >
+            <ArtifactReviewPrompt
+              review={uiState.pendingArtifactReview}
+              onRespond={handleArtifactReviewResponse}
+            />
+          </Box>
+        ) : showPromptArea ? (
+          <Box
+            flexDirection="column"
+            flexShrink={0}
+            maxHeight="45%"
+            position="relative"
+            overflow="scroll"
+          >
+            <SafeToastContainer toasts={toasts} />
+            {transcriptSearchActive && !keepPromptVisibleWithOverlay ? (
+              <TranscriptSearchPrompt
+                query={transcriptSearchQuery}
+                matchCount={transcriptSearchMatchCount}
+                selectedIndex={transcriptSearchSelectedIndex}
+                onChange={handleTranscriptSearchQueryChange}
+                onNext={handleTranscriptSearchNext}
+                onPrevious={handleTranscriptSearchPrevious}
+                onClose={closeTranscriptSearch}
+              />
+            ) : (
+              <Input
+                prompt={prompt}
+                mode={uiState.mode}
+                slashCommands={uiState.slashCommands}
+                isLoading={uiState.isStreaming}
+                statusLabel={promptActivityLabel}
+                onSubmit={handleSubmit}
+                onOpenTranscriptSearch={openTranscriptSearch}
+                onImagePaste={handleImagePaste}
+                onPasteWarning={handlePasteWarning}
+                onModeToggle={engine.sendModeToggle}
+                onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
+                onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
+                onReasoningToggle={handleReasoningToggle}
+                onBackgroundTasksToggle={handleBackgroundTasksToggle}
+                onRevealFooterHints={handleRevealFooterHints}
+                onSendQueuedPromptNow={handleSendNextQueuedPrompt}
+                onRemoveQueuedPrompt={handleRemoveNextQueuedPrompt}
+                onCancel={handleCancel}
+                disabled={isPromptDisabled}
+              />
+            )}
+            {pasteWarning && (
+              <Box paddingLeft={1} marginTop={1}>
+                <Text color="$warning">{pasteWarning}</Text>
+              </Box>
+            )}
+            <PromptFooter
               mode={uiState.mode}
-              slashCommands={uiState.slashCommands}
+              model={uiState.model}
+              maxContextWindow={uiState.maxContextWindow}
+              maxOutputTokens={uiState.maxOutputTokens}
+              currentContextUsage={uiState.currentContextUsage}
               isLoading={uiState.isStreaming}
-              statusLabel={promptActivityLabel}
-              onSubmit={handleSubmit}
-              onOpenTranscriptSearch={openTranscriptSearch}
-              onImagePaste={handleImagePaste}
-              onPasteWarning={handlePasteWarning}
-              onModeToggle={engine.sendModeToggle}
-              onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
-              onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
-              onReasoningToggle={handleReasoningToggle}
-              onBackgroundTasksToggle={handleBackgroundTasksToggle}
-              onRevealFooterHints={handleRevealFooterHints}
-              onSendQueuedPromptNow={handleSendNextQueuedPrompt}
-              onRemoveQueuedPrompt={handleRemoveNextQueuedPrompt}
-              onCancel={handleCancel}
               disabled={isPromptDisabled}
+              promptValue={prompt.value}
+              totalCostUsd={uiState.cost.totalUsd}
+              inputTokens={uiState.cost.inputTokens}
+              outputTokens={uiState.cost.outputTokens}
+              memoryRecall={uiState.memoryRecall}
+              retrieval={uiState.retrieval}
+              turnTiming={uiState.turnTiming}
+              cursorOffset={prompt.cursorOffset}
+              blockedReason={promptBlockedReason}
+              queuedPromptCount={queuedPrompts.length}
+              showExpandedHint={showFooterHints}
+              showArtifacts={showArtifacts}
+              artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
+              backgroundTasksShortcutLabel={TASKS_TOGGLE_SHORTCUT_LABEL}
+              reasoningShortcutLabel={REASONING_TOGGLE_SHORTCUT_LABEL}
             />
-          )}
-          {pasteWarning && (
-            <Box paddingLeft={1} marginTop={1}>
-              <Text color="$warning">{pasteWarning}</Text>
-            </Box>
-          )}
-          <PromptFooter
-            mode={uiState.mode}
-            model={uiState.model}
-            maxContextWindow={uiState.maxContextWindow}
-            maxOutputTokens={uiState.maxOutputTokens}
-            currentContextUsage={uiState.currentContextUsage}
-            isLoading={uiState.isStreaming}
-            disabled={isPromptDisabled}
-            promptValue={prompt.value}
-            totalCostUsd={uiState.cost.totalUsd}
-            inputTokens={uiState.cost.inputTokens}
-            outputTokens={uiState.cost.outputTokens}
-            memoryRecall={uiState.memoryRecall}
-            retrieval={uiState.retrieval}
-            turnTiming={uiState.turnTiming}
-            cursorOffset={prompt.cursorOffset}
-            blockedReason={promptBlockedReason}
-            queuedPromptCount={queuedPrompts.length}
-            showExpandedHint={showFooterHints}
-            showArtifacts={showArtifacts}
-            artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
-            backgroundTasksShortcutLabel={TASKS_TOGGLE_SHORTCUT_LABEL}
-            reasoningShortcutLabel={REASONING_TOGGLE_SHORTCUT_LABEL}
-          />
-        </Box>
-      ) : null}
+          </Box>
+        ) : null}
 
-      {uiState.pendingResumeSelection ? (
-        <CenteredViewportOverlay>
-          <ResumeSelectionPrompt
-            selection={uiState.pendingResumeSelection}
-            onSelect={handleResumeSelection}
-            onCancel={() => handleResumeSelection()}
-          />
-        </CenteredViewportOverlay>
-      ) : uiState.pendingRewindSelection ? (
-        <CenteredViewportOverlay>
-          <RewindSelectionPrompt
-            selection={uiState.pendingRewindSelection}
-            onSelect={handleRewindSelection}
-            onCancel={() => handleRewindSelection()}
-          />
-        </CenteredViewportOverlay>
-      ) : uiState.pendingModelSelection ? (
-        <CenteredViewportOverlay>
-          <ModelSelectionPrompt
-            selection={uiState.pendingModelSelection}
-            onSelect={handleModelSelection}
-            onCancel={() => handleModelSelection()}
-          />
-        </CenteredViewportOverlay>
-      ) : showBackgroundTasks ? (
-        <CenteredViewportOverlay>
-          <BackgroundTasksDialog
-            commands={uiState.backgroundCommands}
-            agents={uiState.backgroundAgents}
-            details={backgroundTaskDetails}
-            onClose={handleBackgroundTasksClose}
-            onInspectTask={handleBackgroundTaskInspect}
-            onStopTask={handleBackgroundTaskStop}
-          />
-        </CenteredViewportOverlay>
-      ) : null}
+        {uiState.pendingResumeSelection ? (
+          <CenteredViewportOverlay>
+            <ResumeSelectionPrompt
+              selection={uiState.pendingResumeSelection}
+              onSelect={handleResumeSelection}
+              onCancel={() => handleResumeSelection()}
+            />
+          </CenteredViewportOverlay>
+        ) : uiState.pendingAskUserQuestion ? (
+          <CenteredViewportOverlay>
+            <AskUserQuestionPrompt
+              request={uiState.pendingAskUserQuestion}
+              onSubmit={handleAskUserQuestion}
+            />
+          </CenteredViewportOverlay>
+        ) : uiState.pendingRewindSelection ? (
+          <CenteredViewportOverlay>
+            <RewindSelectionPrompt
+              selection={uiState.pendingRewindSelection}
+              onSelect={handleRewindSelection}
+              onCancel={() => handleRewindSelection()}
+            />
+          </CenteredViewportOverlay>
+        ) : uiState.pendingModelSelection ? (
+          <CenteredViewportOverlay>
+            <ModelSelectionPrompt
+              selection={uiState.pendingModelSelection}
+              onSelect={handleModelSelection}
+              onCancel={() => handleModelSelection()}
+            />
+          </CenteredViewportOverlay>
+        ) : showBackgroundTasks ? (
+          <CenteredViewportOverlay>
+            <BackgroundTasksDialog
+              commands={uiState.backgroundCommands}
+              agents={uiState.backgroundAgents}
+              details={backgroundTaskDetails}
+              onClose={handleBackgroundTasksClose}
+              onInspectTask={handleBackgroundTaskInspect}
+              onStopTask={handleBackgroundTaskStop}
+            />
+          </CenteredViewportOverlay>
+        ) : null}
       </Box>
     </Screen>
   );
@@ -958,7 +1019,9 @@ function SafeToastContainer({ toasts }: { toasts: ToastData[] }) {
   );
 }
 
-function buildBackgroundCommandTaskNotification(event: StreamEvent): string | null {
+function buildBackgroundCommandTaskNotification(
+  event: StreamEvent,
+): string | null {
   if (event.type !== "background_command_updated") {
     return null;
   }
@@ -1043,7 +1106,9 @@ function buildBackgroundCommandTaskSummary(
   }
 }
 
-function normalizeBackgroundCommandTaskStatus(status: string | undefined): string {
+function normalizeBackgroundCommandTaskStatus(
+  status: string | undefined,
+): string {
   const normalized = status?.trim().toLowerCase();
   if (!normalized) {
     return "updated";
@@ -1142,6 +1207,7 @@ function isQueuedPromptDispatchBlocked(
     !isEngineReady ||
     uiState.isStreaming ||
     uiState.pendingPermission !== null ||
+    uiState.pendingAskUserQuestion !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
     uiState.pendingRewindSelection !== null ||
@@ -1186,6 +1252,7 @@ function getPromptBlockedReason({
   isEngineReady,
   engineError,
   backgroundTasksOpen,
+  pendingAskUserQuestion,
   pendingModelSelection,
   pendingRewindSelection,
   pendingResumeSelection,
@@ -1195,6 +1262,7 @@ function getPromptBlockedReason({
   isEngineReady: boolean;
   engineError: string | null;
   backgroundTasksOpen: boolean;
+  pendingAskUserQuestion: boolean;
   pendingModelSelection: boolean;
   pendingRewindSelection: boolean;
   pendingResumeSelection: boolean;
@@ -1209,6 +1277,9 @@ function getPromptBlockedReason({
   }
   if (pendingResumeSelection) {
     return "resume selection open";
+  }
+  if (pendingAskUserQuestion) {
+    return "question prompt open";
   }
   if (pendingModelSelection) {
     return "model selection open";
