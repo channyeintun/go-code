@@ -55,8 +55,8 @@ func DefaultRetryPolicy() RetryPolicy {
 
 // ShouldRetry returns whether an error is retryable.
 func ShouldRetry(err error) bool {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
 		return false
 	}
 	switch apiErr.Type {
@@ -90,8 +90,7 @@ func RetryWithBackoff(ctx context.Context, policy RetryPolicy, fn func() error) 
 		if attempt < policy.MaxAttempts-1 {
 			delay := BackoffDelay(policy, attempt)
 			// Prefer server-specified retry delay when present.
-			var apiErr *APIError
-			if errors.As(lastErr, &apiErr) && apiErr.RetryAfter > 0 {
+			if apiErr, ok := errors.AsType[*APIError](lastErr); ok && apiErr.RetryAfter > 0 {
 				delay = apiErr.RetryAfter
 			}
 			select {

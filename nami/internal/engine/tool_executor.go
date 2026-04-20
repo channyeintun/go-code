@@ -122,8 +122,7 @@ func prepareToolCall(
 	}
 	allowed, err := validatePlannedTool(ctx, planner, call, pendingCall, state.results, bridge)
 	if err != nil {
-		var reviewRequired *agent.PlanReviewRequiredError
-		if errors.As(err, &reviewRequired) {
+		if _, ok := errors.AsType[*agent.PlanReviewRequiredError](err); ok {
 			state.pauseForPlanReview = true
 			return false, nil
 		}
@@ -189,8 +188,7 @@ func validatePlannedTool(
 	bridge *ipc.Bridge,
 ) (bool, error) {
 	if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
-		var reviewRequired *agent.PlanReviewRequiredError
-		if errors.As(err, &reviewRequired) {
+		if _, ok := errors.AsType[*agent.PlanReviewRequiredError](err); ok {
 			return false, err
 		}
 		results[pendingCall.Index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}

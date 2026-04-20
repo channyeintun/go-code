@@ -115,8 +115,8 @@ func handleToolCallsTurn(
 	turn modelTurn,
 ) error {
 	results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
-	var pauseForPlanReview *PauseForPlanReviewError
-	if err != nil && !errors.As(err, &pauseForPlanReview) {
+	pauseForPlanReview, ok := errors.AsType[*PauseForPlanReviewError](err)
+	if err != nil && !ok {
 		return err
 	}
 	for _, result := range results {
@@ -337,8 +337,8 @@ func invokeModelWithRecovery(
 			return turn, nil
 		}
 
-		var apiErr *api.APIError
-		if errors.As(err, &apiErr) && state.Capabilities.SupportsToolUse && !toolUseRetryUsed && isToolUseUnavailable(apiErr) {
+		apiErr, ok := errors.AsType[*api.APIError](err)
+		if ok && state.Capabilities.SupportsToolUse && !toolUseRetryUsed && isToolUseUnavailable(apiErr) {
 			state.Capabilities.SupportsToolUse = false
 			toolUseRetryUsed = true
 			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
@@ -350,7 +350,7 @@ func invokeModelWithRecovery(
 			continue
 		}
 
-		if errors.As(err, &apiErr) && apiErr.Type == api.ErrOverloaded {
+		if ok && apiErr.Type == api.ErrOverloaded {
 			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
 				Message:     fmt.Sprintf("Model error (attempt %d/3): %s — retrying...", attempt+1, apiErr.Message),
 				Recoverable: true,
@@ -360,7 +360,7 @@ func invokeModelWithRecovery(
 			continue
 		}
 
-		if !errors.As(err, &apiErr) || apiErr.Type != api.ErrPromptTooLong || deps.CompactMessages == nil {
+		if !ok || apiErr.Type != api.ErrPromptTooLong || deps.CompactMessages == nil {
 			return modelTurn{}, err
 		}
 

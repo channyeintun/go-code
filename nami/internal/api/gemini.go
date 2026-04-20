@@ -211,8 +211,7 @@ func (c *GeminiClient) openStream(ctx context.Context, payload geminiGenerateCon
 			apiErr := classifyGeminiStatus(currentResp.StatusCode, bodyBytes)
 			// Attach server-specified retry delay so RetryWithBackoff honours it.
 			if d := geminiRetryAfterDelay(currentResp, bodyBytes); d > 0 {
-				var ae *APIError
-				if errors.As(apiErr, &ae) {
+				if ae, ok := errors.AsType[*APIError](apiErr); ok {
 					if d > geminiMaxRetryAfter {
 						// Server wants us to wait too long — fail immediately.
 						ae.RetryAfter = 0

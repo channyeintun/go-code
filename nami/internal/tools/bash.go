@@ -181,8 +181,7 @@ func (t *BashTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, er
 		if commandCtx.Err() != nil {
 			return ToolOutput{}, commandCtx.Err()
 		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			return ToolOutput{Output: combined, IsError: true}, nil
 		}
 		return ToolOutput{}, fmt.Errorf("run bash command: %w", err)

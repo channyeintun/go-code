@@ -166,8 +166,7 @@ func (t *GitTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, err
 		if commandCtx.Err() != nil {
 			return ToolOutput{}, commandCtx.Err()
 		}
-		var exitErr *exec.ExitError
-		if errors.As(runErr, &exitErr) {
+		if _, ok := errors.AsType[*exec.ExitError](runErr); ok {
 			return ToolOutput{Output: output, IsError: true}, nil
 		}
 		return ToolOutput{}, runErr

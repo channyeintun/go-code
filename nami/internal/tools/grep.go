@@ -160,8 +160,7 @@ func (t *GrepTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, er
 		rawOutput, toolErr = runGrepFallback(ctx, searchPath, pattern, outputMode, normalizedParams)
 	}
 	if toolErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(toolErr, &exitErr) && exitErr.ExitCode() == 1 {
+		if exitErr, ok := errors.AsType[*exec.ExitError](toolErr); ok && exitErr.ExitCode() == 1 {
 			return ToolOutput{Output: "No matches found"}, nil
 		}
 		return ToolOutput{}, toolErr

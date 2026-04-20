@@ -47,8 +47,7 @@ func NewEditFailure(kind EditFailureKind, filePath, message, hint string) *EditF
 }
 
 func ExtractEditFailure(err error) (*EditFailure, bool) {
-	var editFailure *EditFailure
-	if errors.As(err, &editFailure) && editFailure != nil {
+	if editFailure, ok := errors.AsType[*EditFailure](err); ok && editFailure != nil {
 		return editFailure, true
 	}
 	return nil, false
