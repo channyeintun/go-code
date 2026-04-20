@@ -18,6 +18,11 @@ import (
 // Long enough for slow models; context cancellation handles early termination.
 const streamingHTTPTimeout = 5 * time.Minute
 
+// maxPromptBudgetReservedOutputTokens mirrors the prompt-side reserve used by
+// the UI and compaction heuristics when providers only expose a raw context
+// window and an output ceiling.
+const maxPromptBudgetReservedOutputTokens = 20_000
+
 // newHTTPClient returns an *http.Client with a 5-minute timeout suitable for
 // streaming responses. Context cancellation handles premature abort.
 func newHTTPClient() *http.Client {
@@ -44,7 +49,36 @@ type ModelCapabilities struct {
 	SupportsJsonMode         bool
 	SupportsCaching          bool
 	MaxContextWindow         int
+	MaxPromptTokens          int
 	MaxOutputTokens          int
+}
+
+// PromptTokenBudget returns the usable prompt budget for conversation history.
+// Prefer a provider-reported prompt limit when available; otherwise reserve a
+// small portion of the raw context window for model output.
+func (c ModelCapabilities) PromptTokenBudget() int {
+	if c.MaxPromptTokens > 0 {
+		return c.MaxPromptTokens
+	}
+
+	budget := c.MaxContextWindow
+	if budget <= 0 {
+		return 0
+	}
+
+	reserved := c.MaxOutputTokens
+	if reserved < 0 {
+		reserved = 0
+	}
+	if reserved > maxPromptBudgetReservedOutputTokens {
+		reserved = maxPromptBudgetReservedOutputTokens
+	}
+
+	budget -= reserved
+	if budget < 0 {
+		return 0
+	}
+	return budget
 }
 
 // Role represents a message role.

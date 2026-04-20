@@ -336,7 +336,7 @@ func executeSubagent(
 		Skills:          childSkills,
 		Tools:           queryTools,
 		Capabilities:    client.Capabilities(),
-		ContextWindow:   client.Capabilities().MaxContextWindow,
+		ContextWindow:   client.Capabilities().PromptTokenBudget(),
 		MaxTokens:       client.Capabilities().MaxOutputTokens,
 		SessionMemory:   agent.SessionMemorySnapshot{},
 	}, childDeps)

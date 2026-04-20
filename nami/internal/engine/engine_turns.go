@@ -411,6 +411,7 @@ func (t *userTurnContext) maybeGenerateSessionTitle() {
 
 func (t *userTurnContext) newQueryRequest(availableSkills []skillspkg.Skill) agent.QueryRequest {
 	sessionMemory, _ := loadSessionMemorySnapshot(context.Background(), t.deps.artifactManager, t.state.sessionID)
+	capabilities := t.state.client.Capabilities()
 	return agent.QueryRequest{
 		Messages:        t.state.messages,
 		SystemPrompt:    systemPromptForMode(t.state.mode),
@@ -421,9 +422,9 @@ func (t *userTurnContext) newQueryRequest(availableSkills []skillspkg.Skill) age
 		Skills:          availableSkills,
 		ExplicitSkills:  t.explicitSkills,
 		Tools:           t.deps.registry.Definitions(),
-		Capabilities:    t.state.client.Capabilities(),
-		ContextWindow:   t.state.client.Capabilities().MaxContextWindow,
-		MaxTokens:       t.state.client.Capabilities().MaxOutputTokens,
+		Capabilities:    capabilities,
+		ContextWindow:   capabilities.PromptTokenBudget(),
+		MaxTokens:       capabilities.MaxOutputTokens,
 		SessionMemory:   sessionMemory,
 	}
 }

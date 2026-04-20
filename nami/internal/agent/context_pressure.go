@@ -49,7 +49,8 @@ type ContextPressureDecision struct {
 }
 
 func EvaluateContextPressure(messages []api.Message, contextWindow, maxOutputTokens int, continuation ContinuationTracker, signals ContextPressureSignals) ContextPressureDecision {
-	effectiveWindow := compact.EffectiveContextWindow(contextWindow, maxOutputTokens)
+	_ = maxOutputTokens
+	effectiveWindow := contextWindow
 	warningThreshold := compact.WarningThreshold(effectiveWindow)
 	compactThreshold := compact.AutocompactThreshold(effectiveWindow)
 	conversationTokens := compact.EstimateConversationTokens(messages)

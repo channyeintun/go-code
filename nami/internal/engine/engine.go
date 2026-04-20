@@ -750,7 +750,7 @@ func emitModelChanged(bridge *ipc.Bridge, activeModelID string, client api.LLMCl
 	}
 	if client != nil {
 		capabilities := client.Capabilities()
-		payload.MaxContextWindow = capabilities.MaxContextWindow
+		payload.MaxContextWindow = capabilities.PromptTokenBudget()
 		payload.MaxOutputTokens = capabilities.MaxOutputTokens
 	}
 	return bridge.Emit(ipc.EventModelChanged, payload)

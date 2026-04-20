@@ -45,7 +45,11 @@ export function getEffectiveContextWindow(
   maxContextWindow?: number | null,
   maxOutputTokens?: number | null,
 ): number {
-  const contextWindow = maxContextWindow ?? inferContextWindow(model);
+  if (typeof maxContextWindow === "number" && maxContextWindow > 0) {
+    return maxContextWindow;
+  }
+
+  const contextWindow = inferContextWindow(model);
   const reservedOutputTokens = Math.min(
     Math.max(maxOutputTokens ?? APPROX_MAX_RESERVED_OUTPUT_TOKENS, 0),
     APPROX_MAX_RESERVED_OUTPUT_TOKENS,

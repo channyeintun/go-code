@@ -579,6 +579,9 @@ func mergeGitHubCopilotCapabilities(base ModelCapabilities, remote gitHubCopilot
 	if remote.Capabilities.Limits.MaxContextWindowTokens > 0 {
 		capabilities.MaxContextWindow = remote.Capabilities.Limits.MaxContextWindowTokens
 	}
+	if remote.Capabilities.Limits.MaxPromptTokens > 0 {
+		capabilities.MaxPromptTokens = remote.Capabilities.Limits.MaxPromptTokens
+	}
 	if remote.Capabilities.Limits.MaxOutputTokens > 0 {
 		capabilities.MaxOutputTokens = remote.Capabilities.Limits.MaxOutputTokens
 	}

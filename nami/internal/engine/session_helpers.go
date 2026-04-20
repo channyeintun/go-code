@@ -185,7 +185,8 @@ type compactionSummarizer struct {
 }
 
 func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client api.LLMClient, systemPrompt string, tools []api.ToolDefinition) *compact.Pipeline {
-	return compact.NewPipeline(client.Capabilities().MaxContextWindow, &compactionSummarizer{
+	capabilities := client.Capabilities()
+	return compact.NewPipeline(capabilities.PromptTokenBudget(), &compactionSummarizer{
 		bridge:       bridge,
 		tracker:      tracker,
 		client:       client,
