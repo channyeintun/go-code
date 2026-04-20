@@ -112,6 +112,24 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Description: "GPT mini preset",
 	},
 	{
+		Label:       "GPT 5 Mini",
+		Model:       "gpt-5-mini",
+		Provider:    "openai",
+		Description: "OpenAI GPT 5 mini",
+	},
+	{
+		Label:       "GPT 4.1",
+		Model:       "gpt-4.1",
+		Provider:    "openai",
+		Description: "OpenAI GPT 4.1",
+	},
+	{
+		Label:       "GPT 4o",
+		Model:       "gpt-4o",
+		Provider:    "openai",
+		Description: "OpenAI GPT 4o",
+	},
+	{
 		Label:       "Gemini 3 Flash",
 		Model:       "gemini-3.0-flash",
 		Provider:    "gemini",

@@ -535,7 +535,13 @@ func buildOpenAIResponsesTools(tools []ToolDefinition) []openAIResponsesToolDefi
 
 func openAIResponsesUsesDeveloperRole(model string) bool {
 	lower := strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(lower, "gpt-5") || strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4")
+	prefixes := []string{"gpt-5", "o1", "o3", "o4"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(lower, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func openAIResponsesStopReason(status string) string {

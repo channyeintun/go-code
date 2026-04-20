@@ -26,12 +26,24 @@ func NormalizeReasoningEffort(input string) (string, bool) {
 
 func SupportsOpenAIReasoningEffort(model string) bool {
 	lower := normalizeReasoningModelID(model)
-	return strings.HasPrefix(lower, "gpt-5") || strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4")
+	prefixes := []string{"gpt-5", "o1", "o3", "o4"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(lower, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func SupportsXHighReasoningEffort(model string) bool {
 	lower := normalizeReasoningModelID(model)
-	return strings.Contains(lower, "gpt-5.2") || strings.Contains(lower, "gpt-5.3") || strings.Contains(lower, "gpt-5.4")
+	versions := []string{"gpt-5.2", "gpt-5.3", "gpt-5.4"}
+	for _, v := range versions {
+		if strings.Contains(lower, v) {
+			return true
+		}
+	}
+	return false
 }
 
 func ClampReasoningEffort(model, effort string) string {

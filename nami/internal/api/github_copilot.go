@@ -152,12 +152,24 @@ func BuildGitHubCopilotDynamicHeaders(messages []Message) map[string]string {
 
 func GitHubCopilotUsesAnthropicMessages(model string) bool {
 	lower := strings.ToLower(strings.TrimSpace(model))
-	return strings.Contains(lower, "claude") || strings.Contains(lower, "haiku") || strings.Contains(lower, "sonnet") || strings.Contains(lower, "opus")
+	keywords := []string{"claude", "haiku", "sonnet", "opus"}
+	for _, k := range keywords {
+		if strings.Contains(lower, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func GitHubCopilotUsesOpenAIResponses(model string) bool {
 	lower := strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(lower, "gpt-5") || strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4")
+	prefixes := []string{"gpt-5", "gpt-4", "o1", "o3", "o4"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(lower, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func gitHubCopilotInitiator(messages []Message) string {
