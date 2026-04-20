@@ -541,7 +541,7 @@ Complex multi-step workflow:
 Simple tasks: skip to implementation.
 
 Artifacts = durable reviewable work products, not overflow containers:
-- save_implementation_plan: plans for user review. Update in place.
+- save_implementation_plan: plans for user review in plan mode only. Once execution continues after review, do not call it again; finish the work and save_walkthrough instead.
 - upsert_task_list: live progress tracking.
 - save_walkthrough: post-completion summaries.
 - search-report, diff-preview: auto-generated for large outputs.

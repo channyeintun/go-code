@@ -19,6 +19,7 @@ const (
 	taskListArtifactSlot           = "active"
 	taskListArtifactTitle          = "Task List"
 	saveImplementationPlanToolName = "save_implementation_plan"
+	saveWalkthroughToolName        = "save_walkthrough"
 	planModePromptHint             = "Plan mode: Ultrathink. Not read-only — create/modify if user asks. Non-trivial work: save/update plan via save_implementation_plan as primary review artifact. Choreograph child agents: focused objective, let finish, synthesize. read_project_structure = directory layout. project_overview = semantic summary."
 )
 
@@ -43,11 +44,25 @@ type PlanReviewRequiredError struct {
 	PlanTitle string
 }
 
+// WalkthroughRequiredError indicates the model tried to reopen a finalized
+// implementation-plan artifact after execution had already moved past plan review.
+type WalkthroughRequiredError struct {
+	ToolName  string
+	PlanTitle string
+}
+
 func (e *PlanReviewRequiredError) Error() string {
 	if e == nil {
 		return "implementation plan is awaiting user review"
 	}
 	return fmt.Sprintf("write tool %q blocked in plan mode: implementation plan %q is ready and awaiting user review — do not call write tools until the user approves the plan and the mode switches to fast", e.ToolName, e.PlanTitle)
+}
+
+func (e *WalkthroughRequiredError) Error() string {
+	if e == nil {
+		return "final implementation plan is already complete for review; use save_walkthrough instead"
+	}
+	return fmt.Sprintf("tool %q blocked: implementation plan %q is already finalized and the session is no longer in plan mode — do not update the implementation-plan artifact again; continue execution and use %s for the completion artifact instead", e.ToolName, e.PlanTitle, saveWalkthroughToolName)
 }
 
 // NewPlanner constructs a planner for the current session and mode.
@@ -71,7 +86,21 @@ func (p *Planner) FinalizeTurn(ctx context.Context, artifactID string, userReque
 
 // ValidateTool optionally enforces plan-mode write gating.
 func (p *Planner) ValidateTool(ctx context.Context, toolName string, permission toolpkg.PermissionLevel) error {
-	if p == nil || permission != toolpkg.PermissionWrite {
+	if p == nil {
+		return nil
+	}
+
+	if toolName == saveImplementationPlanToolName && p.mode != ModePlan {
+		status, title, err := p.planStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("tool %q blocked: planner state unavailable: %w", toolName, err)
+		}
+		if status == planStatusFinal {
+			return &WalkthroughRequiredError{ToolName: toolName, PlanTitle: title}
+		}
+	}
+
+	if permission != toolpkg.PermissionWrite {
 		return nil
 	}
 	if p.mode != ModePlan || !ProfileForMode(p.mode).RequirePlanBeforeWrite {
@@ -96,11 +125,15 @@ func PlanModePromptHint() string {
 }
 
 func (p *Planner) enabled() bool {
-	return p != nil && p.mode == ModePlan && strings.TrimSpace(p.sessionID) != "" && p.artifactManager != nil
+	return p != nil && p.mode == ModePlan && p.hasSessionArtifacts()
+}
+
+func (p *Planner) hasSessionArtifacts() bool {
+	return p != nil && strings.TrimSpace(p.sessionID) != "" && p.artifactManager != nil
 }
 
 func (p *Planner) planStatus(ctx context.Context) (string, string, error) {
-	if !p.enabled() {
+	if !p.hasSessionArtifacts() {
 		return "", "", nil
 	}
 
