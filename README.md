@@ -10,7 +10,7 @@ Nami combines a terminal UI, a Go-based execution engine, first-class artifacts,
 
 - **Agentic terminal workflow** — chat with your codebase, run tools, and edit files in one place.
 - **Two operating modes** — use **plan** mode for review-first workflows or **fast** mode for direct execution.
-- **First-class artifacts** — implementation plans, task lists, walkthroughs, diff previews, and search reports persist as reviewable outputs.
+- **First-class artifacts** — implementation plans, task lists, walkthroughs, and search reports persist as reviewable outputs.
 - **Bounded child agents** — delegate exploration, code search, or terminal-heavy work to specialized subagents.
 - **Permission gating** — risky or sensitive actions require explicit approval.
 - **Multi-provider model support** — works with Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, Ollama, and GitHub Copilot.
