@@ -54,6 +54,11 @@ type Inbox struct {
 	Handoffs []Handoff `json:"handoffs,omitempty"`
 }
 
+type DequeueResult struct {
+	Handoffs   []Handoff
+	Superseded []Handoff
+}
+
 var inboxMu sync.Mutex
 
 const inboxRelativePath = "swarm/inbox.json"
@@ -259,10 +264,10 @@ func ListHandoffs(store *session.Store, sessionID string, role string, statuses 
 	return filtered, nil
 }
 
-func DequeueHandoffs(store *session.Store, sessionID string, role string, policy QueuePolicy) ([]Handoff, error) {
+func DequeueHandoffs(store *session.Store, sessionID string, role string, policy QueuePolicy) (DequeueResult, error) {
 	role = normalizeRoleName(role)
 	if role == "" {
-		return nil, fmt.Errorf("DequeueHandoffs requires a role")
+		return DequeueResult{}, fmt.Errorf("DequeueHandoffs requires a role")
 	}
 
 	inboxMu.Lock()
@@ -270,7 +275,7 @@ func DequeueHandoffs(store *session.Store, sessionID string, role string, policy
 
 	inbox, err := loadInboxUnlocked(store, sessionID)
 	if err != nil {
-		return nil, err
+		return DequeueResult{}, err
 	}
 
 	pending := make([]Handoff, 0, len(inbox.Handoffs))
@@ -284,7 +289,7 @@ func DequeueHandoffs(store *session.Store, sessionID string, role string, policy
 		pending = append(pending, handoff)
 	}
 	if len(pending) == 0 {
-		return nil, nil
+		return DequeueResult{}, nil
 	}
 
 	sort.Slice(pending, func(i, j int) bool {
@@ -296,12 +301,14 @@ func DequeueHandoffs(store *session.Store, sessionID string, role string, policy
 
 	switch policy {
 	case QueueBatchReview:
-		return pending, nil
+		return DequeueResult{Handoffs: append([]Handoff(nil), pending...)}, nil
 
 	case QueueLatestWins:
 		newest := pending[len(pending)-1]
+		result := DequeueResult{Handoffs: []Handoff{newest}}
 		if len(pending) > 1 {
 			now := time.Now().UTC()
+			superseded := make([]Handoff, 0, len(pending)-1)
 			for _, older := range pending[:len(pending)-1] {
 				supersededIdx := inboxIndexByID(inbox.Handoffs, older.ID)
 				if supersededIdx < 0 {
@@ -315,15 +322,17 @@ func DequeueHandoffs(store *session.Store, sessionID string, role string, policy
 					Note:   inbox.Handoffs[supersededIdx].StatusNote,
 					At:     now,
 				})
+				superseded = append(superseded, inbox.Handoffs[supersededIdx])
 			}
 			if err := saveInboxUnlocked(store, sessionID, inbox); err != nil {
-				return nil, err
+				return DequeueResult{}, err
 			}
+			result.Superseded = superseded
 		}
-		return []Handoff{newest}, nil
+		return result, nil
 
 	default:
-		return pending[:1], nil
+		return DequeueResult{Handoffs: []Handoff{pending[0]}}, nil
 	}
 }
 

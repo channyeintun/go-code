@@ -20,7 +20,7 @@
 
 ## Current Focus
 
-- Next task: sync handoff artifacts during `latest-wins` dequeue.
+- Next task: review fixes completed.
 
 ## Follow-Up Plan Status
 
@@ -32,7 +32,7 @@
 
 - [x] Prevent manual `superseded` handoff updates
 - [x] Fail fast when dequeue policy resolution is invalid
-- [ ] Sync handoff artifacts during `latest-wins` dequeue
+- [x] Sync handoff artifacts during `latest-wins` dequeue
 
 ## Completed Tasks
 

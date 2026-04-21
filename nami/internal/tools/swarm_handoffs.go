@@ -176,20 +176,20 @@ func (t *SwarmListInboxTool) Concurrency(input ToolInput) ConcurrencyDecision {
 }
 
 func (t *SwarmListInboxTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
-	sessionID, _, store, cwd, err := getSwarmRuntime()
+	sessionID, manager, store, cwd, err := getSwarmRuntime()
 	if err != nil {
 		return ToolOutput{}, err
 	}
 	role := firstStringOrEmpty(input.Params, "role")
 	if boolParam(input.Params, "dequeue") {
-		return dequeueInbox(store, sessionID, cwd, role)
+		return dequeueInbox(ctx, manager, store, sessionID, cwd, role)
 	}
 	statuses := collectHandoffStatuses(input.Params)
 	handoffs, err := swarm.ListHandoffs(store, sessionID, role, statuses)
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	return marshalInboxResult(handoffs)
+	return marshalInboxResult(handoffs, nil)
 }
 
 func (t *SwarmUpdateHandoffTool) Name() string { return "swarm_update_handoff" }
@@ -312,7 +312,7 @@ func collectHandoffStatuses(params map[string]any) []swarm.HandoffStatus {
 	return statuses
 }
 
-func dequeueInbox(store *session.Store, sessionID string, cwd string, role string) (ToolOutput, error) {
+func dequeueInbox(ctx context.Context, manager *artifactspkg.Manager, store *session.Store, sessionID string, cwd string, role string) (ToolOutput, error) {
 	if strings.TrimSpace(role) == "" {
 		return ToolOutput{}, fmt.Errorf("dequeue requires a role parameter")
 	}
@@ -320,11 +320,15 @@ func dequeueInbox(store *session.Store, sessionID string, cwd string, role strin
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	handoffs, err := swarm.DequeueHandoffs(store, sessionID, role, policy)
+	result, err := swarm.DequeueHandoffs(store, sessionID, role, policy)
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	return marshalInboxResult(handoffs)
+	artifacts, err := syncDequeuedHandoffArtifacts(ctx, manager, sessionID, result.Superseded)
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	return marshalInboxResult(result.Handoffs, artifacts)
 }
 
 func resolveRoleQueuePolicy(cwd string, role string) (swarm.QueuePolicy, error) {
@@ -346,7 +350,7 @@ func resolveRoleQueuePolicy(cwd string, role string) (swarm.QueuePolicy, error) 
 	return resolved.QueuePolicy, nil
 }
 
-func marshalInboxResult(handoffs []swarm.Handoff) (ToolOutput, error) {
+func marshalInboxResult(handoffs []swarm.Handoff, artifacts []ArtifactMutation) (ToolOutput, error) {
 	payload := map[string]any{
 		"count":    len(handoffs),
 		"handoffs": handoffs,
@@ -355,5 +359,25 @@ func marshalInboxResult(handoffs []swarm.Handoff) (ToolOutput, error) {
 	if err != nil {
 		return ToolOutput{}, fmt.Errorf("marshal swarm inbox: %w", err)
 	}
-	return ToolOutput{Output: string(encoded)}, nil
+	return ToolOutput{Output: string(encoded), Artifacts: artifacts}, nil
+}
+
+func syncDequeuedHandoffArtifacts(ctx context.Context, manager *artifactspkg.Manager, sessionID string, handoffs []swarm.Handoff) ([]ArtifactMutation, error) {
+	if len(handoffs) == 0 {
+		return nil, nil
+	}
+	mutations := make([]ArtifactMutation, 0, len(handoffs))
+	for _, handoff := range handoffs {
+		artifact, _, created, err := saveHandoffArtifact(ctx, manager, sessionID, handoff)
+		if err != nil {
+			return nil, err
+		}
+		mutations = append(mutations, ArtifactMutation{
+			Artifact: artifact,
+			Content:  swarm.RenderHandoffMarkdown(handoff),
+			Created:  created,
+			Focused:  false,
+		})
+	}
+	return mutations, nil
 }
