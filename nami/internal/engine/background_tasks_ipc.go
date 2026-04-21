@@ -177,18 +177,23 @@ func backgroundAgentDetailPayloadFromResult(
 	var metadata *ipc.ChildAgentMetadataPayload
 	if result.Metadata != nil {
 		metadata = &ipc.ChildAgentMetadataPayload{
-			InvocationID:    result.Metadata.InvocationID,
-			AgentID:         result.Metadata.AgentID,
-			Description:     result.Metadata.Description,
-			SubagentType:    result.Metadata.SubagentType,
-			LifecycleState:  result.Metadata.LifecycleState,
-			StatusMessage:   result.Metadata.StatusMessage,
-			StopBlockReason: result.Metadata.StopBlockReason,
-			StopBlockCount:  result.Metadata.StopBlockCount,
-			SessionID:       result.Metadata.SessionID,
-			TranscriptPath:  result.Metadata.TranscriptPath,
-			ResultPath:      result.Metadata.ResultPath,
-			Tools:           append([]string(nil), result.Metadata.Tools...),
+			InvocationID:      result.Metadata.InvocationID,
+			AgentID:           result.Metadata.AgentID,
+			Description:       result.Metadata.Description,
+			SubagentType:      result.Metadata.SubagentType,
+			WorkspaceStrategy: result.Metadata.WorkspaceStrategy,
+			WorkspacePath:     result.Metadata.WorkspacePath,
+			RepositoryRoot:    result.Metadata.RepositoryRoot,
+			WorktreeBranch:    result.Metadata.WorktreeBranch,
+			WorktreeCreated:   result.Metadata.WorktreeCreated,
+			LifecycleState:    result.Metadata.LifecycleState,
+			StatusMessage:     result.Metadata.StatusMessage,
+			StopBlockReason:   result.Metadata.StopBlockReason,
+			StopBlockCount:    result.Metadata.StopBlockCount,
+			SessionID:         result.Metadata.SessionID,
+			TranscriptPath:    result.Metadata.TranscriptPath,
+			ResultPath:        result.Metadata.ResultPath,
+			Tools:             append([]string(nil), result.Metadata.Tools...),
 		}
 	}
 

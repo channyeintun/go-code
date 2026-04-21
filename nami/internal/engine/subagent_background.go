@@ -216,18 +216,23 @@ func toIPCChildAgentMetadata(metadata *toolpkg.ChildAgentMetadata) *ipc.ChildAge
 	}
 	tools := append([]string(nil), metadata.Tools...)
 	return &ipc.ChildAgentMetadataPayload{
-		InvocationID:    metadata.InvocationID,
-		AgentID:         metadata.AgentID,
-		Description:     metadata.Description,
-		SubagentType:    metadata.SubagentType,
-		LifecycleState:  metadata.LifecycleState,
-		StatusMessage:   metadata.StatusMessage,
-		StopBlockReason: metadata.StopBlockReason,
-		StopBlockCount:  metadata.StopBlockCount,
-		SessionID:       metadata.SessionID,
-		TranscriptPath:  metadata.TranscriptPath,
-		ResultPath:      metadata.ResultPath,
-		Tools:           tools,
+		InvocationID:      metadata.InvocationID,
+		AgentID:           metadata.AgentID,
+		Description:       metadata.Description,
+		SubagentType:      metadata.SubagentType,
+		WorkspaceStrategy: metadata.WorkspaceStrategy,
+		WorkspacePath:     metadata.WorkspacePath,
+		RepositoryRoot:    metadata.RepositoryRoot,
+		WorktreeBranch:    metadata.WorktreeBranch,
+		WorktreeCreated:   metadata.WorktreeCreated,
+		LifecycleState:    metadata.LifecycleState,
+		StatusMessage:     metadata.StatusMessage,
+		StopBlockReason:   metadata.StopBlockReason,
+		StopBlockCount:    metadata.StopBlockCount,
+		SessionID:         metadata.SessionID,
+		TranscriptPath:    metadata.TranscriptPath,
+		ResultPath:        metadata.ResultPath,
+		Tools:             tools,
 	}
 }
 
@@ -449,11 +454,12 @@ func launchBackgroundTeam(ctx context.Context, runner toolpkg.AgentRunner, req t
 	results := make([]toolpkg.AgentRunResult, 0, len(req.Tasks))
 	for _, task := range req.Tasks {
 		result, err := runner(ctx, toolpkg.AgentRunRequest{
-			Description:  task.Description,
-			Prompt:       task.Prompt,
-			Role:         task.Role,
-			SubagentType: toolpkg.NormalizeSubagentType(task.SubagentType),
-			Background:   true,
+			Description:       task.Description,
+			Prompt:            task.Prompt,
+			Role:              task.Role,
+			WorkspaceStrategy: task.WorkspaceStrategy,
+			SubagentType:      toolpkg.NormalizeSubagentType(task.SubagentType),
+			Background:        true,
 		})
 		if err != nil {
 			cancelBackgroundTeamMembers(team.members)

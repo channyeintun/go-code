@@ -242,13 +242,21 @@ func executeSubagent(
 	reportStatus func(toolpkg.AgentRunResult),
 ) (toolpkg.AgentRunResult, error) {
 	childSessionID := invocationID
+	workspace, err := prepareDelegatedWorkspace(ctx, req, invocationID, cwd)
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+	childCWD := cwd
+	if strings.TrimSpace(workspace.Path) != "" {
+		childCWD = workspace.Path
+	}
 	childStartedAt := time.Now()
 	childTracker := costpkg.NewTracker()
 	childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
 	childPermissionCtx := permissions.CloneContext(permissionCtx)
 	childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
 	childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
-	childSkills, err := loadAvailableSkills(bridge, cwd)
+	childSkills, err := loadAvailableSkills(bridge, childCWD)
 	if err != nil {
 		return toolpkg.AgentRunResult{}, err
 	}
@@ -284,8 +292,8 @@ func executeSubagent(
 		Mode:          childMode,
 		Model:         childModelID,
 		SubagentModel: "",
-		CWD:           cwd,
-		Branch:        agent.LoadTurnContext().GitBranch,
+		CWD:           childCWD,
+		Branch:        firstNonEmpty(strings.TrimSpace(workspace.Branch), agent.LoadTurnContext().GitBranch),
 		Tracker:       childTracker,
 		Messages:      childMessages,
 	}); err != nil {
@@ -298,8 +306,8 @@ func executeSubagent(
 		Mode:          string(childMode),
 		Model:         childModelID,
 		SubagentModel: "",
-		CWD:           cwd,
-		Branch:        agent.LoadTurnContext().GitBranch,
+		CWD:           childCWD,
+		Branch:        firstNonEmpty(strings.TrimSpace(workspace.Branch), agent.LoadTurnContext().GitBranch),
 		TotalCostUSD:  0,
 		Title:         req.Description,
 	})
@@ -338,41 +346,53 @@ func executeSubagent(
 				Mode:          childMode,
 				Model:         childModelID,
 				SubagentModel: "",
-				CWD:           cwd,
-				Branch:        agent.LoadTurnContext().GitBranch,
+				CWD:           childCWD,
+				Branch:        firstNonEmpty(strings.TrimSpace(workspace.Branch), agent.LoadTurnContext().GitBranch),
 				Tracker:       childTracker,
 				Messages:      childMessages,
 			})
 		},
 		Clock: time.Now,
 	}
-
-	stream := agent.QueryStream(ctx, agent.QueryRequest{
-		Messages:        childMessages,
-		SystemPrompt:    childPrompt,
-		ModelID:         client.ModelID(),
-		ReasoningEffort: config.Load().ReasoningEffort,
-		Mode:            childMode,
-		SessionID:       childSessionID,
-		Skills:          childSkills,
-		Tools:           queryTools,
-		Capabilities:    client.Capabilities(),
-		ContextWindow:   client.Capabilities().PromptTokenBudget(),
-		MaxTokens:       client.Capabilities().MaxOutputTokens,
-		SessionMemory:   agent.SessionMemorySnapshot{},
-	}, childDeps)
-
 	turnStopReason := ""
-	for event, streamErr := range stream {
-		if streamErr != nil {
-			runChildStopFailureHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType, childMessages, streamErr)
-			return toolpkg.AgentRunResult{}, streamErr
-		}
-		if event.Type == ipc.EventTurnComplete {
-			var payload ipc.TurnCompletePayload
-			if err := json.Unmarshal(event.Payload, &payload); err == nil {
-				turnStopReason = payload.StopReason
+	runQuery := func() error {
+		stream := agent.QueryStream(ctx, agent.QueryRequest{
+			Messages:        childMessages,
+			SystemPrompt:    childPrompt,
+			ModelID:         client.ModelID(),
+			ReasoningEffort: config.Load().ReasoningEffort,
+			Mode:            childMode,
+			SessionID:       childSessionID,
+			Skills:          childSkills,
+			Tools:           queryTools,
+			Capabilities:    client.Capabilities(),
+			ContextWindow:   client.Capabilities().PromptTokenBudget(),
+			MaxTokens:       client.Capabilities().MaxOutputTokens,
+			SessionMemory:   agent.SessionMemorySnapshot{},
+		}, childDeps)
+		for event, streamErr := range stream {
+			if streamErr != nil {
+				runChildStopFailureHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType, childMessages, streamErr)
+				return streamErr
 			}
+			if event.Type == ipc.EventTurnComplete {
+				var payload ipc.TurnCompletePayload
+				if err := json.Unmarshal(event.Payload, &payload); err == nil {
+					turnStopReason = payload.StopReason
+				}
+			}
+		}
+		return nil
+	}
+	if workspace.Strategy == swarm.WorkspaceWorktree {
+		if _, err := withDelegatedWorkspace(workspace, func(string) (toolpkg.AgentRunResult, error) {
+			return toolpkg.AgentRunResult{}, runQuery()
+		}); err != nil {
+			return toolpkg.AgentRunResult{}, err
+		}
+	} else {
+		if err := runQuery(); err != nil {
+			return toolpkg.AgentRunResult{}, err
 		}
 	}
 
@@ -382,8 +402,8 @@ func executeSubagent(
 		Mode:          childMode,
 		Model:         childModelID,
 		SubagentModel: "",
-		CWD:           cwd,
-		Branch:        agent.LoadTurnContext().GitBranch,
+		CWD:           childCWD,
+		Branch:        firstNonEmpty(strings.TrimSpace(workspace.Branch), agent.LoadTurnContext().GitBranch),
 		Tracker:       childTracker,
 		Messages:      childMessages,
 	}); err != nil {
@@ -414,7 +434,7 @@ func executeSubagent(
 		InputTokens:    childSnapshot.TotalInputTokens,
 		OutputTokens:   childSnapshot.TotalOutputTokens,
 		Tools:          toolDefinitionNames(childRegistry.Definitions()),
-		Metadata:       lifecycle.metadata(),
+		Metadata:       decorateChildWorkspaceMetadata(lifecycle.metadata(), workspace),
 	}
 	writeBackgroundAgentResultFile(result)
 	return result, nil
@@ -459,15 +479,16 @@ func runChildStartHooks(
 		Type:      hooks.HookSubagentStart,
 		SessionID: childSessionID,
 		Extra: map[string]any{
-			"child_agent":       true,
-			"agent_id":          invocationID,
-			"agent_type":        subagentType,
-			"invocation_id":     invocationID,
-			"description":       req.Description,
-			"prompt":            req.Prompt,
-			"role":              req.Role,
-			"subagent_type":     subagentType,
-			"run_in_background": req.Background,
+			"child_agent":        true,
+			"agent_id":           invocationID,
+			"agent_type":         subagentType,
+			"invocation_id":      invocationID,
+			"description":        req.Description,
+			"prompt":             req.Prompt,
+			"role":               req.Role,
+			"workspace_strategy": req.WorkspaceStrategy,
+			"subagent_type":      subagentType,
+			"run_in_background":  req.Background,
 		},
 	})
 	messages := make([]string, 0, len(responses))
@@ -520,16 +541,17 @@ func evaluateChildStopHooks(
 		SessionID: childSessionID,
 		Output:    stopReq.AssistantMessage.Content,
 		Extra: map[string]any{
-			"child_agent":       true,
-			"agent_id":          invocationID,
-			"agent_type":        subagentType,
-			"invocation_id":     invocationID,
-			"description":       req.Description,
-			"role":              req.Role,
-			"subagent_type":     subagentType,
-			"run_in_background": req.Background,
-			"stop_reason":       stopReq.StopReason,
-			"turn_count":        stopReq.TurnCount,
+			"child_agent":        true,
+			"agent_id":           invocationID,
+			"agent_type":         subagentType,
+			"invocation_id":      invocationID,
+			"description":        req.Description,
+			"role":               req.Role,
+			"workspace_strategy": req.WorkspaceStrategy,
+			"subagent_type":      subagentType,
+			"run_in_background":  req.Background,
+			"stop_reason":        stopReq.StopReason,
+			"turn_count":         stopReq.TurnCount,
 		},
 	})
 	if err != nil {
@@ -582,14 +604,15 @@ func runChildStopFailureHooks(
 		Output:    latestAssistantContent(messages),
 		Error:     err.Error(),
 		Extra: map[string]any{
-			"child_agent":       true,
-			"agent_id":          invocationID,
-			"agent_type":        subagentType,
-			"invocation_id":     invocationID,
-			"description":       req.Description,
-			"role":              req.Role,
-			"subagent_type":     subagentType,
-			"run_in_background": req.Background,
+			"child_agent":        true,
+			"agent_id":           invocationID,
+			"agent_type":         subagentType,
+			"invocation_id":      invocationID,
+			"description":        req.Description,
+			"role":               req.Role,
+			"workspace_strategy": req.WorkspaceStrategy,
+			"subagent_type":      subagentType,
+			"run_in_background":  req.Background,
 		},
 	})
 }

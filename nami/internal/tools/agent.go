@@ -19,26 +19,32 @@ const subagentTypeGeneralPurpose = "general-purpose"
 const subagentTypeVerification = "verification"
 
 type AgentRunRequest struct {
-	Description  string
-	Prompt       string
-	Role         string
-	SubagentType string
-	Background   bool
+	Description       string
+	Prompt            string
+	Role              string
+	WorkspaceStrategy string
+	SubagentType      string
+	Background        bool
 }
 
 type ChildAgentMetadata struct {
-	InvocationID    string   `json:"invocation_id,omitempty"`
-	AgentID         string   `json:"agent_id,omitempty"`
-	Description     string   `json:"description,omitempty"`
-	SubagentType    string   `json:"subagent_type,omitempty"`
-	LifecycleState  string   `json:"lifecycle_state,omitempty"`
-	StatusMessage   string   `json:"status_message,omitempty"`
-	StopBlockReason string   `json:"stop_block_reason,omitempty"`
-	StopBlockCount  int      `json:"stop_block_count,omitempty"`
-	SessionID       string   `json:"session_id,omitempty"`
-	TranscriptPath  string   `json:"transcript_path,omitempty"`
-	ResultPath      string   `json:"result_path,omitempty"`
-	Tools           []string `json:"tools,omitempty"`
+	InvocationID      string   `json:"invocation_id,omitempty"`
+	AgentID           string   `json:"agent_id,omitempty"`
+	Description       string   `json:"description,omitempty"`
+	SubagentType      string   `json:"subagent_type,omitempty"`
+	WorkspaceStrategy string   `json:"workspace_strategy,omitempty"`
+	WorkspacePath     string   `json:"workspace_path,omitempty"`
+	RepositoryRoot    string   `json:"repository_root,omitempty"`
+	WorktreeBranch    string   `json:"worktree_branch,omitempty"`
+	WorktreeCreated   bool     `json:"worktree_created,omitempty"`
+	LifecycleState    string   `json:"lifecycle_state,omitempty"`
+	StatusMessage     string   `json:"status_message,omitempty"`
+	StopBlockReason   string   `json:"stop_block_reason,omitempty"`
+	StopBlockCount    int      `json:"stop_block_count,omitempty"`
+	SessionID         string   `json:"session_id,omitempty"`
+	TranscriptPath    string   `json:"transcript_path,omitempty"`
+	ResultPath        string   `json:"result_path,omitempty"`
+	Tools             []string `json:"tools,omitempty"`
 }
 
 type AgentRunResult struct {
@@ -155,6 +161,11 @@ func (t *AgentTool) InputSchema() any {
 				"type":        "string",
 				"description": "Optional project-local swarm role name. When set, Nami loads matching files from .nami/swarm to refine the child agent prompt.",
 			},
+			"workspace_strategy": map[string]any{
+				"type":        "string",
+				"description": "Optional workspace mode override for this child agent.",
+				"enum":        []string{"shared", "worktree"},
+			},
 			"run_in_background": map[string]any{
 				"type":        "boolean",
 				"description": "Launch the child agent asynchronously and return an agent_id for later status checks.",
@@ -195,15 +206,17 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 	description, _ := stringParam(input.Params, "description")
 	prompt, _ := stringParam(input.Params, "prompt")
 	role, _ := stringParam(input.Params, "role")
+	workspaceStrategy, _ := stringParam(input.Params, "workspace_strategy")
 	subagentType, _ := stringParam(input.Params, "subagent_type")
 	subagentType = NormalizeSubagentType(subagentType)
 
 	result, err := t.runner(ctx, AgentRunRequest{
-		Description:  strings.TrimSpace(description),
-		Prompt:       strings.TrimSpace(prompt),
-		Role:         strings.TrimSpace(role),
-		SubagentType: subagentType,
-		Background:   boolOrDefault(input.Params, "run_in_background", false),
+		Description:       strings.TrimSpace(description),
+		Prompt:            strings.TrimSpace(prompt),
+		Role:              strings.TrimSpace(role),
+		WorkspaceStrategy: strings.TrimSpace(workspaceStrategy),
+		SubagentType:      subagentType,
+		Background:        boolOrDefault(input.Params, "run_in_background", false),
 	})
 	if err != nil {
 		return ToolOutput{}, err

@@ -280,6 +280,26 @@ func (s ResolvedSpec) Role(name string) (ResolvedRole, bool) {
 	return ResolvedRole{}, false
 }
 
+func ParseWorkspaceStrategy(value string) (WorkspaceStrategy, bool) {
+	strategy := normalizeWorkspaceStrategy(value)
+	if strategy == "" {
+		return "", false
+	}
+	return strategy, true
+}
+
+func LoadRoleWorkspaceStrategy(cwd string, role string) (WorkspaceStrategy, error) {
+	spec, err := LoadProjectSpec(cwd)
+	if err != nil {
+		return "", err
+	}
+	resolvedRole, ok := spec.Role(role)
+	if !ok {
+		return "", fmt.Errorf("swarm role %q is not defined in %s", strings.TrimSpace(role), spec.Path)
+	}
+	return resolvedRole.WorkspaceStrategy, nil
+}
+
 func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 	var problems []string
 

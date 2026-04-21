@@ -14,13 +14,13 @@
 - [x] Phase 2: Add role-aware prompt composition
 - [x] Phase 3: Add structured handoff artifacts
 - [x] Phase 4: Add durable inboxes and queue policy
-- [ ] Phase 5: Add optional worktree-backed child agents
+- [x] Phase 5: Add optional worktree-backed child agents
 - [ ] Phase 6: Add swarm dashboard in the TUI
 - [ ] Phase 7: Add role-aware policy enforcement
 
 ## Current Focus
 
-- Next task: Phase 5: add optional worktree-backed child agents for edit-heavy delegated work.
+- Next task: Phase 6: add a swarm dashboard in the TUI.
 
 ## Completed Tasks
 
@@ -30,3 +30,4 @@
 - Phase 2 completed: added `.nami/swarm` constitution and role prompt overlay loading, plus optional `role` support for `agent` and `agent_team` delegated child agents.
 - Phase 3 completed: added a first-class `handoff` artifact kind plus swarm handoff submission and status update tools.
 - Phase 4 completed: added a durable session-backed swarm inbox, inbox listing tool, and role-specific handoff guidance for delegated child agents.
+- Phase 5 completed: added optional `worktree` child-agent workspace strategy support, role-derived worktree selection, and child metadata for worktree path and branch details. Background worktree launches are explicitly blocked until cwd handling is no longer process-global.

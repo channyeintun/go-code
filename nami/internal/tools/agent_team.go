@@ -8,10 +8,11 @@ import (
 )
 
 type AgentTeamTask struct {
-	Description  string `json:"description"`
-	Prompt       string `json:"prompt"`
-	Role         string `json:"role,omitempty"`
-	SubagentType string `json:"subagent_type,omitempty"`
+	Description       string `json:"description"`
+	Prompt            string `json:"prompt"`
+	Role              string `json:"role,omitempty"`
+	WorkspaceStrategy string `json:"workspace_strategy,omitempty"`
+	SubagentType      string `json:"subagent_type,omitempty"`
 }
 
 type AgentTeamLaunchRequest struct {
@@ -74,10 +75,11 @@ func (t *AgentTeamTool) InputSchema() any {
 				"items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"description":   map[string]any{"type": "string"},
-						"prompt":        map[string]any{"type": "string"},
-						"role":          map[string]any{"type": "string"},
-						"subagent_type": map[string]any{"type": "string", "enum": []string{subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification}},
+						"description":        map[string]any{"type": "string"},
+						"prompt":             map[string]any{"type": "string"},
+						"role":               map[string]any{"type": "string"},
+						"workspace_strategy": map[string]any{"type": "string", "enum": []string{"shared", "worktree"}},
+						"subagent_type":      map[string]any{"type": "string", "enum": []string{subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification}},
 					},
 					"required": []string{"description", "prompt"},
 				},
@@ -127,10 +129,11 @@ func (t *AgentTeamTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 	for _, rawTask := range rawTasks {
 		task := rawTask.(map[string]any)
 		tasks = append(tasks, AgentTeamTask{
-			Description:  strings.TrimSpace(firstStringOrEmpty(task, "description")),
-			Prompt:       strings.TrimSpace(firstStringOrEmpty(task, "prompt")),
-			Role:         strings.TrimSpace(firstStringOrEmpty(task, "role")),
-			SubagentType: NormalizeSubagentType(firstStringOrEmpty(task, "subagent_type")),
+			Description:       strings.TrimSpace(firstStringOrEmpty(task, "description")),
+			Prompt:            strings.TrimSpace(firstStringOrEmpty(task, "prompt")),
+			Role:              strings.TrimSpace(firstStringOrEmpty(task, "role")),
+			WorkspaceStrategy: strings.TrimSpace(firstStringOrEmpty(task, "workspace_strategy")),
+			SubagentType:      NormalizeSubagentType(firstStringOrEmpty(task, "subagent_type")),
 		})
 	}
 	result, err := t.launcher(ctx, AgentTeamLaunchRequest{Description: strings.TrimSpace(description), Tasks: tasks})
