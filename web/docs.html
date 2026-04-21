@@ -714,6 +714,8 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               need to call the handoff tools yourself if you want to steer the
               workflow manually. In practice, that usually means asking Nami in
               plain language rather than typing a raw tool payload yourself.
+              For a manual overview of queued swarm work, open
+              <code>/tasks</code>.
             </p>
             <div class="table-wrapper mb-8">
               <table class="w-full text-left text-sm">
@@ -791,8 +793,9 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               6. Watch the Dashboard
             </h4>
             <p class="text-sm text-gray-300 mb-8 leading-relaxed">
-              Open the background tasks dialog to see active roles, recent
-              handoffs, and running background work in one place.
+              Open the background tasks dialog with <code>/tasks</code> to see
+              active roles, recent handoffs, and running background work in one
+              place.
             </p>
 
             <h4
@@ -996,6 +999,15 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Show current session status
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>/tasks</code>
+                    </td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      Open the background tasks dialog, including swarm
+                      handoffs and active child agents
                     </td>
                   </tr>
                   <tr>
