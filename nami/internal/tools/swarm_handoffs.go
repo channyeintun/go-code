@@ -331,13 +331,17 @@ func resolveRoleQueuePolicy(cwd string, role string) (swarm.QueuePolicy, error) 
 	spec, err := swarm.LoadProjectSpec(cwd)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return swarm.QueueFIFO, nil
+			path := strings.TrimSpace(swarm.ProjectSpecPath(cwd))
+			if path == "" {
+				return "", fmt.Errorf("dequeue requires a project swarm spec")
+			}
+			return "", fmt.Errorf("dequeue requires a project swarm spec at %s", path)
 		}
 		return "", err
 	}
 	resolved, ok := spec.Role(role)
 	if !ok {
-		return swarm.QueueFIFO, nil
+		return "", fmt.Errorf("swarm role %q is not defined in %s", strings.TrimSpace(role), spec.Path)
 	}
 	return resolved.QueuePolicy, nil
 }

@@ -20,7 +20,7 @@
 
 ## Current Focus
 
-- Next task: fail fast when dequeue policy resolution is invalid.
+- Next task: sync handoff artifacts during `latest-wins` dequeue.
 
 ## Follow-Up Plan Status
 
@@ -31,7 +31,7 @@
 ## Review Fixes Status
 
 - [x] Prevent manual `superseded` handoff updates
-- [ ] Fail fast when dequeue policy resolution is invalid
+- [x] Fail fast when dequeue policy resolution is invalid
 - [ ] Sync handoff artifacts during `latest-wins` dequeue
 
 ## Completed Tasks
