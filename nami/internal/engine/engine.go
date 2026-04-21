@@ -213,6 +213,9 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err := emitSessionUpdated(bridge, sessionID, ""); err != nil {
 		return err
 	}
+	if err := maybeEmitSwarmSpecStartup(ctx, bridge, artifactManager, sessionID, cwd); err != nil {
+		return err
+	}
 	if client != nil {
 		refreshedClient, refreshErr := refreshStartupModelCapabilities(ctx, activeModelID, client, cfg)
 		if refreshErr == nil {
